@@ -1,0 +1,27 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+)
+
+var jsonOutput bool
+
+var rootCmd = &cobra.Command{
+	Use:   "handler",
+	Short: "Agent handler CLI for managing Claude Code agent sessions",
+	Long:  `A CLI tool backed by SQLite for managing Claude Code agent sessions.`,
+}
+
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func init() {
+	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+}
