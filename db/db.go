@@ -69,6 +69,16 @@ func (db *DB) Conn() *sql.DB {
 	return db.conn
 }
 
+// QueryRow executes a query that returns at most one row.
+func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
+	return db.conn.QueryRow(query, args...)
+}
+
+// Query executes a query that returns rows.
+func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return db.conn.Query(query, args...)
+}
+
 // DefaultPath returns the default database path: ~/.agent-handler/handler.db
 func DefaultPath() string {
 	home, err := os.UserHomeDir()

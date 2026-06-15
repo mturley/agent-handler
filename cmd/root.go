@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
 )
 
@@ -24,4 +25,12 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+}
+
+func openDB() (*db.DB, error) {
+	return db.Open(db.DefaultPath())
+}
+
+func openReadOnlyDB() (*db.DB, error) {
+	return db.OpenReadOnly(db.DefaultPath())
 }

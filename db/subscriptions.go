@@ -153,3 +153,23 @@ func (db *DB) SoftDeleteSubscriptionsForBranch(branch string) (int, error) {
 
 	return int(rows), nil
 }
+
+// SoftDeleteSubscriptionsForSession soft-deletes all active subscriptions for a given session.
+// Returns the count of subscriptions soft-deleted.
+func (db *DB) SoftDeleteSubscriptionsForSession(sessionID string) (int, error) {
+	res, err := db.conn.Exec(`
+		UPDATE subscriptions
+		SET deleted_at = datetime('now')
+		WHERE session_id = ? AND deleted_at IS NULL
+	`, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to soft-delete subscriptions for session %q: %w", sessionID, err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	return int(rows), nil
+}
