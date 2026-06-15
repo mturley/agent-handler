@@ -1,3 +1,3 @@
-# agent-ledger
+# agent-handler
 
 Centralized logging, publish/subscribe messaging, event handling and external resource watching for code agents
