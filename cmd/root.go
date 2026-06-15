@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mturley/agent-handler/cmd/resource"
 	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
 )
@@ -25,6 +26,10 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
+
+	// Set up resource subcommand
+	resource.JSONOutput = &jsonOutput
+	rootCmd.AddCommand(resource.ResourceCmd)
 }
 
 func openDB() (*db.DB, error) {
