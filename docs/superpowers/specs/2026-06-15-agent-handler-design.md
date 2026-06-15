@@ -302,6 +302,7 @@ All commands output human-readable text by default, with `--json` for machine-re
 | Command | Description |
 |---------|-------------|
 | `handler register` | Register/re-register a session |
+| `handler unregister` | Archive a session and soft-delete its subscriptions. For explicit session teardown before quitting. |
 | `handler heartbeat` | Bump `last_active` |
 | `handler status` | All sessions with liveness, unread counts, last activity. `--all` includes archived (paginated, 20 default). |
 | `handler cleanup` | Archive dead sessions. `--stale 14d` for idle threshold. |
@@ -379,6 +380,7 @@ Skills are distributed with agent-handler under a `skills/` directory and symlin
 | `/handler_emit` | Write an event to the ledger (guides agent on event type selection) |
 | `/handler_subscribe` | Subscribe to a resource |
 | `/handler_snapshot` | Write a `pre_compact_snapshot` event (also called by `PreCompact` hook) |
+| `/handler_unregister` | Archive this session and soft-delete its subscriptions before quitting |
 | `/handler` | Initialize or refresh the handler session. Loads all active sessions, unread events, and presents a narrative summary. Idempotent -- safe to call multiple times. Guides the agent on how to use CLI commands for deeper queries, spawn subagents for detailed worktree summaries, find related sessions, and send inter-session messages. |
 
 ---
