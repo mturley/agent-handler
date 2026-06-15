@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/mturley/agent-handler/db"
 )
 
 // HandlerDir returns a temp directory for testing CLI state.
@@ -21,11 +23,15 @@ func HandlerDir(t *testing.T) string {
 }
 
 // TempDB creates a temporary SQLite database for testing.
-// This is a placeholder stub - will be implemented in Task 2 when db package exists.
-func TempDB(t *testing.T) (dbPath string) {
+// The database is properly initialized and automatically cleaned up after the test.
+func TempDB(t *testing.T) *db.DB {
 	t.Helper()
-	dir := HandlerDir(t)
-	dbPath = filepath.Join(dir, "test.db")
-	// TODO: Initialize database when db package is available
-	return dbPath
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "handler.db")
+	d, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open temp db: %v", err)
+	}
+	t.Cleanup(func() { d.Close() })
+	return d
 }
