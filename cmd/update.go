@@ -17,6 +17,7 @@ var updateCmd = &cobra.Command{
 }
 
 func init() {
+	updateCmd.GroupID = "admin"
 	rootCmd.AddCommand(updateCmd)
 }
 

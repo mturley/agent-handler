@@ -29,6 +29,7 @@ var (
 )
 
 func init() {
+	registerCmd.GroupID = "agent"
 	rootCmd.AddCommand(registerCmd)
 	registerCmd.Flags().StringVar(&regSessionID, "session-id", "", "session ID")
 	registerCmd.Flags().StringVar(&regBranch, "branch", "", "branch name")

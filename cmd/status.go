@@ -21,6 +21,7 @@ var (
 )
 
 func init() {
+	statusCmd.GroupID = "human"
 	rootCmd.AddCommand(statusCmd)
 	statusCmd.Flags().BoolVar(&statusAll, "all", false, "include archived sessions")
 	statusCmd.Flags().IntVar(&statusLimit, "limit", 20, "maximum number of sessions to show")

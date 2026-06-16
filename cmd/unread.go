@@ -19,6 +19,7 @@ var unreadCmd = &cobra.Command{
 }
 
 func init() {
+	unreadCmd.GroupID = "agent"
 	rootCmd.AddCommand(unreadCmd)
 	unreadCmd.Flags().String("session-id", "", "session ID (defaults to session from PID cache)")
 	unreadCmd.Flags().Bool("ack", false, "acknowledge events after reading")

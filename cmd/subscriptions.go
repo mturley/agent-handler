@@ -19,6 +19,7 @@ var (
 )
 
 func init() {
+	subscriptionsCmd.GroupID = "human"
 	rootCmd.AddCommand(subscriptionsCmd)
 	subscriptionsCmd.Flags().StringVar(&subsSessionID, "session-id", "", "session ID")
 	subscriptionsCmd.Flags().BoolVar(&subsIncludeDeleted, "all", false, "include deleted subscriptions")

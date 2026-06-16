@@ -20,6 +20,7 @@ var (
 )
 
 func init() {
+	unsubscribeCmd.GroupID = "agent"
 	rootCmd.AddCommand(unsubscribeCmd)
 	unsubscribeCmd.Flags().StringVar(&unsubResource, "resource", "", "resource ID (format: type:id)")
 	unsubscribeCmd.Flags().StringVar(&unsubSessionID, "session-id", "", "session ID")

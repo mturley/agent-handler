@@ -38,8 +38,15 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output in JSON format")
 
+	rootCmd.AddGroup(
+		&cobra.Group{ID: "human", Title: "Commands for humans:"},
+		&cobra.Group{ID: "agent", Title: "Commands for agents (used by hooks and skills):"},
+		&cobra.Group{ID: "admin", Title: "Admin:"},
+	)
+
 	// Set up resource subcommand
 	resource.JSONOutput = &jsonOutput
+	resource.ResourceCmd.GroupID = "human"
 	rootCmd.AddCommand(resource.ResourceCmd)
 }
 

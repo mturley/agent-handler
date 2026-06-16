@@ -19,6 +19,7 @@ var healthCmd = &cobra.Command{
 }
 
 func init() {
+	healthCmd.GroupID = "human"
 	rootCmd.AddCommand(healthCmd)
 }
 

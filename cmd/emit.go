@@ -29,6 +29,7 @@ var (
 )
 
 func init() {
+	emitCmd.GroupID = "agent"
 	rootCmd.AddCommand(emitCmd)
 	emitCmd.Flags().StringVar(&emitType, "type", "", "event type (required)")
 	emitCmd.Flags().StringVar(&emitTitle, "title", "", "event title (required)")

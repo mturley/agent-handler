@@ -21,6 +21,7 @@ var (
 )
 
 func init() {
+	logCmd.GroupID = "human"
 	rootCmd.AddCommand(logCmd)
 	logCmd.Flags().StringVar(&logSessionID, "session-id", "", "session ID (required)")
 	logCmd.Flags().IntVar(&logLimit, "limit", 50, "maximum number of events to show")

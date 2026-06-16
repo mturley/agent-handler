@@ -125,5 +125,6 @@ func outputJSON(rows *sql.Rows, columns []string) error {
 }
 
 func init() {
+	queryCmd.GroupID = "human"
 	rootCmd.AddCommand(queryCmd)
 }

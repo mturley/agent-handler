@@ -24,6 +24,7 @@ var (
 )
 
 func init() {
+	subscribeCmd.GroupID = "agent"
 	rootCmd.AddCommand(subscribeCmd)
 	subscribeCmd.Flags().StringVar(&subResource, "resource", "", "resource ID (format: type:id, e.g., pr:owner/repo#42)")
 	subscribeCmd.Flags().StringVar(&subURL, "url", "", "resource URL (optional)")

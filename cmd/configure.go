@@ -21,6 +21,7 @@ var (
 )
 
 func init() {
+	configureCmd.GroupID = "agent"
 	rootCmd.AddCommand(configureCmd)
 	configureCmd.Flags().StringVar(&cfgSessionID, "session-id", "", "session ID")
 	configureCmd.Flags().StringVar(&cfgInboxMode, "inbox-mode", "", "inbox mode (manual, on-submit, auto)")

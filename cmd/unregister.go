@@ -22,6 +22,7 @@ var unregisterCmd = &cobra.Command{
 var unregSessionID string
 
 func init() {
+	unregisterCmd.GroupID = "agent"
 	rootCmd.AddCommand(unregisterCmd)
 	unregisterCmd.Flags().StringVar(&unregSessionID, "session-id", "", "session ID")
 	unregisterCmd.MarkFlagRequired("session-id")

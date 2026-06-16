@@ -25,6 +25,7 @@ var (
 )
 
 func init() {
+	tailCmd.GroupID = "human"
 	rootCmd.AddCommand(tailCmd)
 	tailCmd.Flags().StringVar(&tailSource, "source", "", "filter by event source")
 	tailCmd.Flags().StringVar(&tailType, "type", "", "filter by event type")

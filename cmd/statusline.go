@@ -15,6 +15,7 @@ var statuslineCmd = &cobra.Command{
 var slSessionID string
 
 func init() {
+	statuslineCmd.GroupID = "agent"
 	rootCmd.AddCommand(statuslineCmd)
 	statuslineCmd.Flags().StringVar(&slSessionID, "session", "", "session ID")
 	statuslineCmd.MarkFlagRequired("session")

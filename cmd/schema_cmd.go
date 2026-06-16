@@ -58,5 +58,6 @@ var schemaCmd = &cobra.Command{
 }
 
 func init() {
+	schemaCmd.GroupID = "human"
 	rootCmd.AddCommand(schemaCmd)
 }

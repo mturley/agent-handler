@@ -18,6 +18,7 @@ var cleanupCmd = &cobra.Command{
 var cleanupStale string
 
 func init() {
+	cleanupCmd.GroupID = "admin"
 	rootCmd.AddCommand(cleanupCmd)
 	cleanupCmd.Flags().StringVar(&cleanupStale, "stale", "", "also archive sessions idle beyond this threshold (e.g., '14d')")
 }

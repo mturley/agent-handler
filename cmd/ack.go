@@ -21,6 +21,7 @@ var ackCmd = &cobra.Command{
 var ackSessionID string
 
 func init() {
+	ackCmd.GroupID = "agent"
 	rootCmd.AddCommand(ackCmd)
 	ackCmd.Flags().StringVar(&ackSessionID, "session-id", "", "session ID (defaults to session from PID cache)")
 }

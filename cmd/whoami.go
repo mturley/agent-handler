@@ -28,5 +28,6 @@ var whoamiCmd = &cobra.Command{
 }
 
 func init() {
+	whoamiCmd.GroupID = "agent"
 	rootCmd.AddCommand(whoamiCmd)
 }

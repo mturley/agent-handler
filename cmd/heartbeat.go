@@ -21,6 +21,7 @@ var heartbeatCmd = &cobra.Command{
 var hbSessionID string
 
 func init() {
+	heartbeatCmd.GroupID = "agent"
 	rootCmd.AddCommand(heartbeatCmd)
 	heartbeatCmd.Flags().StringVar(&hbSessionID, "session-id", "", "session ID (optional, reads from PID cache if omitted)")
 }
