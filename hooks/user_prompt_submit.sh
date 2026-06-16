@@ -10,24 +10,22 @@ fi
 
 CLAUDE_PID="$PPID"
 SESSIONS_DIR="${HANDLER_HOME:-$HOME/.agent-handler}/data/sessions"
-NEEDS_REGISTRATION=false
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Check PID cache for session ID
+# Discover the actual current session ID from the JSONL
+source "${SCRIPT_DIR}/common.sh"
+ACTUAL_SESSION_ID=$(discover_session_id 2>/dev/null || echo "")
+
+# Check PID cache
+CACHED_SESSION_ID=""
 if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
-    SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
-    # Verify session is still active (not archived from a previous process using this PID)
-    STATUS=$(handler query "SELECT status FROM sessions WHERE session_id='${SESSION_ID}'" 2>/dev/null | tail -1)
-    if [ "$STATUS" != "active" ]; then
-        NEEDS_REGISTRATION=true
-    fi
-else
-    NEEDS_REGISTRATION=true
+    CACHED_SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
 fi
 
-if [ "$NEEDS_REGISTRATION" = true ]; then
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    source "${SCRIPT_DIR}/common.sh"
-    if discover_and_register "$CLAUDE_PID" >/dev/null 2>&1; then
+# Register if: no cache, cache is stale, or cache points to wrong session
+if [ -z "$CACHED_SESSION_ID" ] || [ "$CACHED_SESSION_ID" != "$ACTUAL_SESSION_ID" ]; then
+    if [ -n "$ACTUAL_SESSION_ID" ]; then
+        discover_and_register "$CLAUDE_PID" >/dev/null 2>&1 || true
         if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
             SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
         else
@@ -36,6 +34,8 @@ if [ "$NEEDS_REGISTRATION" = true ]; then
     else
         exit 0
     fi
+else
+    SESSION_ID="$CACHED_SESSION_ID"
 fi
 
 # Heartbeat in background, fully silenced

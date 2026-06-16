@@ -23,6 +23,16 @@ find_project_dir() {
     return 1
 }
 
+discover_session_id() {
+    local CWD="$(pwd)"
+    PROJECT_DIR=$(find_project_dir "$CWD") || return 1
+    JSONL_PATH=$(ls -t "$PROJECT_DIR"/*.jsonl 2>/dev/null | head -1)
+    if [ -z "$JSONL_PATH" ]; then
+        return 1
+    fi
+    basename "$JSONL_PATH" .jsonl
+}
+
 discover_and_register() {
     local CLAUDE_PID="$1"
     local CWD="$(pwd)"
