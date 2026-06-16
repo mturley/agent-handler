@@ -10,7 +10,7 @@ Centralized logging, publish/subscribe messaging, event handling and external re
 git clone https://github.com/mturley/agent-handler.git
 cd agent-handler
 make build
-make install # Copies `handler` binary to /usr/local/bin and runs `handler setup` for skill setup
+make install # Copies `handler` binary to /usr/local/bin and runs `handler setup`
 ```
 
 ### Using `go install`
