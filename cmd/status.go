@@ -77,11 +77,15 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Query unread count
-		unreadCount, breakdown, err := d.UnreadCountForSession(s.SessionID)
-		if err != nil {
-			unreadCount = 0
-			breakdown = nil
+		// Query unread count (skip for archived/dead sessions)
+		var unreadCount int
+		var breakdown map[string]int
+		if displayState == "active" || displayState == "idle" {
+			unreadCount, breakdown, err = d.UnreadCountForSession(s.SessionID)
+			if err != nil {
+				unreadCount = 0
+				breakdown = nil
+			}
 		}
 
 		statuses = append(statuses, sessionStatus{
