@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,6 +25,7 @@ var (
 	emitSource    string
 	emitBroadcast bool
 	emitTags      string
+	emitTo        []string
 )
 
 func init() {
@@ -35,6 +37,7 @@ func init() {
 	emitCmd.Flags().StringVar(&emitSource, "source", "agent", "event source")
 	emitCmd.Flags().BoolVar(&emitBroadcast, "broadcast", false, "broadcast to all sessions")
 	emitCmd.Flags().StringVar(&emitTags, "tags", "", "comma-separated tags")
+	emitCmd.Flags().StringSliceVar(&emitTo, "to", nil, "recipient session IDs or branch names (can specify multiple)")
 	emitCmd.MarkFlagRequired("type")
 	emitCmd.MarkFlagRequired("title")
 }
@@ -68,7 +71,20 @@ func runEmit(cmd *cobra.Command, args []string) error {
 		evt.Tags = &emitTags
 	}
 
-	if err := d.InsertEvent(evt, nil, nil); err != nil {
+	var recipients []db.EventRecipient
+	for _, to := range emitTo {
+		// If it looks like a UUID, treat as session ID; otherwise treat as branch
+		recipientType := "branch"
+		if len(to) > 8 && (len(to) == 36 || strings.Contains(to, "-")) {
+			recipientType = "session"
+		}
+		recipients = append(recipients, db.EventRecipient{
+			RecipientType:  recipientType,
+			RecipientValue: to,
+		})
+	}
+
+	if err := d.InsertEvent(evt, recipients, nil); err != nil {
 		return fmt.Errorf("failed to insert event: %w", err)
 	}
 
