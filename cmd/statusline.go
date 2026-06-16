@@ -43,9 +43,12 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to query unread count: %w", err)
 	}
 
+	cmd_color := "\033[36m" // cyan
+	reset_color := "\033[0m"
+
 	// Output line 1: inbox status
 	if unreadCount == 0 {
-		fmt.Println("/inbox: No new messages")
+		fmt.Printf("%s/inbox%s: No new messages\n", cmd_color, reset_color)
 	} else {
 		// Build breakdown string
 		var breakdownParts []string
@@ -61,7 +64,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
-		fmt.Printf("/inbox: %d unread%s\n", unreadCount, breakdownStr)
+		fmt.Printf("%s/inbox%s: %d unread%s\n", cmd_color, reset_color, unreadCount, breakdownStr)
 	}
 
 	// Output line 2: inbox mode
@@ -83,7 +86,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 			rendered += fmt.Sprintf("%s%s%s", dim, modes[mode], reset)
 		}
 	}
-	fmt.Printf("/inbox_mode: %s\n", rendered)
+	fmt.Printf("%s/inbox_mode%s: %s\n", cmd_color, reset_color, rendered)
 
 	return nil
 }
