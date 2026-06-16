@@ -26,11 +26,9 @@ func init() {
 var skillNames = []string{
 	"inbox",
 	"inbox_mode",
-	"handler_register",
 	"handler_emit",
 	"handler_subscribe",
 	"handler_snapshot",
-	"handler_unregister",
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {
@@ -171,7 +169,7 @@ func findAgentHandlerHooks(settingsPath string) []string {
 	}
 
 	var found []string
-	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreCompact"} {
+	for _, event := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
 		existing, ok := hooks[event].([]interface{})
 		if !ok {
 			continue
@@ -204,7 +202,7 @@ func removeHooks(home string) error {
 		return nil
 	}
 
-	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreCompact"} {
+	for _, event := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
 		existing, ok := hooks[event].([]interface{})
 		if !ok {
 			continue

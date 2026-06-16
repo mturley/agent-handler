@@ -52,7 +52,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Extract hooks to %s\n", hooksDir)
 	fmt.Printf("  Extract skills to %s\n", skillsDir)
 	fmt.Printf("  Symlink %d skills into %s\n", len(skillNames), claudeSkillsDir)
-	fmt.Printf("  Configure 3 Claude Code hooks in %s\n", settingsPath)
+	fmt.Printf("  Configure 4 Claude Code hooks in %s\n", settingsPath)
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
 	fmt.Println("")
 
@@ -171,11 +171,13 @@ func configureHooks(home, hooksDir string) error {
 
 	hookEntries := map[string]string{
 		"SessionStart":     "session_start.sh",
+		"SessionEnd":       "session_end.sh",
 		"UserPromptSubmit": "user_prompt_submit.sh",
 		"PreCompact":       "pre_compact.sh",
 	}
 	timeouts := map[string]int{
 		"SessionStart":     10,
+		"SessionEnd":       10,
 		"UserPromptSubmit": 5,
 		"PreCompact":       10,
 	}
