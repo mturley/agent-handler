@@ -8,7 +8,7 @@ description: Check and act on unread events from the agent-handler ledger
 ## Usage
 
 ```bash
-handler unread --session-id $(handler whoami) --ack --json
+handler unread --ack --json
 ```
 
 ## After reading events
@@ -18,7 +18,7 @@ handler unread --session-id $(handler whoami) --ack --json
 
 ## Available CLI commands for deeper queries
 
-- `handler log --session-id $(handler whoami)` — event timeline for this session
+- `handler log` — event timeline for this session
 - `handler status --json` — all sessions with liveness and unread counts
 - `handler resource history <resource_id>` — all events for a resource
 - `handler query "<sql>"` — arbitrary read-only SQL for ad-hoc analysis

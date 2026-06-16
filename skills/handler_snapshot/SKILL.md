@@ -17,7 +17,6 @@ Write a `pre_compact_snapshot` event to the ledger capturing what this session i
 
 ```bash
 handler emit \
-    --session-id $(handler whoami) \
     --type pre_compact_snapshot \
     --title "Snapshot: implementing auth middleware refactor" \
     --body "Currently on step 3 of 5. Completed: session validation, token refresh. Remaining: error handling, tests. Blocked on: nothing. Key decision: using RS256 instead of HS256."

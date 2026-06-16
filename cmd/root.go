@@ -6,6 +6,7 @@ import (
 
 	"github.com/mturley/agent-handler/cmd/resource"
 	"github.com/mturley/agent-handler/db"
+	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
 
@@ -56,4 +57,12 @@ func openDB() (*db.DB, error) {
 
 func openReadOnlyDB() (*db.DB, error) {
 	return db.OpenReadOnly(db.DefaultPath())
+}
+
+func resolveSessionID(cmd *cobra.Command) (string, error) {
+	sessionID, _ := cmd.Flags().GetString("session-id")
+	if sessionID != "" {
+		return sessionID, nil
+	}
+	return discover.ResolveSessionID(db.HandlerHome())
 }

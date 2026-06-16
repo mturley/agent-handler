@@ -3,12 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
 
@@ -40,14 +37,9 @@ func runUnread(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	sessionID, _ := cmd.Flags().GetString("session-id")
-	if sessionID == "" {
-		pid := os.Getpid()
-		sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
-		sessionID, err = discover.ReadPIDCache(sessionsDir, pid)
-		if err != nil {
-			return fmt.Errorf("--session-id is required (could not detect from PID cache: %w)", err)
-		}
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
 	}
 
 	events, err := d.UnreadForSession(sessionID)

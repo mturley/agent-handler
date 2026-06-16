@@ -23,7 +23,6 @@ Record significant events to the ledger so other sessions and the handler can se
 
 ```bash
 handler emit \
-    --session-id $(handler whoami) \
     --type milestone \
     --title "Found root cause of auth bug" \
     --body "The issue is in the session middleware — tokens are being validated against the wrong key."

@@ -3,12 +3,8 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
 
@@ -18,12 +14,10 @@ var ackCmd = &cobra.Command{
 	RunE:  runAck,
 }
 
-var ackSessionID string
-
 func init() {
 	ackCmd.GroupID = "agent"
 	rootCmd.AddCommand(ackCmd)
-	ackCmd.Flags().StringVar(&ackSessionID, "session-id", "", "session ID (defaults to session from PID cache)")
+	ackCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 }
 
 func runAck(cmd *cobra.Command, args []string) error {
@@ -33,25 +27,16 @@ func runAck(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	sessionID := ackSessionID
-	if sessionID == "" {
-		// Try to detect from PID cache
-		pid := os.Getpid()
-		sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
-		detectedSessionID, err := discover.ReadPIDCache(sessionsDir, pid)
-		if err != nil {
-			return fmt.Errorf("--session-id is required (could not detect from PID cache: %w)", err)
-		}
-		sessionID = detectedSessionID
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
 	}
 
-	// Get unread count before acknowledging
 	unreadCount, _, err := d.UnreadCountForSession(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to query unread count: %w", err)
 	}
 
-	// Advance cursor to now
 	ts := time.Now().UTC().Format(time.RFC3339)
 	if err := d.AdvanceCursor(sessionID, ts); err != nil {
 		return fmt.Errorf("failed to advance cursor: %w", err)
