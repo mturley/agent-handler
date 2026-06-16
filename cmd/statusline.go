@@ -67,16 +67,23 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	// Output line 2: inbox mode
 	// TODO: Detect if polling is stopped for auto mode
 	// For now, just show the mode
-	switch session.InboxMode {
-	case "manual":
-		fmt.Println("/inbox_mode: \033[1mmanual\033[0m | on-submit | auto")
-	case "on-submit":
-		fmt.Println("/inbox_mode: manual | \033[1mon-submit\033[0m | auto")
-	case "auto":
-		fmt.Println("/inbox_mode: manual | on-submit | \033[1mauto\033[0m")
-	default:
-		fmt.Printf("/inbox_mode: %s\n", session.InboxMode)
+	active := "\033[1;32m"  // bold green
+	dim := "\033[2m"       // dim
+	reset := "\033[0m"
+
+	modes := map[string]string{"manual": "manual", "on-submit": "on-submit", "auto": "auto"}
+	rendered := ""
+	for i, mode := range []string{"manual", "on-submit", "auto"} {
+		if i > 0 {
+			rendered += fmt.Sprintf("%s | %s", dim, reset)
+		}
+		if session.InboxMode == mode {
+			rendered += fmt.Sprintf("%s%s%s", active, modes[mode], reset)
+		} else {
+			rendered += fmt.Sprintf("%s%s%s", dim, modes[mode], reset)
+		}
 	}
+	fmt.Printf("/inbox_mode: %s\n", rendered)
 
 	return nil
 }
