@@ -31,7 +31,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	// Get session
 	session, err := d.GetSession(slSessionID)
 	if err != nil || session == nil || session.Status == "archived" {
-		fmt.Println("Session not registered. Send a prompt to auto-register, or run /handler_register.")
+		fmt.Println("Session not registered with handler. Send a prompt to register.")
 		return nil
 	}
 
