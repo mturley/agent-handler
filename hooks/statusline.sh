@@ -23,4 +23,19 @@ if [ -z "$SESSION_ID" ]; then
     exit 0
 fi
 
-handler statusline --session "$SESSION_ID" 2>/dev/null
+OUTPUT=$(handler statusline --session "$SESSION_ID" 2>/dev/null)
+if [ -z "$OUTPUT" ]; then
+    exit 0
+fi
+
+# Bell on new unreads: track last count, bell only when it increases
+BELL_FILE="${HANDLER_HOME:-$HOME/.agent-handler}/data/.statusline-last-count-${SESSION_ID}"
+CURRENT_COUNT=$(echo "$OUTPUT" | head -1 | grep -oE '[0-9]+ unread' | grep -oE '[0-9]+' || echo "0")
+LAST_COUNT=$(cat "$BELL_FILE" 2>/dev/null || echo "0")
+
+if [ "$CURRENT_COUNT" -gt "$LAST_COUNT" ] 2>/dev/null; then
+    printf '\a'
+fi
+echo "$CURRENT_COUNT" > "$BELL_FILE" 2>/dev/null
+
+echo "$OUTPUT"
