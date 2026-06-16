@@ -84,6 +84,19 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to write PID cache: %w", err)
 	}
 
+	// Initialize cursor if this session doesn't have one yet
+	existingCursor, _ := d.GetCursor(regSessionID)
+	if existingCursor == "" {
+		// Try to inherit from the most recent archived session on this branch
+		inheritedCursor, _ := d.InheritCursorForBranch(regRepo, regBranch)
+		if inheritedCursor != "" {
+			d.AdvanceCursor(regSessionID, inheritedCursor)
+		} else {
+			// Brand new branch — start with cursor = now so old broadcasts don't appear
+			d.AdvanceCursor(regSessionID, now)
+		}
+	}
+
 	// Auto-subscribe to resources from .worktree-resources
 	cwd, err := os.Getwd()
 	if err != nil {

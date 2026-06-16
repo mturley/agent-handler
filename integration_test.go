@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mturley/agent-handler/db"
 )
@@ -130,6 +131,9 @@ func TestIntegrationLifecycle(t *testing.T) {
 	if !strings.Contains(strings.ToLower(out), "no unread") {
 		t.Errorf("expected no unread events, got: %s", out)
 	}
+
+	// Wait briefly so broadcast timestamp is after the cursor
+	time.Sleep(1100 * time.Millisecond)
 
 	// Emit a broadcast — should appear as unread
 	out, err = runHandler(t, bin, home, "emit",
