@@ -18,9 +18,8 @@ var subscribeCmd = &cobra.Command{
 }
 
 var (
-	subResource  string
-	subURL       string
-	subSessionID string
+	subResource string
+	subURL      string
 )
 
 func init() {
@@ -28,9 +27,8 @@ func init() {
 	rootCmd.AddCommand(subscribeCmd)
 	subscribeCmd.Flags().StringVar(&subResource, "resource", "", "resource ID (format: type:id, e.g., pr:owner/repo#42)")
 	subscribeCmd.Flags().StringVar(&subURL, "url", "", "resource URL (optional)")
-	subscribeCmd.Flags().StringVar(&subSessionID, "session-id", "", "session ID")
+	subscribeCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 	subscribeCmd.MarkFlagRequired("resource")
-	subscribeCmd.MarkFlagRequired("session-id")
 }
 
 func runSubscribe(cmd *cobra.Command, args []string) error {
@@ -39,6 +37,11 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer d.Close()
+
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
+	}
 
 	// Parse resource
 	resourceType, resourceID := worktree.ParseResourceID(subResource)
@@ -55,7 +58,7 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 
 	err = d.Subscribe(db.Subscription{
 		ID:           uuid.New().String(),
-		SessionID:    subSessionID,
+		SessionID:    sessionID,
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		ResourceURL:  urlPtr,
@@ -76,7 +79,7 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	// Output
 	if jsonOutput {
 		output := map[string]interface{}{
-			"session_id":    subSessionID,
+			"session_id":    sessionID,
 			"resource_type": resourceType,
 			"resource_id":   resourceID,
 			"resource_url":  subURL,
@@ -88,7 +91,7 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(data))
 	} else {
-		fmt.Printf("✓ Subscribed session %s to %s:%s\n", subSessionID, resourceType, resourceID)
+		fmt.Printf("✓ Subscribed session %s to %s:%s\n", sessionID, resourceType, resourceID)
 		if subURL != "" {
 			fmt.Printf("  URL: %s\n", subURL)
 		}

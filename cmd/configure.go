@@ -13,63 +13,56 @@ var configureCmd = &cobra.Command{
 	RunE:  runConfigure,
 }
 
-var (
-	cfgSessionID       string
-	cfgInboxMode       string
-	cfgAutoPollInterval int
-	cfgGet             string
-)
-
 func init() {
 	configureCmd.GroupID = "agent"
 	rootCmd.AddCommand(configureCmd)
-	configureCmd.Flags().StringVar(&cfgSessionID, "session-id", "", "session ID")
-	configureCmd.Flags().StringVar(&cfgInboxMode, "inbox-mode", "", "inbox mode (manual, on-submit, auto)")
-	configureCmd.Flags().IntVar(&cfgAutoPollInterval, "auto-poll-interval", 0, "auto-poll interval in seconds (for auto mode)")
-	configureCmd.Flags().StringVar(&cfgGet, "get", "", "get a specific setting value (inbox_mode or auto_poll_interval)")
+	configureCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
+	configureCmd.Flags().String("inbox-mode", "", "inbox mode (manual, on-submit, auto)")
+	configureCmd.Flags().Int("auto-poll-interval", 0, "auto-poll interval in seconds (for auto mode)")
+	configureCmd.Flags().String("get", "", "get a specific setting value (inbox_mode or auto_poll_interval)")
 }
 
 func runConfigure(cmd *cobra.Command, args []string) error {
-	// --get mode: read and output a single value
-	if cfgGet != "" {
-		if cfgSessionID == "" {
-			return fmt.Errorf("--session-id is required when using --get")
-		}
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
+	}
 
+	getFlag, _ := cmd.Flags().GetString("get")
+
+	// --get mode: read and output a single value
+	if getFlag != "" {
 		d, err := openReadOnlyDB()
 		if err != nil {
 			return fmt.Errorf("failed to open database: %w", err)
 		}
 		defer d.Close()
 
-		session, err := d.GetSession(cfgSessionID)
+		session, err := d.GetSession(sessionID)
 		if err != nil {
 			return fmt.Errorf("failed to get session: %w", err)
 		}
-		if session == nil {
-			return fmt.Errorf("session not found: %s", cfgSessionID)
-		}
 
-		switch cfgGet {
-		case "inbox_mode":
+		switch getFlag {
+		case "inbox-mode", "inbox_mode":
 			fmt.Println(session.InboxMode)
-		case "auto_poll_interval":
+		case "auto-poll-interval", "auto_poll_interval":
 			if session.AutoPollInterval != nil {
 				fmt.Println(*session.AutoPollInterval)
 			} else {
 				fmt.Println("null")
 			}
 		default:
-			return fmt.Errorf("unknown setting: %s (valid: inbox_mode, auto_poll_interval)", cfgGet)
+			return fmt.Errorf("unknown setting: %s (valid: inbox-mode, auto-poll-interval)", getFlag)
 		}
 		return nil
 	}
 
 	// Set mode
-	if cfgSessionID == "" {
-		return fmt.Errorf("--session-id is required")
-	}
-	if cfgInboxMode == "" && cfgAutoPollInterval == 0 {
+	inboxMode, _ := cmd.Flags().GetString("inbox-mode")
+	autoPollInterval, _ := cmd.Flags().GetInt("auto-poll-interval")
+
+	if inboxMode == "" && autoPollInterval == 0 {
 		return fmt.Errorf("at least one of --inbox-mode or --auto-poll-interval must be provided")
 	}
 
@@ -79,38 +72,32 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	// Get current session to preserve unset values
-	session, err := d.GetSession(cfgSessionID)
+	session, err := d.GetSession(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get session: %w", err)
 	}
-	if session == nil {
-		return fmt.Errorf("session not found: %s", cfgSessionID)
+
+	finalInboxMode := session.InboxMode
+	if inboxMode != "" {
+		finalInboxMode = inboxMode
 	}
 
-	// Apply changes
-	inboxMode := session.InboxMode
-	if cfgInboxMode != "" {
-		inboxMode = cfgInboxMode
-	}
-
-	var autoPollInterval *int
-	if cfgAutoPollInterval > 0 {
-		autoPollInterval = &cfgAutoPollInterval
+	var finalAutoPoll *int
+	if autoPollInterval > 0 {
+		finalAutoPoll = &autoPollInterval
 	} else {
-		autoPollInterval = session.AutoPollInterval
+		finalAutoPoll = session.AutoPollInterval
 	}
 
-	err = d.ConfigureSession(cfgSessionID, inboxMode, autoPollInterval)
-	if err != nil {
+	if err := d.ConfigureSession(sessionID, finalInboxMode, finalAutoPoll); err != nil {
 		return fmt.Errorf("failed to configure session: %w", err)
 	}
 
 	if jsonOutput {
 		output := map[string]interface{}{
-			"session_id":         cfgSessionID,
-			"inbox_mode":         inboxMode,
-			"auto_poll_interval": autoPollInterval,
+			"session_id":         sessionID,
+			"inbox_mode":         finalInboxMode,
+			"auto_poll_interval": finalAutoPoll,
 		}
 		data, err := json.MarshalIndent(output, "", "  ")
 		if err != nil {
@@ -118,10 +105,10 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(data))
 	} else {
-		fmt.Printf("✓ Configured session %s\n", cfgSessionID)
-		fmt.Printf("  Inbox mode: %s\n", inboxMode)
-		if autoPollInterval != nil {
-			fmt.Printf("  Auto-poll interval: %d seconds\n", *autoPollInterval)
+		fmt.Printf("✓ Configured session %s\n", sessionID)
+		fmt.Printf("  Inbox mode: %s\n", finalInboxMode)
+		if finalAutoPoll != nil {
+			fmt.Printf("  Auto-poll interval: %d seconds\n", *finalAutoPoll)
 		}
 	}
 

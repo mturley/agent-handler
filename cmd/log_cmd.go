@@ -15,18 +15,16 @@ var logCmd = &cobra.Command{
 }
 
 var (
-	logSessionID string
-	logLimit     int
-	logSince     string
+	logLimit int
+	logSince string
 )
 
 func init() {
 	logCmd.GroupID = "human"
 	rootCmd.AddCommand(logCmd)
-	logCmd.Flags().StringVar(&logSessionID, "session-id", "", "session ID (required)")
+	logCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 	logCmd.Flags().IntVar(&logLimit, "limit", 50, "maximum number of events to show")
 	logCmd.Flags().StringVar(&logSince, "since", "", "show events since this timestamp (RFC3339)")
-	logCmd.MarkFlagRequired("session-id")
 }
 
 func runLog(cmd *cobra.Command, args []string) error {
@@ -36,8 +34,13 @@ func runLog(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
+	}
+
 	filter := db.EventFilter{
-		SessionID: &logSessionID,
+		SessionID: &sessionID,
 		Limit:     logLimit,
 	}
 	if logSince != "" {
@@ -61,7 +64,7 @@ func runLog(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		fmt.Printf("Event log for session %s (showing %d):\n\n", logSessionID, len(events))
+		fmt.Printf("Event log for session %s (showing %d):\n\n", sessionID, len(events))
 		// Events are in DESC order from query, so reverse for timeline display
 		for i := len(events) - 1; i >= 0; i-- {
 			e := events[i]

@@ -13,17 +13,13 @@ var subscriptionsCmd = &cobra.Command{
 	RunE:  runSubscriptions,
 }
 
-var (
-	subsSessionID      string
-	subsIncludeDeleted bool
-)
+var subsIncludeDeleted bool
 
 func init() {
 	subscriptionsCmd.GroupID = "human"
 	rootCmd.AddCommand(subscriptionsCmd)
-	subscriptionsCmd.Flags().StringVar(&subsSessionID, "session-id", "", "session ID")
+	subscriptionsCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 	subscriptionsCmd.Flags().BoolVar(&subsIncludeDeleted, "all", false, "include deleted subscriptions")
-	subscriptionsCmd.MarkFlagRequired("session-id")
 }
 
 func runSubscriptions(cmd *cobra.Command, args []string) error {
@@ -33,8 +29,13 @@ func runSubscriptions(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
+	}
+
 	// List subscriptions
-	subs, err := d.ListSubscriptions(subsSessionID, subsIncludeDeleted)
+	subs, err := d.ListSubscriptions(sessionID, subsIncludeDeleted)
 	if err != nil {
 		return fmt.Errorf("failed to list subscriptions: %w", err)
 	}
@@ -52,7 +53,7 @@ func runSubscriptions(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		fmt.Printf("Subscriptions for session %s:\n\n", subsSessionID)
+		fmt.Printf("Subscriptions for session %s:\n\n", sessionID)
 		for _, sub := range subs {
 			status := "active"
 			if sub.DeletedAt != nil {

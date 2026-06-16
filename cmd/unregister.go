@@ -19,13 +19,10 @@ var unregisterCmd = &cobra.Command{
 	RunE:  runUnregister,
 }
 
-var unregSessionID string
-
 func init() {
 	unregisterCmd.GroupID = "agent"
 	rootCmd.AddCommand(unregisterCmd)
-	unregisterCmd.Flags().StringVar(&unregSessionID, "session-id", "", "session ID")
-	unregisterCmd.MarkFlagRequired("session-id")
+	unregisterCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 }
 
 func runUnregister(cmd *cobra.Command, args []string) error {
@@ -35,26 +32,31 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
+	}
+
 	// Get session to find PID before archiving
-	session, err := d.GetSession(unregSessionID)
+	session, err := d.GetSession(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to get session: %w", err)
 	}
 	if session == nil {
-		return fmt.Errorf("session not found: %s", unregSessionID)
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
 	// Archive the session
-	archived, err := d.ArchiveSessions([]string{unregSessionID})
+	archived, err := d.ArchiveSessions([]string{sessionID})
 	if err != nil {
 		return fmt.Errorf("failed to archive session: %w", err)
 	}
 	if archived == 0 {
-		return fmt.Errorf("session not found: %s", unregSessionID)
+		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
 	// Soft-delete all subscriptions for this session
-	subsDeleted, err := d.SoftDeleteSubscriptionsForSession(unregSessionID)
+	subsDeleted, err := d.SoftDeleteSubscriptionsForSession(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to soft-delete subscriptions: %w", err)
 	}
@@ -67,13 +69,13 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 			ID:        eventID,
 			TS:        now,
 			Source:    "handler",
-			SessionID: &unregSessionID,
+			SessionID: &sessionID,
 			Type:      "session_end",
-			Title:     fmt.Sprintf("Session %s ended", unregSessionID),
+			Title:     fmt.Sprintf("Session %s ended", sessionID),
 			Broadcast: false,
 		},
 		[]db.EventRecipient{
-			{RecipientType: "session", RecipientValue: unregSessionID},
+			{RecipientType: "session", RecipientValue: sessionID},
 		},
 		[]db.EventResource{},
 	)
@@ -89,7 +91,7 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 	// Output
 	if jsonOutput {
 		output := map[string]interface{}{
-			"session_id":          unregSessionID,
+			"session_id":          sessionID,
 			"status":              "archived",
 			"subscriptions_deleted": subsDeleted,
 		}
@@ -99,7 +101,7 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(data))
 	} else {
-		fmt.Printf("✓ Unregistered session %s\n", unregSessionID)
+		fmt.Printf("✓ Unregistered session %s\n", sessionID)
 		fmt.Printf("  Status: archived\n")
 		if subsDeleted > 0 {
 			fmt.Printf("  Subscriptions deleted: %d\n", subsDeleted)

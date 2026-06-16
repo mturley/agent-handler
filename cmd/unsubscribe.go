@@ -14,18 +14,14 @@ var unsubscribeCmd = &cobra.Command{
 	RunE:  runUnsubscribe,
 }
 
-var (
-	unsubResource  string
-	unsubSessionID string
-)
+var unsubResource string
 
 func init() {
 	unsubscribeCmd.GroupID = "agent"
 	rootCmd.AddCommand(unsubscribeCmd)
 	unsubscribeCmd.Flags().StringVar(&unsubResource, "resource", "", "resource ID (format: type:id)")
-	unsubscribeCmd.Flags().StringVar(&unsubSessionID, "session-id", "", "session ID")
+	unsubscribeCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 	unsubscribeCmd.MarkFlagRequired("resource")
-	unsubscribeCmd.MarkFlagRequired("session-id")
 }
 
 func runUnsubscribe(cmd *cobra.Command, args []string) error {
@@ -35,6 +31,11 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
+	sessionID, err := resolveSessionID(cmd)
+	if err != nil {
+		return fmt.Errorf("could not determine session: %w", err)
+	}
+
 	// Parse resource
 	resourceType, resourceID := worktree.ParseResourceID(unsubResource)
 	if resourceType == "" {
@@ -42,7 +43,7 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Unsubscribe
-	err = d.Unsubscribe(unsubSessionID, resourceType, resourceID)
+	err = d.Unsubscribe(sessionID, resourceType, resourceID)
 	if err != nil {
 		return fmt.Errorf("failed to unsubscribe: %w", err)
 	}
@@ -56,7 +57,7 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	// Output
 	if jsonOutput {
 		output := map[string]interface{}{
-			"session_id":    unsubSessionID,
+			"session_id":    sessionID,
 			"resource_type": resourceType,
 			"resource_id":   resourceID,
 			"status":        "unsubscribed",
@@ -67,7 +68,7 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println(string(data))
 	} else {
-		fmt.Printf("✓ Unsubscribed session %s from %s:%s\n", unsubSessionID, resourceType, resourceID)
+		fmt.Printf("✓ Unsubscribed session %s from %s:%s\n", sessionID, resourceType, resourceID)
 	}
 
 	return nil
