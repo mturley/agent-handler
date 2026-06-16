@@ -118,25 +118,47 @@ func resolveRecipient(d *db.DB, to string) (recipientType, recipientValue string
 		return "branch", to, nil
 	}
 
-	// Bare branch name — check for ambiguity across repos
-	rows, err := d.Conn().Query(
+	// Try session name match
+	nameRows, err := d.Conn().Query(
+		`SELECT session_id FROM sessions WHERE session_name = ? AND status != 'archived'`, to)
+	if err == nil {
+		defer nameRows.Close()
+		var sessionIDs []string
+		for nameRows.Next() {
+			var id string
+			nameRows.Scan(&id)
+			sessionIDs = append(sessionIDs, id)
+		}
+		if len(sessionIDs) == 1 {
+			return "session", sessionIDs[0], nil
+		}
+		if len(sessionIDs) > 1 {
+			return "", "", fmt.Errorf("multiple sessions named %q — use session ID instead", to)
+		}
+	}
+
+	// Try branch name match
+	branchRows, err := d.Conn().Query(
 		`SELECT DISTINCT repo FROM sessions WHERE branch = ? AND status != 'archived'`, to)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to look up branch %q: %w", to, err)
+		return "", "", fmt.Errorf("failed to look up %q: %w", to, err)
 	}
-	defer rows.Close()
+	defer branchRows.Close()
 
 	var repos []string
-	for rows.Next() {
+	for branchRows.Next() {
 		var repo string
-		rows.Scan(&repo)
+		branchRows.Scan(&repo)
 		repos = append(repos, repo)
 	}
 
+	if len(repos) == 1 {
+		return "branch", to, nil
+	}
 	if len(repos) > 1 {
 		return "", "", fmt.Errorf("branch %q exists in multiple repos: %s. Use repo:branch format (e.g. %s:%s)",
 			to, strings.Join(repos, ", "), repos[0], to)
 	}
 
-	return "branch", to, nil
+	return "", "", fmt.Errorf("no session or branch found matching %q", to)
 }

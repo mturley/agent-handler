@@ -18,7 +18,7 @@ else
     # SessionStart fired before Claude created the JSONL file)
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     source "${SCRIPT_DIR}/common.sh"
-    if discover_and_register "$CLAUDE_PID" 2>/dev/null; then
+    if discover_and_register "$CLAUDE_PID" >/dev/null 2>&1; then
         # Registration succeeded, read the PID cache it created
         if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
             SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
