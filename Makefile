@@ -17,7 +17,7 @@ install:
 	@chmod 755 $(INSTALL_DIR)/$(BINARY_NAME)
 	@echo "Installed binary to $(INSTALL_DIR)/$(BINARY_NAME)"
 	@echo ""
-	@$(INSTALL_DIR)/$(BINARY_NAME) install
+	@$(INSTALL_DIR)/$(BINARY_NAME) setup
 
 clean:
 	rm -rf $(BIN_DIR)

@@ -4,17 +4,17 @@
 
 ```bash
 make build      # builds to bin/handler
-make install    # copies binary to $GOBIN, runs handler install
+make install    # copies binary to $GOBIN, runs handler setup
 make clean      # removes bin/
 ```
 
 Or without the repo:
 ```bash
 go install github.com/mturley/agent-handler@latest
-handler install
+handler setup
 ```
 
-Skills and hooks are embedded in the binary via `//go:embed`. `handler install` extracts them to `~/.agent-handler/` and configures Claude Code. `handler uninstall` reverses everything including removing the binary.
+Skills and hooks are embedded in the binary via `//go:embed`. `handler setup` extracts them to `~/.agent-handler/` and configures Claude Code. `handler uninstall` reverses everything including removing the binary.
 
 ## Test
 
@@ -33,7 +33,7 @@ go test ./...
 
 ## Installation Model
 
-`handler install` extracts embedded skills and hooks to `~/.agent-handler/`, symlinks skills into `~/.claude/skills/`, and configures Claude Code hooks in settings.json. The binary goes to `$GOBIN` (via `go install` or `make install`). Data lives at `~/.agent-handler/`.
+`handler setup` extracts embedded skills and hooks to `~/.agent-handler/`, symlinks skills into `~/.claude/skills/`, and configures Claude Code hooks in settings.json. The binary goes to `$GOBIN` (via `go install` or `make install`). Data lives at `~/.agent-handler/`.
 
 Skills and hooks are embedded into the binary at build time via `//go:embed` in `embedded.go`. The embed directives use glob patterns (`skills/*/SKILL.md`, `hooks/*.sh`), so new skills/hooks are picked up automatically as long as they follow the directory convention.
 

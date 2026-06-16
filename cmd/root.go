@@ -17,7 +17,7 @@ var rootCmd = &cobra.Command{
 	Short: "Agent handler CLI for managing Claude Code agent sessions",
 	Long:  `A CLI tool backed by SQLite for managing Claude Code agent sessions.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "install" || cmd.Name() == "help" || cmd.Name() == "completion" {
+		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" {
 			return nil
 		}
 		home, err := os.UserHomeDir()
@@ -26,7 +26,7 @@ var rootCmd = &cobra.Command{
 		}
 		handlerDir := filepath.Join(home, ".agent-handler")
 		if _, err := os.Stat(handlerDir); os.IsNotExist(err) {
-			fmt.Fprintln(os.Stderr, "agent-handler is not set up yet. Run 'handler install' to configure skills, hooks, and database.")
+			fmt.Fprintln(os.Stderr, "agent-handler is not set up yet. Run 'handler setup' to configure skills, hooks, and database.")
 			os.Exit(1)
 		}
 		return nil

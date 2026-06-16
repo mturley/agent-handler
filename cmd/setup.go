@@ -22,14 +22,14 @@ func SetEmbedded(skills, hooks embed.FS) {
 	embeddedHooks = hooks
 }
 
-var installCmd = &cobra.Command{
-	Use:   "install",
-	Short: "Install or update agent-handler for the current user",
+var setupCmd = &cobra.Command{
+	Use:   "setup",
+	Short: "Set up or update agent-handler skills, hooks, and database",
 	RunE:  runInstall,
 }
 
 func init() {
-	rootCmd.AddCommand(installCmd)
+	rootCmd.AddCommand(setupCmd)
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
@@ -44,7 +44,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
-	fmt.Println("agent-handler install will:")
+	fmt.Println("agent-handler setup will:")
 	fmt.Println("")
 	fmt.Printf("  Create directory structure at %s\n", handlerDir)
 	fmt.Printf("  Initialize SQLite database at %s\n", db.DefaultPath())
@@ -144,7 +144,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("\n✓ Installation complete!")
 	fmt.Printf("\n  All files installed to %s\n", handlerDir)
-	fmt.Println("  To update: 'go install github.com/mturley/agent-handler@latest && handler install'")
+	fmt.Println("  To update: 'go install github.com/mturley/agent-handler@latest && handler setup'")
 	fmt.Println("  To uninstall, run 'handler uninstall'.")
 	fmt.Println("\nTest with: handler status")
 	return nil
