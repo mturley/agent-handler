@@ -147,8 +147,15 @@ func findAgentHandlerHooks(settingsPath string) []string {
 
 	var found []string
 	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreCompact"} {
-		if hookConfig, exists := hooks[event]; exists && isAgentHandlerHook(hookConfig) {
-			found = append(found, event)
+		existing, ok := hooks[event].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, group := range existing {
+			if isAgentHandlerHook(group) {
+				found = append(found, event)
+				break
+			}
 		}
 	}
 	return found
@@ -173,8 +180,25 @@ func removeHooks(home string) error {
 	}
 
 	for _, event := range []string{"SessionStart", "UserPromptSubmit", "PreCompact"} {
-		if hookConfig, exists := hooks[event]; exists && isAgentHandlerHook(hookConfig) {
-			delete(hooks, event)
+		existing, ok := hooks[event].([]interface{})
+		if !ok {
+			continue
+		}
+		var kept []interface{}
+		removed := false
+		for _, group := range existing {
+			if isAgentHandlerHook(group) {
+				removed = true
+			} else {
+				kept = append(kept, group)
+			}
+		}
+		if removed {
+			if len(kept) == 0 {
+				delete(hooks, event)
+			} else {
+				hooks[event] = kept
+			}
 			fmt.Printf("  ✓ Removed %s hook\n", event)
 		}
 	}

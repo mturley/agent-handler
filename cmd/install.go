@@ -177,18 +177,27 @@ func configureHooks(home, hooksDir string) error {
 
 	for event, script := range hookEntries {
 		scriptPath := filepath.Join(hooksDir, script)
-		existingHooks[event] = []interface{}{
-			map[string]interface{}{
-				"matcher": "",
-				"hooks": []interface{}{
-					map[string]interface{}{
-						"type":    "command",
-						"command": scriptPath,
-						"timeout": timeouts[event],
-					},
+		newMatcherGroup := map[string]interface{}{
+			"matcher": "",
+			"hooks": []interface{}{
+				map[string]interface{}{
+					"type":    "command",
+					"command": scriptPath,
+					"timeout": timeouts[event],
 				},
 			},
 		}
+
+		// Preserve existing matcher groups from other tools, remove any existing agent-handler ones
+		var kept []interface{}
+		if existing, ok := existingHooks[event].([]interface{}); ok {
+			for _, group := range existing {
+				if !isAgentHandlerHook(group) {
+					kept = append(kept, group)
+				}
+			}
+		}
+		existingHooks[event] = append(kept, newMatcherGroup)
 		fmt.Printf("  ✓ %s -> %s\n", event, scriptPath)
 	}
 
