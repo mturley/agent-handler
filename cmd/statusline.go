@@ -30,11 +30,9 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 
 	// Get session
 	session, err := d.GetSession(slSessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	if session == nil {
-		return fmt.Errorf("session not found: %s", slSessionID)
+	if err != nil || session == nil || session.Status == "archived" {
+		fmt.Println("Session not registered with handler. Send a prompt to register.")
+		return nil
 	}
 
 	// Query unread count
