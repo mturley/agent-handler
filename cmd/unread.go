@@ -20,6 +20,7 @@ func init() {
 	rootCmd.AddCommand(unreadCmd)
 	unreadCmd.Flags().String("session-id", "", "session ID (defaults to session from PID cache)")
 	unreadCmd.Flags().Bool("ack", false, "acknowledge events after reading")
+	unreadCmd.Flags().Bool("count", false, "only print the unread count")
 }
 
 func runUnread(cmd *cobra.Command, args []string) error {
@@ -40,6 +41,17 @@ func runUnread(cmd *cobra.Command, args []string) error {
 	sessionID, err := resolveSessionID(cmd)
 	if err != nil {
 		return fmt.Errorf("could not determine session: %w", err)
+	}
+
+	countOnly, _ := cmd.Flags().GetBool("count")
+
+	if countOnly {
+		count, _, err := d.UnreadCountForSession(sessionID)
+		if err != nil {
+			return fmt.Errorf("failed to count unread events: %w", err)
+		}
+		fmt.Println(count)
+		return nil
 	}
 
 	events, err := d.UnreadForSession(sessionID)

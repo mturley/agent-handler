@@ -45,8 +45,8 @@ handler heartbeat --session-id "$SESSION_ID" >/dev/null 2>&1 &
 INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
 
 if [ "$INBOX_MODE" = "on-submit" ]; then
-    UNREAD=$(handler unread --session-id "$SESSION_ID" 2>/dev/null)
-    if [ -n "$UNREAD" ] && ! echo "$UNREAD" | grep -qi "no unread"; then
-        echo "You have new unread messages in your handler inbox. Run /inbox to read and respond to them."
+    UNREAD_COUNT=$(handler unread --session-id "$SESSION_ID" --count 2>/dev/null)
+    if [ -n "$UNREAD_COUNT" ] && [ "$UNREAD_COUNT" != "0" ]; then
+        echo "You have ${UNREAD_COUNT} new unread message(s) in your handler inbox. Run /inbox to read and respond to them."
     fi
 fi
