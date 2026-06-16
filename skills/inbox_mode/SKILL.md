@@ -13,48 +13,36 @@ Three modes control how you receive unread events:
 | `on-submit` | You are notified of new messages on each prompt submit. |
 | `auto` | A cron job polls for new events and invokes /inbox when messages arrive. |
 
-## Usage
+## Switching to manual or on-submit
 
-Set the mode with:
+1. If the current mode is auto, clean up the cron job first:
+```bash
+CRON_ID=$(handler configure --get cron-job-id)
+```
+If CRON_ID is not empty, use CronDelete to delete that job.
+
+2. Set the mode:
 ```bash
 handler configure --inbox-mode <mode>
 ```
 
-## Switching to auto mode
+## Switching to auto
 
-After running the configure command, set up a durable cron job to poll for messages:
+1. Set the mode:
+```bash
+handler configure --inbox-mode auto
+```
 
+2. Create a durable cron job (default: every 1 minute):
 ```
 CronCreate with:
-  cron: "*/<interval-in-minutes> * * * *"  (e.g. "*/1 * * * *" for every minute)
+  cron: "*/1 * * * *"
   durable: true
   recurring: true
   prompt: "Check handler unread --count. If the count is greater than 0, invoke /inbox."
 ```
 
-Save the returned job ID by storing it with:
+3. Store the returned job ID:
 ```bash
-handler emit --type handler_cron_id --title "<job-id>" --tags "inbox_auto_cron"
+handler configure --cron-job-id <job-id>
 ```
-
-This stores the cron job ID in the ledger so it can be found later for cleanup.
-
-## Switching away from auto mode
-
-When switching from auto to manual or on-submit:
-
-1. Find the cron job ID:
-```bash
-handler query "SELECT title FROM events WHERE type='handler_cron_id' AND tags LIKE '%inbox_auto_cron%' ORDER BY ts DESC LIMIT 1"
-```
-
-2. Delete the cron job using CronDelete with that ID.
-
-3. Set the new mode:
-```bash
-handler configure --inbox-mode <mode>
-```
-
-## Default interval
-
-If the user doesn't specify an interval, default to every 1 minute (`"*/1 * * * *"`).
