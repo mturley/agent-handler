@@ -73,14 +73,13 @@ func runEmit(cmd *cobra.Command, args []string) error {
 
 	var recipients []db.EventRecipient
 	for _, to := range emitTo {
-		// If it looks like a UUID, treat as session ID; otherwise treat as branch
-		recipientType := "branch"
-		if len(to) > 8 && (len(to) == 36 || strings.Contains(to, "-")) {
-			recipientType = "session"
+		recipientType, recipientValue, err := resolveRecipient(d, to)
+		if err != nil {
+			return err
 		}
 		recipients = append(recipients, db.EventRecipient{
 			RecipientType:  recipientType,
-			RecipientValue: to,
+			RecipientValue: recipientValue,
 		})
 	}
 
@@ -105,4 +104,38 @@ func runEmit(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func resolveRecipient(d *db.DB, to string) (recipientType, recipientValue string, err error) {
+	// UUID-shaped strings are session IDs
+	if len(to) == 36 && strings.Count(to, "-") == 4 {
+		return "session", to, nil
+	}
+
+	// repo:branch format
+	if strings.Contains(to, ":") {
+		return "branch", to, nil
+	}
+
+	// Bare branch name — check for ambiguity across repos
+	rows, err := d.Conn().Query(
+		`SELECT DISTINCT repo FROM sessions WHERE branch = ? AND status != 'archived'`, to)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to look up branch %q: %w", to, err)
+	}
+	defer rows.Close()
+
+	var repos []string
+	for rows.Next() {
+		var repo string
+		rows.Scan(&repo)
+		repos = append(repos, repo)
+	}
+
+	if len(repos) > 1 {
+		return "", "", fmt.Errorf("branch %q exists in multiple repos: %s. Use repo:branch format (e.g. %s:%s)",
+			to, strings.Join(repos, ", "), repos[0], to)
+	}
+
+	return "branch", to, nil
 }

@@ -168,13 +168,14 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND er.recipient_value = ?)
+		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
 		    OR s.id IS NOT NULL
 		  )
 		ORDER BY e.ts ASC
 	`
 
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch)
+	repoBranch := session.Repo + ":" + session.Branch
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread events: %w", err)
 	}
@@ -211,13 +212,14 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND er.recipient_value = ?)
+		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
 		    OR s.id IS NOT NULL
 		  )
 		GROUP BY e.type
 	`
 
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch)
+	repoBranch := session.Repo + ":" + session.Branch
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to count unread events: %w", err)
 	}
