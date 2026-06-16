@@ -37,6 +37,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
+	agentHandlerDir := filepath.Join(home, ".agent-handler")
 	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
@@ -73,6 +74,15 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	hooksPath := filepath.Join(agentHandlerDir, "hooks")
+	skillsPath := filepath.Join(agentHandlerDir, "skills")
+	if _, err := os.Stat(hooksPath); err == nil {
+		fmt.Printf("  Remove extracted hooks from %s\n", hooksPath)
+	}
+	if _, err := os.Stat(skillsPath); err == nil {
+		fmt.Printf("  Remove extracted skills from %s\n", skillsPath)
+	}
+
 	fmt.Println("")
 
 	if !confirm("Proceed?") {
@@ -101,10 +111,19 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ Removed %s\n", realBinaryPath)
 	}
 
-	agentHandlerDir := filepath.Join(home, ".agent-handler")
+	// Remove extracted hooks and skills from ~/.agent-handler
+	for _, dir := range []string{"hooks", "skills"} {
+		dirPath := filepath.Join(agentHandlerDir, dir)
+		if _, err := os.Stat(dirPath); err == nil {
+			os.RemoveAll(dirPath)
+			fmt.Printf("  ✓ Removed %s\n", dirPath)
+		}
+	}
+
 	fmt.Println("\n✓ Uninstallation complete!")
-	if _, err := os.Stat(agentHandlerDir); err == nil {
-		fmt.Printf("\n  Your event history, session data, and database are still at %s\n", agentHandlerDir)
+	dataDir := filepath.Join(agentHandlerDir, "data")
+	if _, err := os.Stat(dataDir); err == nil {
+		fmt.Printf("\n  Your event history, session data, and database are still at %s\n", dataDir)
 		fmt.Println("  To fully remove all data: rm -rf ~/.agent-handler")
 	}
 	return nil

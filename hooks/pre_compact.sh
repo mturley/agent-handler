@@ -8,7 +8,7 @@ if ! command -v handler &>/dev/null; then
 fi
 
 CLAUDE_PID="$PPID"
-SESSIONS_DIR="${HOME}/.agent-handler/sessions"
+SESSIONS_DIR="${HOME}/.agent-handler/data/sessions"
 
 if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
     SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")

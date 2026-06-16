@@ -61,7 +61,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Println("")
 
 	// 1. Create directory structure
-	for _, dir := range []string{handlerDir, filepath.Join(handlerDir, "sessions"), filepath.Join(handlerDir, "logs"), hooksDir, skillsDir} {
+	dataDir := filepath.Join(handlerDir, "data")
+	for _, dir := range []string{handlerDir, dataDir, filepath.Join(dataDir, "sessions"), filepath.Join(dataDir, "logs"), hooksDir, skillsDir} {
 		os.MkdirAll(dir, 0755)
 	}
 	fmt.Printf("  ✓ Created directory structure at %s\n", handlerDir)

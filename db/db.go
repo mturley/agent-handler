@@ -79,12 +79,12 @@ func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return db.conn.Query(query, args...)
 }
 
-// DefaultPath returns the default database path: ~/.agent-handler/handler.db
+// DefaultPath returns the default database path: ~/.agent-handler/data/handler.db
 func DefaultPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		// Fallback to current directory if home cannot be determined
-		return filepath.Join(".", ".agent-handler", "handler.db")
+		return filepath.Join(".", ".agent-handler", "data", "handler.db")
 	}
-	return filepath.Join(home, ".agent-handler", "handler.db")
+	return filepath.Join(home, ".agent-handler", "data", "handler.db")
 }

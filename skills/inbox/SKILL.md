@@ -11,7 +11,7 @@ Run `handler unread --session-id <your-session-id> --json` to check for unread e
 
 Your session ID is stored in the PID cache. Run:
 ```bash
-cat ~/.agent-handler/sessions/$PPID
+cat ~/.agent-handler/data/sessions/$PPID
 ```
 If that file doesn't exist, discover it from the JSONL:
 ```bash
