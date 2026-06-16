@@ -123,7 +123,7 @@ func findAgentHandlerSkills(claudeSkillsDir string) []string {
 			if err != nil {
 				continue
 			}
-			if strings.Contains(target, "agent-handler") || strings.Contains(target, "agent-ledger") {
+			if strings.Contains(target, "agent-handler") {
 				found = append(found, name)
 			}
 		}
@@ -223,9 +223,7 @@ func isAgentHandlerHook(hookConfig interface{}) bool {
 		return false
 	}
 	s := string(data)
-	return strings.Contains(s, "agent-handler") || strings.Contains(s, "agent-ledger") ||
-		strings.Contains(s, "session_start.sh") || strings.Contains(s, "user_prompt_submit.sh") ||
-		strings.Contains(s, "pre_compact.sh")
+	return strings.Contains(s, "agent-handler")
 }
 
 func confirm(prompt string) bool {
