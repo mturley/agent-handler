@@ -25,9 +25,9 @@ fi
 # Register if: no cache, or cache points to wrong session
 if [ -z "$CACHED_SESSION_ID" ] || [ "$CACHED_SESSION_ID" != "$ACTUAL_SESSION_ID" ]; then
     if [ -n "$ACTUAL_SESSION_ID" ]; then
-        # Don't resurrect archived sessions — they were intentionally unregistered
-        STATUS=$(handler query "SELECT status FROM sessions WHERE session_id='${ACTUAL_SESSION_ID}'" 2>/dev/null | tail -1)
-        if [ "$STATUS" = "archived" ]; then
+        # Don't resurrect sessions archived less than 60 seconds ago
+        RECENTLY_ARCHIVED=$(handler query "SELECT COUNT(*) FROM sessions WHERE session_id='${ACTUAL_SESSION_ID}' AND status='archived' AND last_active > datetime('now', '-60 seconds')" 2>/dev/null | tail -1)
+        if [ "$RECENTLY_ARCHIVED" = "1" ]; then
             exit 0
         fi
         discover_and_register "$CLAUDE_PID" >/dev/null 2>&1 || true
