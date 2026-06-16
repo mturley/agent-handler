@@ -31,7 +31,17 @@ Then run `handler setup` again.
 
 ### Update
 
-Repeat the install instructions.
+If installed via `go install`:
+```bash
+handler update
+```
+
+If installed from source:
+```bash
+cd agent-handler
+git pull
+make build && make install
+```
 
 ### Uninstall
 
