@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	agentHandlerDir := filepath.Join(home, ".agent-handler")
+	agentHandlerDir := db.HandlerHome()
 	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 

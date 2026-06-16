@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/mturley/agent-handler/cmd/resource"
 	"github.com/mturley/agent-handler/db"
@@ -20,12 +19,8 @@ var rootCmd = &cobra.Command{
 		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" {
 			return nil
 		}
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil
-		}
-		handlerDir := filepath.Join(home, ".agent-handler")
-		if _, err := os.Stat(handlerDir); os.IsNotExist(err) {
+		dbPath := db.DefaultPath()
+		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			fmt.Fprintln(os.Stderr, "agent-handler is not set up yet. Run 'handler setup' to configure skills, hooks, and database.")
 			os.Exit(1)
 		}

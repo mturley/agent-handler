@@ -2,7 +2,7 @@ BINARY_NAME := handler
 BIN_DIR := bin
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: build install clean
+.PHONY: build install test clean
 
 build:
 	@mkdir -p $(BIN_DIR)
@@ -18,6 +18,9 @@ install:
 	@echo "Installed binary to $(INSTALL_DIR)/$(BINARY_NAME)"
 	@echo ""
 	@$(INSTALL_DIR)/$(BINARY_NAME) setup
+
+test:
+	go test ./... -v
 
 clean:
 	rm -rf $(BIN_DIR)

@@ -38,7 +38,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	handlerDir := filepath.Join(home, ".agent-handler")
+	handlerDir := db.HandlerHome()
 	hooksDir := filepath.Join(handlerDir, "hooks")
 	skillsDir := filepath.Join(handlerDir, "skills")
 	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
