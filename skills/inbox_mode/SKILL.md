@@ -17,18 +17,18 @@ Three modes control how you receive unread events:
 
 To set the mode, run:
 ```bash
-handler configure --session-id <your-session-id> --inbox-mode <mode>
+handler configure --session-id $(handler whoami) --inbox-mode <mode>
 ```
 
 For auto mode with a custom interval:
 ```bash
-handler configure --session-id <your-session-id> --inbox-mode auto --auto-poll-interval 60
+handler configure --session-id $(handler whoami) --inbox-mode auto --auto-poll-interval 60
 ```
 
 ## Auto mode
 
 When setting auto mode, start a polling loop that periodically runs `/inbox`:
 - Use ScheduleWakeup or /loop to check every N seconds (default 60)
-- On each poll, run `handler unread --session-id <id> --json`
+- On each poll, run `handler unread --session-id $(handler whoami) --json`
 - If there are unread events, present them and offer to act
-- Acknowledge after presenting: `handler ack --session-id <id>`
+- Acknowledge after presenting: `handler ack --session-id $(handler whoami)`

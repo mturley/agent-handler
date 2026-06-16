@@ -11,7 +11,7 @@ Subscribe to receive events about an external resource (PR, Jira issue, etc.).
 
 ```bash
 handler subscribe \
-    --session-id <your-session-id> \
+    --session-id $(handler whoami) \
     --resource "pr:owner/repo#123" \
     --url "https://github.com/owner/repo/pull/123"
 ```
@@ -29,5 +29,5 @@ This also updates the `.worktree-resources` file so other tools can see what thi
 ## Unsubscribing
 
 ```bash
-handler unsubscribe --session-id <id> --resource "pr:owner/repo#123"
+handler unsubscribe --session-id $(handler whoami) --resource "pr:owner/repo#123"
 ```

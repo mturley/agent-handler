@@ -14,7 +14,7 @@ Use this when you're done with a session and want to cleanly archive it. This:
 ## Usage
 
 ```bash
-handler unregister --session-id <your-session-id>
+handler unregister --session-id $(handler whoami)
 ```
 
 ## When to use
