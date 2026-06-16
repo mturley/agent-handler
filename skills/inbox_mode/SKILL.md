@@ -57,4 +57,4 @@ handler configure --inbox-mode <mode>
 
 ## Default interval
 
-If the user doesn't specify an interval, default to every 1 minute.
+If the user doesn't specify an interval, default to every 1 minute (`"*/1 * * * *"`).
