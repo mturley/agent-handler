@@ -33,11 +33,11 @@ handler configure --inbox-mode <mode>
 handler configure --inbox-mode auto
 ```
 
-2. Create a durable cron job (default: every 1 minute):
+2. Create a session-scoped cron job (default: every 1 minute):
 ```
 CronCreate with:
   cron: "*/1 * * * *"
-  durable: true
+  durable: false
   recurring: true
   prompt: "Check handler unread --count. If the count is greater than 0, invoke /inbox."
 ```
@@ -46,3 +46,5 @@ CronCreate with:
 ```bash
 handler configure --cron-job-id <job-id>
 ```
+
+Note: the cron job is session-scoped and will not survive session restarts. Inbox mode resets to manual when the session ends.
