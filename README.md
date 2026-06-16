@@ -10,7 +10,7 @@ Centralized logging, publish/subscribe messaging, event handling and external re
 git clone https://github.com/mturley/agent-handler.git
 cd agent-handler
 make build
-make install
+make install # Copies `handler` binary to /usr/local/bin and runs `handler install` for skill setup
 ```
 
 ### Using `go install`
@@ -20,20 +20,26 @@ go install github.com/mturley/agent-handler@latest
 handler install
 ```
 
-Note: `go install` puts the binary in `$(go env GOPATH)/bin`. Make sure that's on your PATH:
+Note: `go install` puts the binary in `$(go env GOPATH)/bin`. If you get `command not found: handler`, make sure the go bin directory is on your PATH by adding this to your shell's rc file:
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
-Both methods install to `~/.agent-handler/` and configure Claude Code hooks and skills automatically. The `handler install` command shows what it will do and asks for confirmation before proceeding.
+Then run `handler install` again.
 
-To update, pull the latest changes (or re-run `go install`) and run `handler install` again.
+`handler install` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
+
+### Update
+
+Repeat the install instructions.
 
 ### Uninstall
 
 ```bash
 handler uninstall
 ```
+
+The binary and skill/hook configuration will be cleaned up, but your database and session data will remain in `~/.agent-handler`. To fully clean up your installation you can delete that directory.
 
 ## Key Commands
 
