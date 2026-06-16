@@ -15,11 +15,7 @@ Three modes control how you receive unread events:
 
 ## Switching to manual or on-submit
 
-1. If the current mode is auto, clean up the cron job first:
-```bash
-CRON_ID=$(handler configure --get cron-job-id)
-```
-If CRON_ID is not empty, use CronDelete to delete that job.
+1. If the current mode is auto, use CronList to find the inbox polling cron job and CronDelete to remove it.
 
 2. Set the mode:
 ```bash
@@ -42,9 +38,4 @@ CronCreate with:
   prompt: "Check handler unread --count. If the count is greater than 0, invoke /inbox."
 ```
 
-3. Store the returned job ID:
-```bash
-handler configure --cron-job-id <job-id>
-```
-
-Note: the cron job is session-scoped and will not survive session restarts. Inbox mode resets to manual when the session ends.
+The cron job is session-scoped and will not survive session restarts. Inbox mode resets to manual when the session ends.

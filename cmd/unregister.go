@@ -56,7 +56,7 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 	}
 
 	// Reset inbox mode to manual
-	d.ConfigureSession(sessionID, "manual", nil, nil)
+	d.ConfigureSession(sessionID, "manual", nil)
 
 	// Soft-delete all subscriptions for this session
 	subsDeleted, err := d.SoftDeleteSubscriptionsForSession(sessionID)

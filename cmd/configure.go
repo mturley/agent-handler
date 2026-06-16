@@ -19,8 +19,7 @@ func init() {
 	configureCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 	configureCmd.Flags().String("inbox-mode", "", "inbox mode (manual, on-submit, auto)")
 	configureCmd.Flags().Int("auto-poll-interval", 0, "auto-poll interval in seconds (for auto mode)")
-	configureCmd.Flags().String("cron-job-id", "", "cron job ID for auto inbox polling")
-	configureCmd.Flags().String("get", "", "get a specific setting value (inbox-mode, auto-poll-interval, cron-job-id)")
+	configureCmd.Flags().String("get", "", "get a specific setting value (inbox-mode, auto-poll-interval)")
 }
 
 func runConfigure(cmd *cobra.Command, args []string) error {
@@ -31,7 +30,6 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 
 	getFlag, _ := cmd.Flags().GetString("get")
 
-	// --get mode: read and output a single value
 	if getFlag != "" {
 		d, err := openReadOnlyDB()
 		if err != nil {
@@ -53,25 +51,17 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 			} else {
 				fmt.Println("null")
 			}
-		case "cron-job-id", "cron_job_id":
-			if session.CronJobID != "" {
-				fmt.Println(session.CronJobID)
-			} else {
-				fmt.Println("")
-			}
 		default:
-			return fmt.Errorf("unknown setting: %s (valid: inbox-mode, auto-poll-interval, cron-job-id)", getFlag)
+			return fmt.Errorf("unknown setting: %s (valid: inbox-mode, auto-poll-interval)", getFlag)
 		}
 		return nil
 	}
 
-	// Set mode
 	inboxMode, _ := cmd.Flags().GetString("inbox-mode")
 	autoPollInterval, _ := cmd.Flags().GetInt("auto-poll-interval")
-	cronJobID, _ := cmd.Flags().GetString("cron-job-id")
 
-	if inboxMode == "" && autoPollInterval == 0 && cronJobID == "" {
-		return fmt.Errorf("at least one setting flag must be provided")
+	if inboxMode == "" && autoPollInterval == 0 {
+		return fmt.Errorf("at least one of --inbox-mode or --auto-poll-interval must be provided")
 	}
 
 	d, err := openDB()
@@ -97,12 +87,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		finalAutoPoll = session.AutoPollInterval
 	}
 
-	var finalCronJobID *string
-	if cronJobID != "" {
-		finalCronJobID = &cronJobID
-	}
-
-	if err := d.ConfigureSession(sessionID, finalInboxMode, finalAutoPoll, finalCronJobID); err != nil {
+	if err := d.ConfigureSession(sessionID, finalInboxMode, finalAutoPoll); err != nil {
 		return fmt.Errorf("failed to configure session: %w", err)
 	}
 
