@@ -85,6 +85,10 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Remove extracted skills from %s\n", skillsPath)
 	}
 
+	if hasHandlerPermission(settingsPath) {
+		fmt.Printf("  Remove Bash(handler *) permission from %s\n", settingsPath)
+	}
+
 	fmt.Println("")
 
 	if !confirm("Proceed?") {
@@ -238,12 +242,51 @@ func removeHooks(home string) error {
 		}
 	}
 
+	// Remove handler permission
+	if perms, ok := settings["permissions"].(map[string]interface{}); ok {
+		if allow, ok := perms["allow"].([]interface{}); ok {
+			var kept []interface{}
+			for _, p := range allow {
+				if s, ok := p.(string); ok && s == "Bash(handler *)" {
+					continue
+				}
+				kept = append(kept, p)
+			}
+			if len(kept) != len(allow) {
+				perms["allow"] = kept
+				fmt.Println("  ✓ Removed Bash(handler *) permission")
+			}
+		}
+	}
+
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err
 	}
 	out = append(out, '\n')
 	return os.WriteFile(settingsPath, out, 0644)
+}
+
+func hasHandlerPermission(settingsPath string) bool {
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return false
+	}
+	settings := make(map[string]interface{})
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return false
+	}
+	perms, _ := settings["permissions"].(map[string]interface{})
+	if perms == nil {
+		return false
+	}
+	allow, _ := perms["allow"].([]interface{})
+	for _, p := range allow {
+		if s, ok := p.(string); ok && s == "Bash(handler *)" {
+			return true
+		}
+	}
+	return false
 }
 
 func isAgentHandlerHook(hookConfig interface{}) bool {

@@ -147,6 +147,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuring status line: %w", err)
 	}
 
+	// 7. Offer to auto-allow handler commands
+	fmt.Println("")
+	configurePermissions(home)
+
 	fmt.Println("\n✓ Installation complete!")
 	fmt.Printf("\n  All files installed to %s\n", handlerDir)
 	fmt.Println("  To update, run 'handler update'.")
@@ -244,4 +248,54 @@ func configureStatusLine(home string) error {
 	}
 	data = append(data, '\n')
 	return os.WriteFile(settingsPath, data, 0644)
+}
+
+func configurePermissions(home string) {
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	permission := "Bash(handler *)"
+
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return
+	}
+	settings := make(map[string]interface{})
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return
+	}
+
+	perms, _ := settings["permissions"].(map[string]interface{})
+	if perms != nil {
+		if allow, ok := perms["allow"].([]interface{}); ok {
+			for _, p := range allow {
+				if s, ok := p.(string); ok && s == permission {
+					fmt.Printf("  ✓ Permission already configured: %s\n", permission)
+					return
+				}
+			}
+		}
+	}
+
+	fmt.Printf("  Auto-allow all handler CLI commands in Claude Code sessions?\n")
+	fmt.Printf("  This adds \"%s\" to your Claude Code permissions so agents\n", permission)
+	fmt.Printf("  can run handler commands without prompting for approval.\n\n")
+	if !confirm("  Add permission?") {
+		fmt.Println("  Skipped. You can add it manually later in ~/.claude/settings.json")
+		return
+	}
+
+	if perms == nil {
+		perms = make(map[string]interface{})
+	}
+	allow, _ := perms["allow"].([]interface{})
+	allow = append(allow, permission)
+	perms["allow"] = allow
+	settings["permissions"] = perms
+
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return
+	}
+	out = append(out, '\n')
+	os.WriteFile(settingsPath, out, 0644)
+	fmt.Printf("  ✓ Added permission: %s\n", permission)
 }
