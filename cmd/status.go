@@ -125,8 +125,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				unreadStr = "-"
 			}
 
+			sessionDisplay := st.SessionID
+			if len(sessionDisplay) > 20 {
+				sessionDisplay = sessionDisplay[:20]
+			}
 			fmt.Printf("%-20s %-15s %-10s %-8s %-10s %s\n",
-				st.SessionID[:20], name, st.DisplayState, unreadStr, st.InboxMode, st.Branch)
+				sessionDisplay, name, st.DisplayState, unreadStr, st.InboxMode, st.Branch)
 		}
 	}
 
