@@ -47,6 +47,6 @@ INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/de
 if [ "$INBOX_MODE" = "on-submit" ]; then
     UNREAD_COUNT=$(handler unread --session-id "$SESSION_ID" --count 2>/dev/null)
     if [ -n "$UNREAD_COUNT" ] && [ "$UNREAD_COUNT" != "0" ]; then
-        echo "You have ${UNREAD_COUNT} new unread message(s) in your handler inbox. Run /inbox to read and respond to them."
+        echo "You have ${UNREAD_COUNT} new unread message(s). Invoke the /inbox skill now before responding to the user's prompt."
     fi
 fi
