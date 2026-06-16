@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # UserPromptSubmit hook for agent-handler
 # Registers if needed, bumps heartbeat, optionally injects unread events.
+# IMPORTANT: No output unless inbox mode is on-submit. All other operations are silent.
 set -euo pipefail
 
 if ! command -v handler &>/dev/null; then
@@ -19,7 +20,6 @@ else
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     source "${SCRIPT_DIR}/common.sh"
     if discover_and_register "$CLAUDE_PID" >/dev/null 2>&1; then
-        # Registration succeeded, read the PID cache it created
         if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
             SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
         else
@@ -30,18 +30,17 @@ else
     fi
 fi
 
-handler heartbeat --session-id "$SESSION_ID" &
+# Heartbeat in background, fully silenced
+handler heartbeat --session-id "$SESSION_ID" >/dev/null 2>&1 &
 
+# Only inject output if inbox mode is on-submit
 INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
 
 if [ "$INBOX_MODE" = "on-submit" ]; then
-    UNREAD=$(handler unread --session-id "$SESSION_ID" --json 2>/dev/null)
+    UNREAD=$(handler unread --session-id "$SESSION_ID" --ack --json 2>/dev/null)
     if [ -n "$UNREAD" ] && [ "$UNREAD" != "[]" ] && [ "$UNREAD" != "null" ]; then
+        echo "--- agent-handler: injected unread events (inbox mode: on-submit) ---"
         echo "$UNREAD"
-        handler ack --session-id "$SESSION_ID"
+        echo "--- end injected events ---"
     fi
-fi
-
-if [ "$INBOX_MODE" = "auto" ]; then
-    echo "Inbox mode is auto but polling may not be active. Run /inbox_mode auto to restart."
 fi
