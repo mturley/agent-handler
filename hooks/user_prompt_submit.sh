@@ -22,9 +22,14 @@ if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
     CACHED_SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
 fi
 
-# Register if: no cache, cache is stale, or cache points to wrong session
+# Register if: no cache, or cache points to wrong session
 if [ -z "$CACHED_SESSION_ID" ] || [ "$CACHED_SESSION_ID" != "$ACTUAL_SESSION_ID" ]; then
     if [ -n "$ACTUAL_SESSION_ID" ]; then
+        # Don't resurrect archived sessions — they were intentionally unregistered
+        STATUS=$(handler query "SELECT status FROM sessions WHERE session_id='${ACTUAL_SESSION_ID}'" 2>/dev/null | tail -1)
+        if [ "$STATUS" = "archived" ]; then
+            exit 0
+        fi
         discover_and_register "$CLAUDE_PID" >/dev/null 2>&1 || true
         if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
             SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
