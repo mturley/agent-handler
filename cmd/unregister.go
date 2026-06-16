@@ -61,27 +61,19 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to soft-delete subscriptions: %w", err)
 	}
 
-	// Emit session_end event
+	// Emit session_end event (not addressed to anyone — for audit trail only)
 	now := time.Now().UTC().Format(time.RFC3339)
-	eventID := uuid.New().String()
-	err = d.InsertEvent(
+	d.InsertEvent(
 		db.Event{
-			ID:        eventID,
+			ID:        uuid.New().String(),
 			TS:        now,
 			Source:    "handler",
 			SessionID: &sessionID,
 			Type:      "session_end",
 			Title:     fmt.Sprintf("Session %s ended", sessionID),
-			Broadcast: false,
 		},
-		[]db.EventRecipient{
-			{RecipientType: "session", RecipientValue: sessionID},
-		},
-		[]db.EventResource{},
+		nil, nil,
 	)
-	if err != nil {
-		return fmt.Errorf("failed to insert session_end event: %w", err)
-	}
 
 	// Clean up PID cache file
 	sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
