@@ -144,7 +144,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Println("\n✓ Installation complete!")
 	fmt.Printf("\n  All files installed to %s\n", handlerDir)
 	fmt.Println("  To update, run 'handler install' again.")
-	fmt.Println("  To uninstall, run 'handler uninstall' (or 'handler uninstall --purge' to also remove data).")
+	fmt.Println("  To uninstall, run 'handler uninstall'.")
 	fmt.Println("\nTest with: handler status")
 	return nil
 }
