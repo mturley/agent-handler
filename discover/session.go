@@ -61,17 +61,28 @@ func DiscoverSessionID(claudeHome, cwd string) (sessionID, jsonlPath string, err
 	return sessionID, mostRecentPath, nil
 }
 
-// cwdToProjectDir encodes the cwd into the Claude project directory naming convention.
-// The convention is to replace "/" with "-" and prepend "-".
+// cwdToProjectDir finds the Claude project directory for a given cwd.
+// Claude encodes the path by replacing "/" and "." with "-" and prepending "-".
+// We try the canonical encoding first, then fall back to "/" only.
 func cwdToProjectDir(claudeHome, cwd string) string {
-	// Normalize paths
 	cwd = filepath.Clean(cwd)
+	projectsDir := filepath.Join(claudeHome, "projects")
 
-	// Convert cwd to project dir name: replace "/" with "-" and prepend "-"
-	projectName := strings.ReplaceAll(cwd, "/", "-")
+	// Primary encoding: replace both / and . with -
+	r := strings.NewReplacer("/", "-", ".", "-")
+	projectName := r.Replace(cwd)
 	if !strings.HasPrefix(projectName, "-") {
 		projectName = "-" + projectName
 	}
+	candidate := filepath.Join(projectsDir, projectName)
+	if _, err := os.Stat(candidate); err == nil {
+		return candidate
+	}
 
-	return filepath.Join(claudeHome, "projects", projectName)
+	// Fallback: replace only / with -
+	projectName = strings.ReplaceAll(cwd, "/", "-")
+	if !strings.HasPrefix(projectName, "-") {
+		projectName = "-" + projectName
+	}
+	return filepath.Join(projectsDir, projectName)
 }
