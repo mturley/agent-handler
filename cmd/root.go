@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/mturley/agent-handler/cmd/resource"
 	"github.com/mturley/agent-handler/db"
@@ -15,6 +16,21 @@ var rootCmd = &cobra.Command{
 	Use:   "handler",
 	Short: "Agent handler CLI for managing Claude Code agent sessions",
 	Long:  `A CLI tool backed by SQLite for managing Claude Code agent sessions.`,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Name() == "install" || cmd.Name() == "help" || cmd.Name() == "completion" {
+			return nil
+		}
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		handlerDir := filepath.Join(home, ".agent-handler")
+		if _, err := os.Stat(handlerDir); os.IsNotExist(err) {
+			fmt.Fprintln(os.Stderr, "agent-handler is not set up yet. Run 'handler install' to configure skills, hooks, and database.")
+			os.Exit(1)
+		}
+		return nil
+	},
 }
 
 func Execute() {

@@ -3,12 +3,18 @@
 ## Build and Install
 
 ```bash
-make build    # builds to bin/handler
-make install  # builds, copies to ~/.agent-handler/, symlinks skills + hooks, configures Claude settings
-make clean    # removes bin/
+make build      # builds to bin/handler
+make install    # builds + runs handler install
+make clean      # removes bin/
 ```
 
-Install is in the Makefile (not the binary) because it needs repo context to find skills and hooks. Uninstall is in the binary (`handler uninstall`) because it runs from the installed copy.
+Or without the repo:
+```bash
+go install github.com/mturley/agent-handler@latest
+handler install
+```
+
+Skills and hooks are embedded in the binary via `//go:embed`. `handler install` extracts them to `~/.agent-handler/` and configures Claude Code. `handler uninstall --purge` reverses everything including removing the binary itself.
 
 ## Test
 
@@ -27,15 +33,13 @@ go test ./...
 
 ## Installation Model
 
-`make install` copies the binary, hooks, and skills into `~/.agent-handler/` and symlinks skills into `~/.claude/skills/`. This makes the installation independent of the source repo. `handler uninstall` reverses everything.
+`handler install` extracts embedded skills and hooks to `~/.agent-handler/`, symlinks skills into `~/.claude/skills/`, and configures Claude Code hooks in settings.json. The installation is independent of the source repo.
 
-When adding or removing skills, update:
-- The `SKILLS` variable in `Makefile`
-- The `skillNames` slice in `cmd/uninstall.go`
+Skills and hooks are embedded into the binary at build time via `//go:embed` in `embedded.go`. The embed directives use glob patterns (`skills/*/SKILL.md`, `hooks/*.sh`), so new skills/hooks are picked up automatically as long as they follow the directory convention.
 
-When adding or removing hooks, update:
-- The `HOOKS` variable and the python3 hook configuration block in `Makefile`
-- The `removeHooks()` function in `cmd/uninstall.go`
+When adding or removing skills, update the `skillNames` slice in `cmd/uninstall.go` (install discovers skills from the embedded FS, but uninstall needs the list to know what to clean up).
+
+When adding or removing hooks, update `configureHooks()` in `cmd/install.go` and `removeHooks()` in `cmd/uninstall.go`.
 
 ## Design
 

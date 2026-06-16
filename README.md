@@ -2,26 +2,37 @@
 
 Centralized logging, publish/subscribe messaging, event handling and external resource watching for code agents.
 
-## Getting Started
+## Install
 
-### Build
+### From source (requires Go 1.22+)
 
 ```bash
-go build -o handler .
+git clone https://github.com/mturley/agent-handler.git
+cd agent-handler
+make build
+make install
 ```
 
-### Install
+### Using `go install`
 
 ```bash
-./handler install
+go install github.com/mturley/agent-handler@latest
+handler install
 ```
 
-This creates `~/.agent-handler/`, initializes the SQLite database, and symlinks skills into `~/.claude/skills/`.
+Both methods install to `~/.agent-handler/` and configure Claude Code hooks and skills automatically. The `handler install` command shows what it will do and asks for confirmation before proceeding.
 
-### Key Commands
+To update, pull the latest changes (or re-run `go install`) and run `handler install` again.
+
+### Uninstall
 
 ```bash
-handler register    # Register a Claude Code session
+handler uninstall
+```
+
+## Key Commands
+
+```bash
 handler status      # Show all sessions with liveness and unread counts
 handler emit        # Write an event to the ledger
 handler unread      # Check unread events for a session
@@ -34,14 +45,14 @@ handler health      # Database health and statistics
 
 Run `handler --help` for the full command list, or `handler <command> --help` for details on any command.
 
-### Claude Code Integration
+## Claude Code Integration
 
-Hook scripts in `hooks/` wire Claude Code session lifecycle events to handler:
-- `session_start.sh` -- auto-registers sessions, shows catch-up summary
-- `user_prompt_submit.sh` -- heartbeat, optional event injection
-- `pre_compact.sh` -- snapshots context before compaction
+Hooks wire Claude Code session lifecycle events to handler:
+- **SessionStart** -- auto-registers sessions, shows catch-up summary of missed events
+- **UserPromptSubmit** -- heartbeat, optional event injection based on inbox mode
+- **PreCompact** -- snapshots context before compaction
 
-Skills in `skills/` teach agents how to interact with handler:
+Skills teach agents how to interact with handler:
 - `/inbox` -- check and act on unread events
 - `/inbox_mode` -- configure manual, on-submit, or auto delivery
 

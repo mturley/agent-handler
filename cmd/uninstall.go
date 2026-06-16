@@ -18,7 +18,6 @@ var uninstallCmd = &cobra.Command{
 }
 
 func init() {
-	uninstallCmd.Flags().Bool("purge", false, "Also remove ~/.agent-handler/ and all data")
 	rootCmd.AddCommand(uninstallCmd)
 }
 
@@ -33,13 +32,11 @@ var skillNames = []string{
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {
-	purge, _ := cmd.Flags().GetBool("purge")
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	agentHandlerDir := filepath.Join(home, ".agent-handler")
 	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
@@ -65,34 +62,25 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Check /usr/local/bin symlink
-	usrLocalBin := "/usr/local/bin/handler"
-	removeUsrLocalBin := false
-	if target, err := os.Readlink(usrLocalBin); err == nil {
-		if strings.Contains(target, ".agent-handler") || strings.Contains(target, "agent-handler") || strings.Contains(target, "agent-ledger") {
-			fmt.Printf("  Remove symlink %s -> %s\n", usrLocalBin, target)
-			removeUsrLocalBin = true
+	// Detect the binary location
+	binaryPath, _ := os.Executable()
+	realBinaryPath, _ := filepath.EvalSymlinks(binaryPath)
+	if realBinaryPath != "" {
+		if binaryPath != realBinaryPath {
+			fmt.Printf("  Remove %s -> %s\n", binaryPath, realBinaryPath)
+		} else {
+			fmt.Printf("  Remove %s\n", realBinaryPath)
 		}
-	}
-
-	if purge {
-		if _, err := os.Stat(agentHandlerDir); err == nil {
-			fmt.Printf("  Delete %s (database, sessions, hooks, skills, binary)\n", agentHandlerDir)
-		}
-	} else {
-		fmt.Printf("  Preserve data at %s (use --purge to remove)\n", agentHandlerDir)
 	}
 
 	fmt.Println("")
 
-	// Ask for confirmation
 	if !confirm("Proceed?") {
 		fmt.Println("Aborted.")
 		return nil
 	}
 	fmt.Println("")
 
-	// Execute
 	for _, name := range symlinkTargets {
 		dst := filepath.Join(claudeSkillsDir, name)
 		os.Remove(dst)
@@ -103,19 +91,22 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		removeHooks(home)
 	}
 
-	if removeUsrLocalBin {
-		os.Remove(usrLocalBin)
-		fmt.Printf("  ✓ Removed symlink %s\n", usrLocalBin)
-	}
-
-	if purge {
-		if _, err := os.Stat(agentHandlerDir); err == nil {
-			os.RemoveAll(agentHandlerDir)
-			fmt.Printf("  ✓ Removed %s\n", agentHandlerDir)
+	// Remove binary last (since we're running from it)
+	if realBinaryPath != "" {
+		if binaryPath != realBinaryPath {
+			os.Remove(binaryPath)
+			fmt.Printf("  ✓ Removed %s\n", binaryPath)
 		}
+		os.Remove(realBinaryPath)
+		fmt.Printf("  ✓ Removed %s\n", realBinaryPath)
 	}
 
+	agentHandlerDir := filepath.Join(home, ".agent-handler")
 	fmt.Println("\n✓ Uninstallation complete!")
+	if _, err := os.Stat(agentHandlerDir); err == nil {
+		fmt.Printf("\n  Your event history, session data, and database are still at %s\n", agentHandlerDir)
+		fmt.Println("  To fully remove all data: rm -rf ~/.agent-handler")
+	}
 	return nil
 }
 
