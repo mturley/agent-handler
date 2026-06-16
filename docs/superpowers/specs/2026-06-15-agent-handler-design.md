@@ -436,6 +436,7 @@ The exact installation mechanism will be determined during implementation. Durin
 - Pane discovery: `handler peek` finds the tmux pane by matching the `handler:<session_id>` title convention. If the session was not started via the wrapper (no matching pane title), `handler peek` reports that the session exists but is not inspectable.
 - Pane capture output can be piped through an LLM call to interpret state ("waiting for tool approval", "actively generating", "idle at prompt")
 - `handler status` shows a `peekable` indicator for sessions started via the wrapper
+- Terminal bell on new unread events: the statusline script sends `\a` via `tmux send-keys` to the session's pane when the unread count increases. Requires tmux pane discovery (only works for sessions started via `handler claude`).
 
 ### Phase 5: Web UI
 - Event timeline with filters
