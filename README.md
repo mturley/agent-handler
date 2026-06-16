@@ -29,7 +29,7 @@ Then run `handler setup` again.
 
 `handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
 
-### Update
+## Update
 
 If installed via `go install`:
 ```bash
@@ -43,7 +43,7 @@ git pull
 make build && make install
 ```
 
-### Uninstall
+## Uninstall
 
 ```bash
 handler uninstall
