@@ -38,7 +38,7 @@ func (db *DB) UpsertSession(s Session) error {
 			session_name = excluded.session_name,
 			pid = excluded.pid,
 			status = excluded.status,
-			inbox_mode = COALESCE(NULLIF(excluded.inbox_mode, ''), sessions.inbox_mode),
+			inbox_mode = sessions.inbox_mode,
 			auto_poll_interval = COALESCE(excluded.auto_poll_interval, sessions.auto_poll_interval),
 			last_active = excluded.last_active,
 			registered_at = excluded.registered_at,
