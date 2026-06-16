@@ -229,6 +229,14 @@ func removeHooks(home string) error {
 		settings["hooks"] = hooks
 	}
 
+	// Remove status line if it's ours
+	if sl, ok := settings["statusLine"]; ok {
+		if isAgentHandlerHook(sl) {
+			delete(settings, "statusLine")
+			fmt.Println("  ✓ Removed status line configuration")
+		}
+	}
+
 	out, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
 		return err

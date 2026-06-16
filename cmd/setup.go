@@ -52,6 +52,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Extract skills to %s\n", skillsDir)
 	fmt.Printf("  Symlink %d skills into %s\n", len(skillNames), claudeSkillsDir)
 	fmt.Printf("  Configure 3 Claude Code hooks in %s\n", settingsPath)
+	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
 	fmt.Println("")
 
 	if !confirm("Proceed?") {
@@ -136,10 +137,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ %s -> %s\n", skillName, dstDir)
 	}
 
-	// 6. Configure Claude Code hooks
+	// 6. Configure Claude Code hooks and status line
 	fmt.Println("")
 	if err := configureHooks(home, hooksDir); err != nil {
 		return fmt.Errorf("configuring hooks: %w", err)
+	}
+	if err := configureStatusLine(home); err != nil {
+		return fmt.Errorf("configuring status line: %w", err)
 	}
 
 	fmt.Println("\n✓ Installation complete!")
@@ -203,6 +207,35 @@ func configureHooks(home, hooksDir string) error {
 	}
 
 	settings["hooks"] = existingHooks
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	return os.WriteFile(settingsPath, data, 0644)
+}
+
+func configureStatusLine(home string) error {
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+
+	settings := make(map[string]interface{})
+	if data, err := os.ReadFile(settingsPath); err == nil {
+		if err := json.Unmarshal(data, &settings); err != nil {
+			return fmt.Errorf("failed to parse %s: %w", settingsPath, err)
+		}
+	}
+
+	handlerDir := db.HandlerHome()
+	statuslineScript := filepath.Join(handlerDir, "hooks", "statusline.sh")
+
+	settings["statusLine"] = map[string]interface{}{
+		"type":            "command",
+		"command":         statuslineScript,
+		"refreshInterval": 10,
+	}
+
+	fmt.Printf("  ✓ Status line -> %s (refresh every 10s)\n", statuslineScript)
 
 	data, err := json.MarshalIndent(settings, "", "  ")
 	if err != nil {
