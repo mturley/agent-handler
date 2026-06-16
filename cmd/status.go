@@ -99,7 +99,19 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if jsonOutput {
-		data, err := json.MarshalIndent(statuses, "", "  ")
+		// Add repo to JSON output
+		type jsonStatus struct {
+			sessionStatus
+			Repo string `json:"repo"`
+		}
+		var jsonStatuses []jsonStatus
+		for i, st := range statuses {
+			jsonStatuses = append(jsonStatuses, jsonStatus{
+				sessionStatus: st,
+				Repo:          sessions[i].Repo,
+			})
+		}
+		data, err := json.MarshalIndent(jsonStatuses, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -110,30 +122,82 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
-		fmt.Printf("%-20s %-15s %-10s %-8s %-10s %s\n", "SESSION", "NAME", "STATE", "UNREAD", "INBOX", "BRANCH")
-		fmt.Println("────────────────────────────────────────────────────────────────────────────")
-		for _, st := range statuses {
+		dim := "\033[2m"
+		reset := "\033[0m"
+		bold := "\033[1m"
+		green := "\033[32m"
+		yellow := "\033[33m"
+		red := "\033[31m"
+
+		for i, st := range statuses {
+			if i > 0 {
+				fmt.Println()
+			}
+
+			// State color
+			stateColor := dim
+			switch st.DisplayState {
+			case "active":
+				stateColor = green
+			case "idle":
+				stateColor = yellow
+			case "dead":
+				stateColor = red
+			}
+
+			// Name or branch as primary identifier
 			name := st.SessionName
 			if name == "" {
-				name = "-"
-			}
-			if len(name) > 15 {
-				name = name[:12] + "..."
+				name = st.Branch
 			}
 
-			unreadStr := fmt.Sprintf("%d", st.UnreadCount)
-			if st.UnreadCount == 0 {
-				unreadStr = "-"
+			fmt.Printf("  %s%s%s %s%s%s\n", bold, name, reset, stateColor, st.DisplayState, reset)
+			fmt.Printf("  %s%s%s @ %s%s%s\n", dim, sessions[i].Repo, reset, dim, st.Branch, reset)
+
+			// Unread
+			if st.UnreadCount > 0 {
+				parts := ""
+				for eventType, count := range st.Breakdown {
+					if parts != "" {
+						parts += ", "
+					}
+					parts += fmt.Sprintf("%d %s", count, eventType)
+				}
+				fmt.Printf("  %d unread (%s)\n", st.UnreadCount, parts)
 			}
 
-			sessionDisplay := st.SessionID
-			if len(sessionDisplay) > 20 {
-				sessionDisplay = sessionDisplay[:20]
+			// Last active
+			lastActive, err := time.Parse(time.RFC3339, st.LastActive)
+			if err == nil {
+				ago := time.Since(lastActive).Truncate(time.Second)
+				fmt.Printf("  %sLast active: %s ago  |  ID: %s%s\n", dim, formatDuration(ago), st.SessionID[:12], reset)
 			}
-			fmt.Printf("%-20s %-15s %-10s %-8s %-10s %s\n",
-				sessionDisplay, name, st.DisplayState, unreadStr, st.InboxMode, st.Branch)
+		}
+
+		// Count dead sessions
+		deadCount := 0
+		for _, st := range statuses {
+			if st.DisplayState == "dead" {
+				deadCount++
+			}
+		}
+		if deadCount > 0 {
+			fmt.Printf("\n  %s%d dead session(s). Run 'handler cleanup' to archive.%s\n", dim, deadCount, reset)
 		}
 	}
 
 	return nil
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
