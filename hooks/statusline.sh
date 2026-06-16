@@ -28,4 +28,13 @@ if [ -z "$OUTPUT" ]; then
     exit 0
 fi
 
+# If session is not registered, try to register in the background
+if echo "$OUTPUT" | grep -q "not registered"; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+    (
+        source "${SCRIPT_DIR}/common.sh"
+        discover_and_register "$PPID" >/dev/null 2>&1
+    ) &
+fi
+
 echo "$OUTPUT"
