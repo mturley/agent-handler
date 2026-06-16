@@ -20,7 +20,10 @@ go install github.com/mturley/agent-handler@latest
 handler install
 ```
 
-Note: `go install` puts the binary in `~/go/bin`. Make sure that's on your PATH (`export PATH="$HOME/go/bin:$PATH"` in your shell profile).
+Note: `go install` puts the binary in `$(go env GOPATH)/bin`. Make sure that's on your PATH:
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
 
 Both methods install to `~/.agent-handler/` and configure Claude Code hooks and skills automatically. The `handler install` command shows what it will do and asks for confirmation before proceeding.
 
