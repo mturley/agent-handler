@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
 
@@ -32,5 +33,19 @@ func runHeartbeat(cmd *cobra.Command, args []string) error {
 	defer d.Close()
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	return d.BumpLastActive(sessionID, now)
+	if err := d.BumpLastActive(sessionID, now); err != nil {
+		return err
+	}
+
+	// Refresh session name if it changed
+	session, err := d.GetSession(sessionID)
+	if err != nil || session.JSONLPath == "" {
+		return nil
+	}
+	currentName := discover.DiscoverSessionNameFast(session.JSONLPath)
+	if currentName != "" && currentName != session.SessionName {
+		d.Conn().Exec(`UPDATE sessions SET session_name = ? WHERE session_id = ?`, currentName, sessionID)
+	}
+
+	return nil
 }

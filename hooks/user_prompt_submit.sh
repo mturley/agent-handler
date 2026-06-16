@@ -30,7 +30,7 @@ else
     fi
 fi
 
-handler heartbeat --session-id "$SESSION_ID"
+handler heartbeat --session-id "$SESSION_ID" &
 
 INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
 
