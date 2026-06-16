@@ -8,13 +8,12 @@ description: Check and act on unread events from the agent-handler ledger
 ## Usage
 
 ```bash
-handler unread --session-id $(handler whoami) --json
+handler unread --session-id $(handler whoami) --ack --json
 ```
 
 ## After reading events
 
-1. Immediately acknowledge them: `handler ack --session-id $(handler whoami)`
-2. Present the events to the user in a clear summary, grouped by type
+1. Present the events to the user in a clear summary, grouped by type
 3. For each actionable event, suggest what to do about it (e.g. "There's a PR review comment — want me to look at it and address the feedback?")
 
 ## Available CLI commands for deeper queries

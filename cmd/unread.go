@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
@@ -17,35 +18,44 @@ var unreadCmd = &cobra.Command{
 	RunE:  runUnread,
 }
 
-var unreadSessionID string
-
 func init() {
 	rootCmd.AddCommand(unreadCmd)
-	unreadCmd.Flags().StringVar(&unreadSessionID, "session-id", "", "session ID (defaults to session from PID cache)")
+	unreadCmd.Flags().String("session-id", "", "session ID (defaults to session from PID cache)")
+	unreadCmd.Flags().Bool("ack", false, "acknowledge events after reading")
 }
 
 func runUnread(cmd *cobra.Command, args []string) error {
-	d, err := openReadOnlyDB()
+	ack, _ := cmd.Flags().GetBool("ack")
+
+	var d *db.DB
+	var err error
+	if ack {
+		d, err = openDB()
+	} else {
+		d, err = openReadOnlyDB()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer d.Close()
 
-	sessionID := unreadSessionID
+	sessionID, _ := cmd.Flags().GetString("session-id")
 	if sessionID == "" {
-		// Try to detect from PID cache
 		pid := os.Getpid()
 		sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
-		detectedSessionID, err := discover.ReadPIDCache(sessionsDir, pid)
+		sessionID, err = discover.ReadPIDCache(sessionsDir, pid)
 		if err != nil {
 			return fmt.Errorf("--session-id is required (could not detect from PID cache: %w)", err)
 		}
-		sessionID = detectedSessionID
 	}
 
 	events, err := d.UnreadForSession(sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to query unread events: %w", err)
+	}
+
+	if ack && len(events) > 0 {
+		d.AdvanceCursor(sessionID, time.Now().UTC().Format(time.RFC3339))
 	}
 
 	if jsonOutput {
