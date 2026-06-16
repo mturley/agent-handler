@@ -10,13 +10,21 @@ fi
 
 CLAUDE_PID="$PPID"
 SESSIONS_DIR="${HANDLER_HOME:-$HOME/.agent-handler}/data/sessions"
+NEEDS_REGISTRATION=false
 
 # Check PID cache for session ID
 if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
     SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
+    # Verify session is still active (not archived from a previous process using this PID)
+    STATUS=$(handler query "SELECT status FROM sessions WHERE session_id='${SESSION_ID}'" 2>/dev/null | tail -1)
+    if [ "$STATUS" != "active" ]; then
+        NEEDS_REGISTRATION=true
+    fi
 else
-    # Not registered yet — try to register now (handles the case where
-    # SessionStart fired before Claude created the JSONL file)
+    NEEDS_REGISTRATION=true
+fi
+
+if [ "$NEEDS_REGISTRATION" = true ]; then
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     source "${SCRIPT_DIR}/common.sh"
     if discover_and_register "$CLAUDE_PID" >/dev/null 2>&1; then
