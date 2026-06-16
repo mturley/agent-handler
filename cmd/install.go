@@ -54,17 +54,18 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create .claude/skills directory: %w", err)
 	}
 
-	// Find skills directory relative to binary location
+	// Find skills directory relative to binary location.
+	// The binary lives at <repo>/bin/handler (possibly symlinked from /usr/local/bin).
+	// Resolve the real path to find the repo root.
 	execPath, err := os.Executable()
 	if err != nil {
-		fmt.Printf("⚠ Could not determine binary location: %v\n", err)
-		fmt.Printf("  To manually symlink skills during development, run:\n")
-		fmt.Printf("    ln -s <agent-handler-repo>/skills/* %s/\n", claudeSkillsDir)
-		return nil
+		return fmt.Errorf("could not determine binary location: %w", err)
+	}
+	realPath, err := filepath.EvalSymlinks(execPath)
+	if err != nil {
+		return fmt.Errorf("could not resolve binary symlink: %w", err)
 	}
 
-	// Skills should be in <binary-dir>/skills or <binary-dir>/../skills
-	execDir := filepath.Dir(execPath)
 	skillNames := []string{
 		"inbox",
 		"inbox_mode",
@@ -75,26 +76,28 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		"handler_unregister",
 	}
 
-	// Try both relative to binary dir and parent dir
-	skillsDirs := []string{
-		filepath.Join(execDir, "skills"),
-		filepath.Join(execDir, "..", "skills"),
+	// Try: <real-binary-dir>/../skills, <real-binary-dir>/skills, <real-binary-dir>/../../skills
+	realDir := filepath.Dir(realPath)
+	candidates := []string{
+		filepath.Join(realDir, "..", "skills"),
+		filepath.Join(realDir, "skills"),
+		filepath.Join(realDir, "..", "..", "skills"),
 	}
 
 	var foundSkillsDir string
-	for _, skillsDir := range skillsDirs {
-		if info, err := os.Stat(skillsDir); err == nil && info.IsDir() {
-			foundSkillsDir = skillsDir
+	for _, candidate := range candidates {
+		resolved, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(resolved); err == nil && info.IsDir() {
+			foundSkillsDir = resolved
 			break
 		}
 	}
 
 	if foundSkillsDir == "" {
-		fmt.Printf("⚠ Could not locate skills directory relative to binary\n")
-		fmt.Printf("  Binary location: %s\n", execPath)
-		fmt.Printf("  To manually symlink skills during development, run:\n")
-		fmt.Printf("    ln -s <agent-handler-repo>/skills/* %s/\n", claudeSkillsDir)
-		return nil
+		return fmt.Errorf("could not locate skills directory relative to binary at %s (resolved: %s)", execPath, realPath)
 	}
 
 	// Create symlinks for each skill
