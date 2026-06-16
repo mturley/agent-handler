@@ -174,7 +174,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			lastActive, err := time.Parse(time.RFC3339, st.LastActive)
 			if err == nil {
 				ago := time.Since(lastActive).Truncate(time.Second)
-				fmt.Printf("  %sLast active: %s ago  |  ID: %s%s\n", dim, formatDuration(ago), st.SessionID[:12], reset)
+				fmt.Printf("  %sLast active: %s ago  |  ID: %s%s\n", dim, formatDuration(ago), st.SessionID, reset)
 			}
 		}
 
