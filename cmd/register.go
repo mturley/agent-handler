@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/mturley/agent-handler/worktree"
@@ -125,6 +128,26 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Spawn background catch-up watcher runs for subscribed resources
+	subs, _ := d.ListSubscriptions(regSessionID, false)
+	if len(subs) > 0 {
+		cfg, _ := config.Read(config.DefaultPath())
+		resourcesByService := make(map[string][]string)
+		for _, sub := range subs {
+			service := config.ResourceTypeToService(sub.ResourceType)
+			if service != "" && cfg.IsServiceConfigured(service) {
+				resourcesByService[service] = append(resourcesByService[service],
+					sub.ResourceType+":"+sub.ResourceID)
+			}
+		}
+		for service, resources := range resourcesByService {
+			resourceList := strings.Join(resources, ",")
+			go func(svc, rl string) {
+				exec.Command("handler", "watcher", "run", svc, "--resources", rl).Run()
+			}(service, resourceList)
+		}
+	}
+
 	// Query unread count for catch-up summary
 	unreadCount, breakdown, err := d.UnreadCountForSession(regSessionID)
 	if err != nil {
@@ -168,7 +191,7 @@ func runRegister(cmd *cobra.Command, args []string) error {
 			fmt.Println("  Unread: No new messages")
 		}
 		if session.InboxMode == "auto" {
-			fmt.Println("\n💡 Inbox mode is 'auto' — restart polling with /inbox_mode auto")
+			fmt.Println("\n💡 Inbox mode is 'auto' — restart polling with /inbox-mode auto")
 		}
 	}
 
