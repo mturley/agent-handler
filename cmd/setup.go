@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/mturley/agent-handler/db"
@@ -150,6 +151,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	// 7. Offer to auto-allow handler commands
 	fmt.Println("")
 	configurePermissions(home)
+
+	// 8. Configure external service API tokens
+	fmt.Println("\nConfiguring external service API tokens...")
+	authCmd := exec.Command("handler", "watcher", "auth")
+	authCmd.Stdin = os.Stdin
+	authCmd.Stdout = os.Stdout
+	authCmd.Stderr = os.Stderr
+	authCmd.Run()
 
 	fmt.Println("\n✓ Installation complete!")
 	fmt.Printf("\n  All files installed to %s\n", handlerDir)

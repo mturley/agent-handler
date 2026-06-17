@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/mturley/agent-handler/db"
+	watcherPkg "github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
 )
 
@@ -25,10 +26,10 @@ func init() {
 
 var skillNames = []string{
 	"inbox",
-	"inbox_mode",
-	"handler_emit",
-	"handler_subscribe",
-	"handler_snapshot",
+	"inbox-mode",
+	"handler-emit",
+	"handler-subscribe",
+	"handler-snapshot",
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {
@@ -60,6 +61,13 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Remove %d hooks from %s:\n", len(hookNames), settingsPath)
 		for _, name := range hookNames {
 			fmt.Printf("    - %s\n", name)
+		}
+	}
+
+	// Check watcher schedules
+	for _, name := range []string{"github", "jira"} {
+		if watcherPkg.IsInstalled(name) {
+			fmt.Printf("  Uninstall %s watcher schedule\n", name)
 		}
 	}
 
@@ -99,6 +107,14 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		dst := filepath.Join(claudeSkillsDir, name)
 		os.Remove(dst)
 		fmt.Printf("  ✓ Removed skill symlink %s\n", name)
+	}
+
+	// Uninstall watcher schedules
+	for _, name := range []string{"github", "jira"} {
+		if watcherPkg.IsInstalled(name) {
+			watcherPkg.Uninstall(name)
+			fmt.Printf("  ✓ Uninstalled %s watcher\n", name)
+		}
 	}
 
 	if len(hookNames) > 0 {
