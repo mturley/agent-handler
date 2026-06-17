@@ -7,6 +7,7 @@ import (
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/watcher"
+	"github.com/mturley/agent-handler/watcher/github"
 	"github.com/spf13/cobra"
 )
 
@@ -89,10 +90,20 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Polling %d resources for %s watcher...\n", len(resources), name)
 
-	// TODO: Implement polling in Tasks 7-9
-	fmt.Printf("Watcher %q not yet implemented\n", name)
+	// Open watcher log
+	logger := watcher.OpenLog(name)
 
-	return nil
+	// Run watcher-specific poll
+	switch name {
+	case "github":
+		return github.Poll(d, cfg, resources, logger)
+	case "jira":
+		// TODO: Implement in Task 9
+		fmt.Printf("Watcher %q not yet implemented\n", name)
+		return nil
+	default:
+		return fmt.Errorf("unknown watcher: %s", name)
+	}
 }
 
 // serviceToResourceType maps service names to resource types
