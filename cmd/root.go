@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/mturley/agent-handler/cmd/resource"
+	"github.com/mturley/agent-handler/cmd/watcher"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
@@ -49,6 +50,11 @@ func init() {
 	resource.JSONOutput = &jsonOutput
 	resource.ResourceCmd.GroupID = "human"
 	rootCmd.AddCommand(resource.ResourceCmd)
+
+	// Set up watcher subcommand
+	watcher.JSONOutput = &jsonOutput
+	watcher.WatcherCmd.GroupID = "human"
+	rootCmd.AddCommand(watcher.WatcherCmd)
 }
 
 func openDB() (*db.DB, error) {
