@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/worktree"
 	"github.com/spf13/cobra"
@@ -47,6 +48,18 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	resourceType, resourceID := worktree.ParseResourceID(subResource)
 	if resourceType == "" {
 		return fmt.Errorf("invalid resource format (expected type:id): %s", subResource)
+	}
+
+	// Check if the corresponding service is configured
+	service := config.ResourceTypeToService(resourceType)
+	if service != "" {
+		cfg, err := config.Read(config.DefaultPath())
+		if err != nil {
+			return fmt.Errorf("reading config: %w", err)
+		}
+		if !cfg.IsServiceConfigured(service) {
+			return fmt.Errorf("%s is not configured. Run 'handler watcher auth %s' to set up API access", service, service)
+		}
 	}
 
 	// Subscribe
