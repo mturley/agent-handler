@@ -32,7 +32,11 @@ type JiraConfig struct {
 }
 
 // DefaultPath returns the default configuration file path
+// Respects HANDLER_HOME env var for testing
 func DefaultPath() string {
+	if dir := os.Getenv("HANDLER_HOME"); dir != "" {
+		return filepath.Join(dir, "config.yaml")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""

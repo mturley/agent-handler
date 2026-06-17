@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 )
 
@@ -60,6 +61,18 @@ func TestIntegrationLifecycle(t *testing.T) {
 		t.Fatalf("failed to init test DB: %v", err)
 	}
 	testDB.Close()
+
+	// Create a minimal config file with GitHub token so subscribe guard passes
+	cfg := config.Config{
+		Services: config.Services{
+			GitHub: &config.GitHubConfig{Token: "fake-token"},
+			Jira:   &config.JiraConfig{Token: "fake-token", URL: "https://fake.atlassian.net", Email: "test@example.com"},
+		},
+	}
+	configPath := filepath.Join(home, "config.yaml")
+	if err := config.Write(configPath, &cfg); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	// Register a session
 	out, err = runHandler(t, bin, home, "register",
@@ -231,8 +244,8 @@ func TestIntegrationLifecycle(t *testing.T) {
 	if !strings.Contains(out, "/inbox") {
 		t.Errorf("statusline should contain /inbox, got: %s", out)
 	}
-	if !strings.Contains(out, "/inbox_mode") {
-		t.Errorf("statusline should contain /inbox_mode, got: %s", out)
+	if !strings.Contains(out, "/inbox-mode") {
+		t.Errorf("statusline should contain /inbox-mode, got: %s", out)
 	}
 
 	// Register a second session for related-session testing
@@ -278,6 +291,18 @@ func TestIntegrationUnregister(t *testing.T) {
 		t.Fatalf("failed to init test DB: %v", err)
 	}
 	testDB.Close()
+
+	// Create a minimal config file for subscribe guard
+	cfg := config.Config{
+		Services: config.Services{
+			GitHub: &config.GitHubConfig{Token: "fake-token"},
+			Jira:   &config.JiraConfig{Token: "fake-token", URL: "https://fake.atlassian.net", Email: "test@example.com"},
+		},
+	}
+	configPath := filepath.Join(home, "config.yaml")
+	if err := config.Write(configPath, &cfg); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
 
 	// Register
 	runHandler(t, bin, home, "register",
