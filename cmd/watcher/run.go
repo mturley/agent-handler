@@ -8,6 +8,7 @@ import (
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/mturley/agent-handler/watcher/github"
+	"github.com/mturley/agent-handler/watcher/jira"
 	"github.com/spf13/cobra"
 )
 
@@ -98,9 +99,7 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 	case "github":
 		return github.Poll(d, cfg, resources, logger)
 	case "jira":
-		// TODO: Implement in Task 9
-		fmt.Printf("Watcher %q not yet implemented\n", name)
-		return nil
+		return jira.Poll(d, cfg, resources, logger)
 	default:
 		return fmt.Errorf("unknown watcher: %s", name)
 	}
