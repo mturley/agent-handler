@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/mturley/agent-handler/config"
+	"github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
 )
 
@@ -85,6 +87,76 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		}
 	}
 	fmt.Printf("%s/inbox-mode%s: %s\n", cmd_color, reset_color, rendered)
+
+	// Output line 3: active subscriptions and watcher status
+	subs, err := d.ListSubscriptions(slSessionID, false)
+	if err != nil {
+		return fmt.Errorf("failed to query subscriptions: %w", err)
+	}
+
+	// Count by type
+	prCount := 0
+	jiraCount := 0
+	for _, sub := range subs {
+		if sub.ResourceType == "pr" {
+			prCount++
+		} else if sub.ResourceType == "jira" {
+			jiraCount++
+		}
+	}
+
+	// Build subscription summary
+	subParts := []string{}
+	if prCount > 0 {
+		if prCount == 1 {
+			subParts = append(subParts, "1 PR")
+		} else {
+			subParts = append(subParts, fmt.Sprintf("%d PRs", prCount))
+		}
+	}
+	if jiraCount > 0 {
+		if jiraCount == 1 {
+			subParts = append(subParts, "1 Jira")
+		} else {
+			subParts = append(subParts, fmt.Sprintf("%d Jira", jiraCount))
+		}
+	}
+
+	subSummary := ""
+	if len(subParts) == 0 {
+		subSummary = "no active subscriptions"
+	} else {
+		subSummary = subParts[0]
+		for i := 1; i < len(subParts); i++ {
+			subSummary += fmt.Sprintf(", %s", subParts[i])
+		}
+	}
+
+	// Check watcher status
+	cfg, err := config.Read(config.DefaultPath())
+	if err != nil {
+		return fmt.Errorf("failed to read config: %w", err)
+	}
+
+	watcherStatus := ""
+	green := "\033[32m" // green
+	services := []string{}
+	if cfg.IsServiceConfigured("github") && watcher.IsInstalled("github") {
+		services = append(services, fmt.Sprintf("github %s✓%s", green, reset))
+	}
+	if cfg.IsServiceConfigured("jira") && watcher.IsInstalled("jira") {
+		services = append(services, fmt.Sprintf("jira %s✓%s", green, reset))
+	}
+
+	if len(services) > 0 {
+		watcherStatus = " | watchers: "
+		watcherStatus += services[0]
+		for i := 1; i < len(services); i++ {
+			watcherStatus += " " + services[i]
+		}
+	}
+
+	fmt.Printf("%s← %s%s%s\n", dim, subSummary, watcherStatus, reset)
 
 	return nil
 }
