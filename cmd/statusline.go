@@ -84,7 +84,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 			rendered += fmt.Sprintf("%s%s%s", dim, modes[mode], reset)
 		}
 	}
-	fmt.Printf("%s/inbox_mode%s: %s\n", cmd_color, reset_color, rendered)
+	fmt.Printf("%s/inbox-mode%s: %s\n", cmd_color, reset_color, rendered)
 
 	return nil
 }

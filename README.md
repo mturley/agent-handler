@@ -75,7 +75,28 @@ Hooks wire Claude Code session lifecycle events to handler:
 
 Skills teach agents how to interact with handler:
 - `/inbox` -- check and act on unread events
-- `/inbox_mode` -- configure manual, on-submit, or auto delivery
+- `/inbox-mode` -- configure manual, on-submit, or auto delivery
+
+## External Watchers
+
+Watch for external events (PR reviews, Jira comments, CI status) and deliver them to your sessions.
+
+### Setup
+
+```bash
+handler watcher auth         # Configure API tokens (GitHub, Jira)
+handler watcher install github
+handler watcher install jira
+```
+
+### Management
+
+```bash
+handler watcher list         # Show installed watchers
+handler watcher logs github  # View watcher logs
+handler watcher run github   # Run once manually
+handler watcher uninstall github
+```
 
 ## Design
 

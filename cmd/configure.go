@@ -43,7 +43,7 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		}
 
 		switch getFlag {
-		case "inbox-mode", "inbox_mode":
+		case "inbox-mode":
 			fmt.Println(session.InboxMode)
 		case "auto-poll-interval", "auto_poll_interval":
 			if session.AutoPollInterval != nil {

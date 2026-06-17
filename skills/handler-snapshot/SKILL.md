@@ -1,9 +1,9 @@
 ---
-name: handler_snapshot
+name: handler-snapshot
 description: Write a pre-compaction snapshot to preserve session context
 ---
 
-# /handler_snapshot — Snapshot Current State
+# /handler-snapshot — Snapshot Current State
 
 Write a `pre_compact_snapshot` event to the ledger capturing what this session is currently doing. This preserves context that would otherwise be lost when the conversation is compacted.
 

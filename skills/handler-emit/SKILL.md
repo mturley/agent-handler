@@ -1,9 +1,9 @@
 ---
-name: handler_emit
+name: handler-emit
 description: Write an event to the agent-handler ledger
 ---
 
-# /handler_emit — Emit an Event
+# /handler-emit — Emit an Event
 
 Record significant events to the ledger so other sessions and the handler can see what happened.
 

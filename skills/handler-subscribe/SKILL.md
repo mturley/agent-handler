@@ -1,9 +1,9 @@
 ---
-name: handler_subscribe
+name: handler-subscribe
 description: Subscribe this session to external resource events
 ---
 
-# /handler_subscribe — Subscribe to a Resource
+# /handler-subscribe — Subscribe to a Resource
 
 Subscribe to receive events about an external resource (PR, Jira issue, etc.).
 

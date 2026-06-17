@@ -1,9 +1,9 @@
 ---
-name: inbox_mode
+name: inbox-mode
 description: Set how this session receives unread events — manual, on-submit, or auto
 ---
 
-# /inbox_mode — Configure Inbox Mode
+# /inbox-mode — Configure Inbox Mode
 
 Three modes control how you receive unread events:
 
