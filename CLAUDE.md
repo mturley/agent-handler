@@ -41,6 +41,22 @@ When adding or removing skills, update the `skillNames` slice in `cmd/uninstall.
 
 When adding or removing hooks, update `configureHooks()` in `cmd/install.go` and `removeHooks()` in `cmd/uninstall.go`.
 
+## Watchers
+
+External event watchers poll GitHub and Jira APIs for changes to subscribed resources. They run as one-shot commands scheduled via launchd (macOS) or cron (Linux).
+
+- `config/` — Config file read/write and token validation
+- `watcher/` — Shared framework (active resources, cursors, dedup) and scheduler
+- `watcher/github/` — GitHub PR watcher using GraphQL API
+- `watcher/jira/` — Jira issue watcher using REST API
+
+When adding new watcher types:
+- Create a new package under `watcher/<name>/`
+- Add the service to `config.Config` and `config.IsServiceConfigured`
+- Add the resource type mapping in `config.ResourceTypeToService`
+- Add the service to `cmd/watcher/auth.go` prompts
+- Add the service to `cmd/watcher/run.go` switch statement
+
 ## Design
 
 Full design spec: `docs/superpowers/specs/2026-06-15-agent-handler-design.md`
