@@ -39,7 +39,9 @@ Skills and hooks are embedded into the binary at build time via `//go:embed` in 
 
 When adding or removing skills, update the `skillNames` slice in `cmd/uninstall.go` (install discovers skills from the embedded FS, but uninstall needs the list to know what to clean up).
 
-When adding or removing hooks, update `configureHooks()` in `cmd/install.go` and `removeHooks()` in `cmd/uninstall.go`.
+When adding or removing hooks, update `configureHooks()` in `cmd/setup.go` and `removeHooks()` in `cmd/uninstall.go`.
+
+When adding, removing, or changing skills, commands, or capabilities, also update `skills/using-handler/SKILL.md` — this skill is loaded at the start of every Claude session and is how agents learn about handler's capabilities and CLI syntax.
 
 ## Watchers
 
