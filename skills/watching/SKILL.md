@@ -28,3 +28,9 @@ You can ask me to watch or unwatch a resource by its ID, number, or URL. For exa
 - "watch RHOAIENG-456" or "watch https://redhat.atlassian.net/browse/RHOAIENG-456"
 - "unwatch PR #123"
 - "unwatch RHOAIENG-456"
+
+## CLI reference
+
+To subscribe: `handler subscribe --resource "pr:owner/repo#123" --url "https://github.com/owner/repo/pull/123"`
+To unsubscribe: `handler unsubscribe --resource "pr:owner/repo#123"`
+Resource format is always `type:id` with the `--resource` flag.
