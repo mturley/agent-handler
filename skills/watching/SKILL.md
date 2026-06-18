@@ -20,3 +20,10 @@ handler query "SELECT e.ts, e.title, e.body FROM events e JOIN event_resources e
 3. Show watcher status: installed, running, last run time
 4. If there are recent watcher errors (last 24 hours), summarize them and suggest fixes
 5. If watchers are not installed for subscribed resource types, suggest running `handler watcher install`
+6. Tell the user:
+
+You can ask me to watch or unwatch a resource by its ID, number, or URL. For example:
+- "watch PR #123" or "watch https://github.com/owner/repo/pull/123"
+- "watch RHOAIENG-456" or "watch https://redhat.atlassian.net/browse/RHOAIENG-456"
+- "unwatch PR #123"
+- "unwatch RHOAIENG-456"
