@@ -252,14 +252,21 @@ func runWatchingGlobal(d *db.DB) error {
 		return nil
 	}
 
+	bold := "\033[1m"
+	dim := "\033[2m"
+	reset := "\033[0m"
+	green := "\033[32m"
+	red := "\033[31m"
+	yellow := "\033[33m"
+
 	if len(results) == 0 {
 		fmt.Println("No active subscriptions across any session")
 	} else {
 		fmt.Printf("Watched resources across all sessions (%d):\n\n", len(results))
 		for _, gs := range results {
-			fmt.Printf("  %s:%s\n", gs.ResourceType, gs.ResourceID)
+			fmt.Printf("  %s%s:%s%s\n", bold, gs.ResourceType, gs.ResourceID, reset)
 			if gs.ResourceURL != "" {
-				fmt.Printf("    %s\n", gs.ResourceURL)
+				fmt.Printf("  %s%s%s\n", dim, gs.ResourceURL, reset)
 			}
 			for _, si := range gs.Sessions {
 				name := si.SessionName
@@ -270,20 +277,20 @@ func runWatchingGlobal(d *db.DB) error {
 				if t, err := time.Parse(time.RFC3339, si.LastActive); err == nil {
 					lastActive = formatDuration(time.Since(t)) + " ago"
 				}
-				fmt.Printf("    └ %s (%s) — %s\n", name, si.SessionID[:12], lastActive)
+				fmt.Printf("  %s└ %s (%s) — %s%s\n", dim, name, si.SessionID[:12], lastActive, reset)
 			}
 			fmt.Println()
 		}
 	}
 
-	fmt.Println("Watchers:")
+	fmt.Printf("%s─── Watchers ───%s\n", dim, reset)
 	for _, ws := range watchers {
 		if !ws.Configured {
-			fmt.Printf("  %s: not configured\n", ws.Name)
+			fmt.Printf("  %s%s✗%s %s%snot configured%s\n", ws.Name, red, reset, dim, " ", reset)
 			continue
 		}
 		if !ws.Installed {
-			fmt.Printf("  %s: configured but not installed\n", ws.Name)
+			fmt.Printf("  %s %s%s✗%s %s(not installed)%s\n", ws.Name, yellow, " ", reset, dim, reset)
 			continue
 		}
 		lastRun := "never"
@@ -302,17 +309,15 @@ func runWatchingGlobal(d *db.DB) error {
 				}
 			}
 		}
-		state := "running"
-		if !ws.Running {
-			state = "stopped"
-		}
 		if ws.HasError {
-			fmt.Printf("  %s: %s, last run %s%s — ERROR\n", ws.Name, state, lastRun, nextRun)
+			fmt.Printf("  %s✗%s %s %s(last run: %s%s)%s\n", red, reset, ws.Name, dim, lastRun, nextRun, reset)
 			if ws.LastErrorMessage != "" {
-				fmt.Printf("    %s\n", ws.LastErrorMessage)
+				fmt.Printf("  %s  %s%s\n", dim, ws.LastErrorMessage, reset)
 			}
+		} else if !ws.Running {
+			fmt.Printf("  %s⏸%s %s %s(stopped, last run: %s)%s\n", yellow, reset, ws.Name, dim, lastRun, reset)
 		} else {
-			fmt.Printf("  %s: %s, last run %s%s\n", ws.Name, state, lastRun, nextRun)
+			fmt.Printf("  %s✓%s %s %s(last run: %s%s)%s\n", green, reset, ws.Name, dim, lastRun, nextRun, reset)
 		}
 	}
 
