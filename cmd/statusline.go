@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/watcher"
@@ -177,10 +178,15 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	services := []string{}
 	for _, svc := range []string{"github", "jira"} {
 		if cfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
+			lastRun := watcher.LastRunTime(svc)
+			ago := ""
+			if lastRun != nil {
+				ago = " " + formatDuration(time.Since(*lastRun))
+			}
 			if d.HasWatcherError(svc) {
-				services = append(services, fmt.Sprintf("%s %s✗%s%s", svc, red, reset, dim))
+				services = append(services, fmt.Sprintf("%s %s✗%s%s%s", svc, red, reset, dim, ago))
 			} else {
-				services = append(services, fmt.Sprintf("%s %s✓%s%s", svc, green, reset, dim))
+				services = append(services, fmt.Sprintf("%s %s✓%s%s%s", svc, green, reset, dim, ago))
 			}
 		}
 	}

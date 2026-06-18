@@ -115,6 +115,39 @@ func IsInstalled(name string) bool {
 	return isInstalledCron(name)
 }
 
+// InstalledInterval returns the configured polling interval in seconds for an installed watcher.
+// Returns 0 if the watcher is not installed or the interval can't be determined.
+func InstalledInterval(name string) int {
+	if runtime.GOOS == "darwin" {
+		plistPath, err := launchdPlistPath(name)
+		if err != nil {
+			return 0
+		}
+		data, err := os.ReadFile(plistPath)
+		if err != nil {
+			return 0
+		}
+		content := string(data)
+		// Parse <key>StartInterval</key>\n\t<integer>N</integer>
+		idx := strings.Index(content, "<key>StartInterval</key>")
+		if idx < 0 {
+			return 0
+		}
+		rest := content[idx:]
+		start := strings.Index(rest, "<integer>")
+		end := strings.Index(rest, "</integer>")
+		if start < 0 || end < 0 {
+			return 0
+		}
+		var interval int
+		fmt.Sscanf(rest[start+len("<integer>"):end], "%d", &interval)
+		return interval
+	}
+	// For cron, parse the schedule — but cron intervals are in minutes
+	// and harder to parse generically. Return 0 for now.
+	return 0
+}
+
 // LastRunTime returns the last run time of the watcher by checking the log file modification time.
 // Returns nil if the log file does not exist.
 func LastRunTime(name string) *time.Time {

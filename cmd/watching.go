@@ -46,6 +46,8 @@ func runWatching(cmd *cobra.Command, args []string) error {
 		Installed        bool   `json:"installed"`
 		Running          bool   `json:"running"`
 		LastRun          string `json:"last_run,omitempty"`
+		NextRun          string `json:"next_run,omitempty"`
+		IntervalSeconds  int    `json:"interval_seconds,omitempty"`
 		HasError         bool   `json:"has_error"`
 		LastErrorMessage string `json:"last_error_message,omitempty"`
 	}
@@ -60,6 +62,12 @@ func runWatching(cmd *cobra.Command, args []string) error {
 		ws.Running = watcherPkg.IsRunning(name)
 		if lastRun := watcherPkg.LastRunTime(name); lastRun != nil {
 			ws.LastRun = lastRun.Format(time.RFC3339)
+			interval := watcherPkg.InstalledInterval(name)
+			if interval > 0 {
+				ws.IntervalSeconds = interval
+				nextRun := lastRun.Add(time.Duration(interval) * time.Second)
+				ws.NextRun = nextRun.Format(time.RFC3339)
+			}
 		}
 		ws.HasError = d.HasWatcherError(name)
 		if ws.HasError {
@@ -106,9 +114,19 @@ func runWatching(cmd *cobra.Command, args []string) error {
 			continue
 		}
 		lastRun := "never"
+		nextRun := ""
 		if ws.LastRun != "" {
 			if t, err := time.Parse(time.RFC3339, ws.LastRun); err == nil {
 				lastRun = formatDuration(time.Since(t)) + " ago"
+			}
+		}
+		if ws.NextRun != "" {
+			if t, err := time.Parse(time.RFC3339, ws.NextRun); err == nil {
+				if t.After(time.Now()) {
+					nextRun = fmt.Sprintf(", next: %s", formatDuration(time.Until(t)))
+				} else {
+					nextRun = ", next: any moment"
+				}
 			}
 		}
 		state := "running"
@@ -116,16 +134,12 @@ func runWatching(cmd *cobra.Command, args []string) error {
 			state = "stopped"
 		}
 		if ws.HasError {
-			fmt.Printf("  %s: %s, last run %s — ERROR\n", ws.Name, state, lastRun)
+			fmt.Printf("  %s: %s, last run %s%s — ERROR\n", ws.Name, state, lastRun, nextRun)
 			if ws.LastErrorMessage != "" {
-				msg := ws.LastErrorMessage
-				if len(msg) > 120 {
-					msg = msg[:120] + "..."
-				}
-				fmt.Printf("    %s\n", msg)
+				fmt.Printf("    %s\n", ws.LastErrorMessage)
 			}
 		} else {
-			fmt.Printf("  %s: %s, last run %s\n", ws.Name, state, lastRun)
+			fmt.Printf("  %s: %s, last run %s%s\n", ws.Name, state, lastRun, nextRun)
 		}
 	}
 

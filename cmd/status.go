@@ -190,8 +190,18 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				if watcherPkg.IsInstalled(svc) {
 					lastRun := watcherPkg.LastRunTime(svc)
 					runInfo := "never"
+					nextInfo := ""
 					if lastRun != nil {
 						runInfo = formatDuration(time.Since(*lastRun)) + " ago"
+						interval := watcherPkg.InstalledInterval(svc)
+						if interval > 0 {
+							nextRun := lastRun.Add(time.Duration(interval) * time.Second)
+							if nextRun.After(time.Now()) {
+								nextInfo = fmt.Sprintf(", next: %s", formatDuration(time.Until(nextRun)))
+							} else {
+								nextInfo = ", next: any moment"
+							}
+						}
 					}
 					if watcherPkg.IsRunning(svc) {
 						if d.HasWatcherError(svc) {
@@ -199,9 +209,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 							if ws, err := d.GetWatcherStatus(svc); err == nil && ws != nil && ws.LastErrorMessage != "" {
 								errMsg = fmt.Sprintf("\n  %s         %s%s", dim, ws.LastErrorMessage, reset)
 							}
-							status = fmt.Sprintf("%s✗ error%s %s(last run: %s)%s%s", red, reset, dim, runInfo, reset, errMsg)
+							status = fmt.Sprintf("%s✗ error%s %s(last run: %s%s)%s%s", red, reset, dim, runInfo, nextInfo, reset, errMsg)
 						} else {
-							status = fmt.Sprintf("%s✓ running%s %s(last run: %s)%s", green, reset, dim, runInfo, reset)
+							status = fmt.Sprintf("%s✓ running%s %s(last run: %s%s)%s", green, reset, dim, runInfo, nextInfo, reset)
 						}
 					} else {
 						status = fmt.Sprintf("%s⏸ stopped%s %s(last run: %s — run 'handler watcher start')%s", yellow, reset, dim, runInfo, reset)
