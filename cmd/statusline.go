@@ -195,7 +195,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		watcherStatus = " | "
 		for i, s := range services {
 			if i > 0 {
-				watcherStatus += " · "
+				watcherStatus += " "
 			}
 			watcherStatus += s
 		}
