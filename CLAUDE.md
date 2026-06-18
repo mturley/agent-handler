@@ -57,6 +57,35 @@ When adding new watcher types:
 - Add the service to `cmd/watcher/auth.go` prompts
 - Add the service to `cmd/watcher/run.go` switch statement
 
+## .worktree-resources File
+
+The `.worktree-resources` file lives in the root of a git worktree (gitignored). It declares which external resources this worktree cares about. Any tool can read or write this file — it's the portable contract between handler and other worktree-aware tools.
+
+**Format:** One resource per line, `<type>:<id> <url>`:
+
+```
+pr:owner/repo#123 https://github.com/owner/repo/pull/123
+jira:RHOAIENG-12345 https://redhat.atlassian.net/browse/RHOAIENG-12345
+```
+
+**Supported resource types:**
+- `pr` — GitHub pull request. ID format: `owner/repo#number`
+- `jira` — Jira issue. ID format: issue key (e.g. `RHOAIENG-12345`)
+
+**Behavior:**
+- `handler register` reads this file on session start and auto-subscribes to listed resources
+- `handler subscribe` appends new entries
+- `handler unsubscribe` removes entries
+- Malformed lines (missing URL, empty lines) are silently skipped
+- Duplicate entries are deduplicated on append
+
+**Integration with other tools:**
+Any tool that sets up a worktree can seed this file. For example, a worktree creation script that associates a worktree with a PR:
+```bash
+echo "pr:owner/repo#123 https://github.com/owner/repo/pull/123" >> .worktree-resources
+```
+Handler will pick up these subscriptions on the next session start in that worktree.
+
 ## Design
 
 Full design spec: `docs/superpowers/specs/2026-06-15-agent-handler-design.md`
