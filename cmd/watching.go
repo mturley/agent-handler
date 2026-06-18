@@ -41,11 +41,13 @@ func runWatching(cmd *cobra.Command, args []string) error {
 	cfg, _ := config.Read(config.DefaultPath())
 
 	type watcherStatus struct {
-		Name      string  `json:"name"`
-		Configured bool   `json:"configured"`
-		Installed  bool   `json:"installed"`
-		Running    bool   `json:"running"`
-		LastRun    string `json:"last_run,omitempty"`
+		Name             string `json:"name"`
+		Configured       bool   `json:"configured"`
+		Installed        bool   `json:"installed"`
+		Running          bool   `json:"running"`
+		LastRun          string `json:"last_run,omitempty"`
+		HasError         bool   `json:"has_error"`
+		LastErrorMessage string `json:"last_error_message,omitempty"`
 	}
 
 	var watchers []watcherStatus
@@ -59,49 +61,19 @@ func runWatching(cmd *cobra.Command, args []string) error {
 		if lastRun := watcherPkg.LastRunTime(name); lastRun != nil {
 			ws.LastRun = lastRun.Format(time.RFC3339)
 		}
-		watchers = append(watchers, ws)
-	}
-
-	// Recent errors (last 24 hours) for subscribed resources
-	var recentErrors []struct {
-		TS    string `json:"ts"`
-		Title string `json:"title"`
-		Body  string `json:"body,omitempty"`
-	}
-
-	if len(subs) > 0 {
-		rows, err := d.Conn().Query(`
-			SELECT DISTINCT e.ts, e.title, COALESCE(e.body, '')
-			FROM events e
-			JOIN event_resources er ON er.event_id = e.id
-			JOIN subscriptions sub ON sub.resource_type = er.resource_type
-				AND sub.resource_id = er.resource_id
-				AND sub.session_id = ?
-				AND sub.deleted_at IS NULL
-			WHERE e.type = 'watcher_error'
-				AND e.ts > datetime('now', '-24 hours')
-			ORDER BY e.ts DESC
-			LIMIT 10
-		`, sessionID)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var e struct {
-					TS    string `json:"ts"`
-					Title string `json:"title"`
-					Body  string `json:"body,omitempty"`
-				}
-				rows.Scan(&e.TS, &e.Title, &e.Body)
-				recentErrors = append(recentErrors, e)
+		ws.HasError = d.HasWatcherError(name)
+		if ws.HasError {
+			if dbStatus, err := d.GetWatcherStatus(name); err == nil && dbStatus != nil {
+				ws.LastErrorMessage = dbStatus.LastErrorMessage
 			}
 		}
+		watchers = append(watchers, ws)
 	}
 
 	if jsonOutput {
 		output := map[string]interface{}{
 			"subscriptions": subs,
 			"watchers":      watchers,
-			"recent_errors": recentErrors,
 		}
 		data, _ := json.MarshalIndent(output, "", "  ")
 		fmt.Println(string(data))
@@ -143,23 +115,18 @@ func runWatching(cmd *cobra.Command, args []string) error {
 		if !ws.Running {
 			state = "stopped"
 		}
-		fmt.Printf("  %s: %s, last run %s\n", ws.Name, state, lastRun)
-	}
-
-	if len(recentErrors) > 0 {
-		fmt.Printf("\nRecent errors (last 24h): %d\n", len(recentErrors))
-		for _, e := range recentErrors {
-			fmt.Printf("  [%s] %s\n", e.TS[:19], e.Title)
-			if e.Body != "" {
-				body := e.Body
-				if len(body) > 120 {
-					body = body[:120] + "..."
+		if ws.HasError {
+			fmt.Printf("  %s: %s, last run %s — ERROR\n", ws.Name, state, lastRun)
+			if ws.LastErrorMessage != "" {
+				msg := ws.LastErrorMessage
+				if len(msg) > 120 {
+					msg = msg[:120] + "..."
 				}
-				fmt.Printf("    %s\n", body)
+				fmt.Printf("    %s\n", msg)
 			}
+		} else {
+			fmt.Printf("  %s: %s, last run %s\n", ws.Name, state, lastRun)
 		}
-	} else {
-		fmt.Println("\nNo errors in the last 24 hours.")
 	}
 
 	return nil
