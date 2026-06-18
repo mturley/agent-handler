@@ -64,7 +64,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 				}
 			}
 		}
-		fmt.Printf("%s/inbox%s: %d unread%s\n", cmd_color, reset_color, unreadCount, breakdownStr)
+		fmt.Printf("%s/inbox%s: \033[33m● %d unread%s\033[0m\n", cmd_color, reset_color, unreadCount, breakdownStr)
 	}
 
 	// Output line 2: inbox mode

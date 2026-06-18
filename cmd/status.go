@@ -194,7 +194,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 						runInfo = formatDuration(time.Since(*lastRun)) + " ago"
 					}
 					if watcherPkg.IsRunning(svc) {
-						status = fmt.Sprintf("%s✓ running%s %s(last run: %s)%s", green, reset, dim, runInfo, reset)
+						if d.HasWatcherError(svc) {
+							status = fmt.Sprintf("%s✗ error%s %s(last run: %s — run '/watching' for details)%s", red, reset, dim, runInfo, reset)
+						} else {
+							status = fmt.Sprintf("%s✓ running%s %s(last run: %s)%s", green, reset, dim, runInfo, reset)
+						}
 					} else {
 						status = fmt.Sprintf("%s⏸ stopped%s %s(last run: %s — run 'handler watcher start')%s", yellow, reset, dim, runInfo, reset)
 					}
