@@ -1,6 +1,6 @@
 ---
 name: handler-snapshot
-description: Write a pre-compaction snapshot to preserve session context
+description: "Checkpoint current progress to the ledger before context compaction or a long pause. Called automatically by the PreCompact hook, but can also be invoked manually when you want to save your current state."
 ---
 
 # /handler-snapshot — Snapshot Current State

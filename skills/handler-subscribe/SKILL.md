@@ -1,6 +1,6 @@
 ---
 name: handler-subscribe
-description: Subscribe this session to external resource events
+description: "Watch a PR or Jira issue for changes. Use when the user asks to watch, subscribe to, or track a resource, or when starting work on a PR or Jira issue that should be monitored for reviews, comments, or status changes."
 ---
 
 # /handler-subscribe — Subscribe to a Resource

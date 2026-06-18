@@ -1,6 +1,6 @@
 ---
 name: handler-emit
-description: Write an event to the agent-handler ledger
+description: "Record milestones, decisions, blockers, and handoffs to the shared ledger. Use proactively when you reach a significant milestone, make an important decision, get blocked, or identify follow-up work — other sessions and the handler can see these events."
 ---
 
 # /handler-emit — Emit an Event
