@@ -217,16 +217,16 @@ func buildBatchedPRQuery(prs []PRRef) string {
           nodes {
             commit {
               oid
-            }
-          }
-        }
-        checkSuites(last: 10) {
-          nodes {
-            checkRuns(last: 20) {
-              nodes {
-                name
-                conclusion
-                completedAt
+              checkSuites(last: 10) {
+                nodes {
+                  checkRuns(last: 20) {
+                    nodes {
+                      name
+                      conclusion
+                      completedAt
+                    }
+                  }
+                }
               }
             }
           }
@@ -321,7 +321,6 @@ type prNode struct {
 	Comments      commentsConnection     `json:"comments"`
 	ReviewThreads reviewThreadsConnection `json:"reviewThreads"`
 	Commits       commitsConnection      `json:"commits"`
-	CheckSuites   checkSuitesConnection  `json:"checkSuites"`
 }
 
 type reviewsConnection struct {
@@ -371,7 +370,8 @@ type commitsConnection struct {
 
 type commitNode struct {
 	Commit struct {
-		OID string `json:"oid"`
+		OID         string                `json:"oid"`
+		CheckSuites checkSuitesConnection `json:"checkSuites"`
 	} `json:"commit"`
 }
 
@@ -449,20 +449,21 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 		data.Commits.LatestSHA = node.Commits.Nodes[0].Commit.OID
 	}
 
-	// Parse check runs
-	for _, suite := range node.CheckSuites.Nodes {
-		for _, run := range suite.CheckRuns.Nodes {
-			// Only include completed check runs
-			if run.CompletedAt != nil && *run.CompletedAt != "" {
-				conclusion := ""
-				if run.Conclusion != nil {
-					conclusion = *run.Conclusion
+	// Parse check runs (nested under commits → commit → checkSuites)
+	if len(node.Commits.Nodes) > 0 {
+		for _, suite := range node.Commits.Nodes[0].Commit.CheckSuites.Nodes {
+			for _, run := range suite.CheckRuns.Nodes {
+				if run.CompletedAt != nil && *run.CompletedAt != "" {
+					conclusion := ""
+					if run.Conclusion != nil {
+						conclusion = *run.Conclusion
+					}
+					data.CheckRuns = append(data.CheckRuns, CheckRun{
+						Name:        run.Name,
+						Conclusion:  conclusion,
+						CompletedAt: *run.CompletedAt,
+					})
 				}
-				data.CheckRuns = append(data.CheckRuns, CheckRun{
-					Name:        run.Name,
-					Conclusion:  conclusion,
-					CompletedAt: *run.CompletedAt,
-				})
 			}
 		}
 	}
