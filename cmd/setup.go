@@ -55,6 +55,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Symlink %d skills into %s\n", len(skillNames), claudeSkillsDir)
 	fmt.Printf("  Configure 4 Claude Code hooks in %s\n", settingsPath)
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
+	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")
 	fmt.Println("  Offer to configure external service API tokens (GitHub, Jira)")
 	fmt.Println("  Offer to install watchers for configured services")
 	fmt.Println("")
