@@ -94,7 +94,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to query subscriptions: %w", err)
 	}
 
-	// Count by type
+	// Count subscriptions by type
 	prCount := 0
 	jiraCount := 0
 	for _, sub := range subs {
@@ -105,30 +105,63 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Build subscription summary
+	// Check which resource types have unread events
+	prUnread := false
+	jiraUnread := false
+	for eventType := range breakdown {
+		switch eventType {
+		case "pr_comment", "pr_review_comment", "pr_review_requested", "pr_approved",
+			"pr_closed", "pr_merged", "pr_reopened", "pr_new_commits",
+			"ci_check_passed", "ci_check_failed":
+			prUnread = true
+		case "jira_comment", "jira_status_change", "jira_assigned",
+			"jira_description_changed", "jira_labels_changed":
+			jiraUnread = true
+		case "watcher_error":
+			// Check if this error is for PR or Jira subscriptions
+			if prCount > 0 {
+				prUnread = true
+			}
+			if jiraCount > 0 {
+				jiraUnread = true
+			}
+		}
+	}
+
+	yellow := "\033[33m" // yellow
+
+	// Build subscription summary (normal weight, not dim)
 	subParts := []string{}
 	if prCount > 0 {
-		if prCount == 1 {
-			subParts = append(subParts, "1 PR")
+		label := "1 PR"
+		if prCount > 1 {
+			label = fmt.Sprintf("%d PRs", prCount)
+		}
+		if prUnread {
+			subParts = append(subParts, fmt.Sprintf("%s● %s%s", yellow, label, reset))
 		} else {
-			subParts = append(subParts, fmt.Sprintf("%d PRs", prCount))
+			subParts = append(subParts, label)
 		}
 	}
 	if jiraCount > 0 {
-		if jiraCount == 1 {
-			subParts = append(subParts, "1 Jira")
+		label := "1 Jira"
+		if jiraCount > 1 {
+			label = fmt.Sprintf("%d Jira", jiraCount)
+		}
+		if jiraUnread {
+			subParts = append(subParts, fmt.Sprintf("%s● %s%s", yellow, label, reset))
 		} else {
-			subParts = append(subParts, fmt.Sprintf("%d Jira", jiraCount))
+			subParts = append(subParts, label)
 		}
 	}
 
 	subSummary := ""
 	if len(subParts) == 0 {
-		subSummary = "no active subscriptions"
+		subSummary = fmt.Sprintf("%sno active subscriptions%s", dim, reset)
 	} else {
 		subSummary = subParts[0]
 		for i := 1; i < len(subParts); i++ {
-			subSummary += fmt.Sprintf(", %s", subParts[i])
+			subSummary += ", " + subParts[i]
 		}
 	}
 
@@ -160,7 +193,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, dim, subSummary, watcherStatus, reset)
+	fmt.Printf("%s/watching%s: %s %s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
 
 	return nil
 }

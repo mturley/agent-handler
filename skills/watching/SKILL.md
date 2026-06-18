@@ -15,7 +15,11 @@ handler watching --json
 
 1. Present the watched resources grouped by type (PRs, Jira issues)
 2. Show watcher status: configured, installed, running, last run time
-3. If there are recent watcher errors (last 24 hours), summarize them and suggest fixes
+3. If there are recent watcher errors (last 24 hours), summarize them and help troubleshoot:
+   - "Could not resolve to a Repository" → the repo may be private and the GitHub token needs `repo` scope. Suggest re-running `handler watcher auth github` with a new token.
+   - "401 Unauthorized" or "403 Forbidden" → the API token is invalid or expired. Suggest `handler watcher auth <service>` to update it.
+   - "rate limit" → the watcher is hitting API limits. Suggest increasing the polling interval with `handler watcher uninstall <name>` then `handler watcher install <name> --interval 10m`.
+   - For other errors, show the error message and suggest checking `handler watcher logs <name>` for more details.
 4. If watchers are not installed for subscribed resource types, suggest running `handler watcher install`
 5. Tell the user:
 
