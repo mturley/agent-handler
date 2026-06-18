@@ -34,18 +34,13 @@ func runSubscriptions(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("could not determine session: %w", err)
 	}
 
-	// List subscriptions
 	subs, err := d.ListSubscriptions(sessionID, subsIncludeDeleted)
 	if err != nil {
 		return fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
-	// Output
 	if jsonOutput {
-		data, err := json.MarshalIndent(subs, "", "  ")
-		if err != nil {
-			return err
-		}
+		data, _ := json.MarshalIndent(subs, "", "  ")
 		fmt.Println(string(data))
 	} else {
 		if len(subs) == 0 {
