@@ -181,21 +181,23 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 			lastRun := watcher.LastRunTime(svc)
 			ago := ""
 			if lastRun != nil {
-				ago = " " + formatDuration(time.Since(*lastRun))
+				ago = fmt.Sprintf(" (%s ago)", formatDuration(time.Since(*lastRun)))
 			}
 			if d.HasWatcherError(svc) {
-				services = append(services, fmt.Sprintf("%s %s✗%s%s%s", svc, red, reset, dim, ago))
+				services = append(services, fmt.Sprintf("%s✗%s%s %s%s", red, reset, dim, svc, ago))
 			} else {
-				services = append(services, fmt.Sprintf("%s %s✓%s%s%s", svc, green, reset, dim, ago))
+				services = append(services, fmt.Sprintf("%s✓%s%s %s%s", green, reset, dim, svc, ago))
 			}
 		}
 	}
 
 	if len(services) > 0 {
-		watcherStatus = " | status: "
-		watcherStatus += services[0]
-		for i := 1; i < len(services); i++ {
-			watcherStatus += " " + services[i]
+		watcherStatus = " | "
+		for i, s := range services {
+			if i > 0 {
+				watcherStatus += " · "
+			}
+			watcherStatus += s
 		}
 	}
 
