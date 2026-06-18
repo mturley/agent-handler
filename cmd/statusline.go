@@ -186,7 +186,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(services) > 0 {
-		watcherStatus = " | watchers: "
+		watcherStatus = " | status: "
 		watcherStatus += services[0]
 		for i := 1; i < len(services); i++ {
 			watcherStatus += " " + services[i]
