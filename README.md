@@ -84,6 +84,11 @@ Watch for external events (PR reviews, Jira comments, CI status) and deliver the
 ### Setup
 
 ```bash
+handler watcher install      # Configure tokens + install all authenticated watchers
+```
+
+Or step by step:
+```bash
 handler watcher auth         # Configure API tokens (GitHub, Jira)
 handler watcher install github
 handler watcher install jira
@@ -92,10 +97,12 @@ handler watcher install jira
 ### Management
 
 ```bash
-handler watcher list         # Show installed watchers
+handler watcher list         # Show installed watchers and status
+handler watcher stop         # Pause all watchers (or: handler watcher stop github)
+handler watcher start        # Resume paused watchers (or: handler watcher start github)
 handler watcher logs github  # View watcher logs
 handler watcher run github   # Run once manually
-handler watcher uninstall github
+handler watcher uninstall    # Remove all watchers (or: handler watcher uninstall github)
 ```
 
 ## .worktree-resources
