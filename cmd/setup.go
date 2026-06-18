@@ -52,8 +52,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Initialize SQLite database at %s\n", db.DefaultPath())
 	fmt.Printf("  Extract hooks to %s\n", hooksDir)
 	fmt.Printf("  Extract skills to %s\n", skillsDir)
-	fmt.Printf("  Symlink %d skills into %s\n", len(skillNames), claudeSkillsDir)
-	fmt.Printf("  Configure 4 Claude Code hooks in %s\n", settingsPath)
+	fmt.Printf("  Symlink %d skills into %s:\n", len(skillNames), claudeSkillsDir)
+	for _, name := range skillNames {
+		fmt.Printf("    - /%s\n", name)
+	}
+	fmt.Printf("  Configure Claude Code hooks in %s:\n", settingsPath)
+	for _, hook := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
+		fmt.Printf("    - %s\n", hook)
+	}
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
 	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")
 	fmt.Println("  Offer to configure external service API tokens (GitHub, Jira)")
