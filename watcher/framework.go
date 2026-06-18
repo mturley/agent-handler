@@ -117,7 +117,15 @@ func EmitWatcherEvent(d *db.DB, source, eventType, title string, body *string, e
 }
 
 // EmitWatcherError inserts a watcher_error event with event_resources.
+// Skips emitting if the watcher is already in error state with the same message.
 func EmitWatcherError(d *db.DB, source, title string, body *string, resource Resource) error {
+	if body != nil {
+		ws, err := d.GetWatcherStatus(source)
+		if err == nil && ws != nil && ws.LastErrorMessage == *body && d.HasWatcherError(source) {
+			return nil
+		}
+	}
+
 	event := db.Event{
 		ID:         uuid.New().String(),
 		TS:         time.Now().UTC().Format(time.RFC3339),

@@ -35,10 +35,10 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 		if err != nil {
 			logger.Printf("ERROR: failed to fetch issue %s: %v", issueKey, err)
 			errBody := fmt.Sprintf("Failed to fetch issue: %v", err)
-			d.RecordWatcherError("jira", errBody)
 			if err := watcher.EmitWatcherError(d, "jira", fmt.Sprintf("Failed to fetch %s", issueKey), &errBody, resource); err != nil {
 				logger.Printf("ERROR: failed to emit watcher error: %v", err)
 			}
+			d.RecordWatcherError("jira", errBody)
 			continue
 		}
 
