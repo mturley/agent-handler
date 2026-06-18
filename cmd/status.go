@@ -197,11 +197,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 						if d.HasWatcherError(svc) {
 							errMsg := ""
 							if ws, err := d.GetWatcherStatus(svc); err == nil && ws != nil && ws.LastErrorMessage != "" {
-								msg := ws.LastErrorMessage
-								if len(msg) > 100 {
-									msg = msg[:100] + "..."
-								}
-								errMsg = fmt.Sprintf("\n  %s         %s%s", dim, msg, reset)
+								errMsg = fmt.Sprintf("\n  %s         %s%s", dim, ws.LastErrorMessage, reset)
 							}
 							status = fmt.Sprintf("%s✗ error%s %s(last run: %s)%s%s", red, reset, dim, runInfo, reset, errMsg)
 						} else {
