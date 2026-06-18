@@ -1,11 +1,17 @@
 ---
 name: using-handler
-description: "CLI reference for agent-handler. Use proactively: invoke this skill when you see handler skills in your statusline (/inbox, /inbox-mode, /watching) or when the user asks about watched resources, inbox, or messaging other sessions."
+description: "Use when starting any session — loads awareness of agent-handler capabilities. agent-handler is installed and active: it tracks your sessions, watches external resources (PRs, Jira issues), and provides an inbox for cross-session messaging. This skill teaches you the available commands and skills."
 ---
 
-# agent-handler CLI Reference
+# agent-handler
 
-agent-handler manages sessions, events, subscriptions, and external resource watchers across Claude Code sessions.
+You are running inside a session managed by agent-handler. It provides:
+- **Inbox** — receive messages from other sessions and notifications from watched resources
+- **Watchers** — GitHub PRs and Jira issues are polled for changes and delivered to your inbox
+- **Cross-session messaging** — send messages to other active sessions by name or branch
+- **Subscriptions** — watch external resources and get notified of changes
+
+Your statusline shows your inbox status, inbox mode, and watched resources. Use the skills and commands below to interact with handler.
 
 ## Skills available
 
