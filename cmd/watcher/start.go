@@ -8,8 +8,9 @@ import (
 )
 
 var startCmd = &cobra.Command{
-	Use:   "start",
-	Short: "Resume all paused watchers",
+	Use:   "start [name]",
+	Short: "Resume paused watchers",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runStart,
 }
 
@@ -18,8 +19,13 @@ func init() {
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
+	targets := knownWatchers
+	if len(args) == 1 {
+		targets = []string{args[0]}
+	}
+
 	started := 0
-	for _, name := range knownWatchers {
+	for _, name := range targets {
 		if watcherPkg.IsInstalled(name) && !watcherPkg.IsRunning(name) {
 			if err := watcherPkg.Start(name); err != nil {
 				fmt.Printf("  ⚠ Failed to start %s: %v\n", name, err)
@@ -33,7 +39,7 @@ func runStart(cmd *cobra.Command, args []string) error {
 	if started == 0 {
 		fmt.Println("No paused watchers to start.")
 		anyInstalled := false
-		for _, name := range knownWatchers {
+		for _, name := range targets {
 			if watcherPkg.IsInstalled(name) {
 				anyInstalled = true
 				break

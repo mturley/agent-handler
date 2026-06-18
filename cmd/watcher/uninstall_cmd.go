@@ -2,43 +2,45 @@ package watcher
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/mturley/agent-handler/watcher"
+	watcherPkg "github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
 )
 
+var uninstallWatcherCmd = &cobra.Command{
+	Use:   "uninstall [name]",
+	Short: "Remove scheduled watchers",
+	Long: `With no arguments: uninstalls all installed watchers.
+With a name argument: uninstalls a specific watcher.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runUninstallWatcher,
+}
+
 func init() {
-	WatcherCmd.AddCommand(uninstallCmd)
+	WatcherCmd.AddCommand(uninstallWatcherCmd)
 }
 
-var uninstallCmd = &cobra.Command{
-	Use:   "uninstall <name>",
-	Short: "Remove a scheduled watcher",
-	Long: `Remove a scheduled watcher from the system scheduler.
-
-Valid watchers: github, jira
-
-This removes the watcher from the system scheduler (LaunchAgent or cron entry)
-but does not delete logs or database entries.`,
-	Args: cobra.ExactArgs(1),
-	RunE: uninstallWatcher,
-}
-
-func uninstallWatcher(cmd *cobra.Command, args []string) error {
-	name := strings.ToLower(args[0])
-
-	// Validate watcher name
-	if name != "github" && name != "jira" {
-		return fmt.Errorf("unknown watcher: %s (must be 'github' or 'jira')", name)
+func runUninstallWatcher(cmd *cobra.Command, args []string) error {
+	targets := knownWatchers
+	if len(args) == 1 {
+		targets = []string{args[0]}
 	}
 
-	// Uninstall watcher
-	if err := watcher.Uninstall(name); err != nil {
-		return fmt.Errorf("failed to uninstall watcher: %w", err)
+	uninstalled := 0
+	for _, name := range targets {
+		if watcherPkg.IsInstalled(name) {
+			if err := watcherPkg.Uninstall(name); err != nil {
+				fmt.Printf("  ⚠ Failed to uninstall %s: %v\n", name, err)
+				continue
+			}
+			fmt.Printf("  ✓ Uninstalled %s watcher\n", name)
+			uninstalled++
+		}
 	}
 
-	fmt.Printf("✓ Watcher %q uninstalled\n", name)
+	if uninstalled == 0 {
+		fmt.Println("No installed watchers to uninstall.")
+	}
 
 	return nil
 }

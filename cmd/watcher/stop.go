@@ -8,8 +8,9 @@ import (
 )
 
 var stopCmd = &cobra.Command{
-	Use:   "stop",
-	Short: "Pause all installed watchers",
+	Use:   "stop [name]",
+	Short: "Pause installed watchers",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runStop,
 }
 
@@ -18,8 +19,13 @@ func init() {
 }
 
 func runStop(cmd *cobra.Command, args []string) error {
+	targets := knownWatchers
+	if len(args) == 1 {
+		targets = []string{args[0]}
+	}
+
 	stopped := 0
-	for _, name := range knownWatchers {
+	for _, name := range targets {
 		if watcherPkg.IsInstalled(name) && watcherPkg.IsRunning(name) {
 			if err := watcherPkg.Stop(name); err != nil {
 				fmt.Printf("  ⚠ Failed to stop %s: %v\n", name, err)
