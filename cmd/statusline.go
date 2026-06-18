@@ -201,7 +201,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("%s/watching%s: %s %s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
+	fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
 
 	return nil
 }
