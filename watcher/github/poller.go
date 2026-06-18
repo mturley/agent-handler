@@ -47,6 +47,7 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 		logger.Printf("ERROR: failed to fetch PRs: %v", err)
 		// Emit error events for all resources
 		errBody := fmt.Sprintf("Failed to fetch PR data: %v", err)
+		d.RecordWatcherError("github", errBody)
 		for _, r := range resources {
 			if err := watcher.EmitWatcherError(d, "github", "GitHub API error", &errBody, r); err != nil {
 				logger.Printf("ERROR: failed to emit watcher error: %v", err)
@@ -81,6 +82,7 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 	}
 
 	logger.Printf("Emitted %d events", eventCount)
+	d.RecordWatcherSuccess("github")
 	return nil
 }
 

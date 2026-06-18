@@ -140,12 +140,16 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 
 	watcherStatus := ""
 	green := "\033[32m" // green
+	red := "\033[31m"   // red
 	services := []string{}
-	if cfg.IsServiceConfigured("github") && watcher.IsInstalled("github") {
-		services = append(services, fmt.Sprintf("github %s✓%s%s", green, reset, dim))
-	}
-	if cfg.IsServiceConfigured("jira") && watcher.IsInstalled("jira") {
-		services = append(services, fmt.Sprintf("jira %s✓%s%s", green, reset, dim))
+	for _, svc := range []string{"github", "jira"} {
+		if cfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
+			if d.HasWatcherError(svc) {
+				services = append(services, fmt.Sprintf("%s %s✗%s%s", svc, red, reset, dim))
+			} else {
+				services = append(services, fmt.Sprintf("%s %s✓%s%s", svc, green, reset, dim))
+			}
+		}
 	}
 
 	if len(services) > 0 {

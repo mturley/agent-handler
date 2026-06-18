@@ -66,6 +66,13 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_resource ON subscriptions(resource_type, resource_id, deleted_at);
 
+CREATE TABLE IF NOT EXISTS watcher_status (
+    name TEXT PRIMARY KEY,
+    last_success TEXT,
+    last_error TEXT,
+    last_error_message TEXT
+);
+
 CREATE TABLE IF NOT EXISTS resource_relationships (
     id TEXT PRIMARY KEY,
     child_type TEXT NOT NULL,
