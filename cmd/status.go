@@ -3,9 +3,12 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/discover"
+	watcherPkg "github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
 )
 
@@ -176,6 +179,52 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				ago := time.Since(lastActive).Truncate(time.Second)
 				fmt.Printf("  %sLast active: %s ago  |  ID: %s%s\n", dim, formatDuration(ago), st.SessionID, reset)
 			}
+		}
+
+		// Watcher and resource summary
+		fmt.Printf("\n%s─── Watchers ───%s\n", dim, reset)
+		cfg, _ := config.Read(config.DefaultPath())
+		for _, svc := range []string{"github", "jira"} {
+			authStatus := fmt.Sprintf("%s✗ not configured%s", red, reset)
+			if cfg != nil && cfg.IsServiceConfigured(svc) {
+				if watcherPkg.IsInstalled(svc) {
+					lastRun := watcherPkg.LastRunTime(svc)
+					runInfo := "never"
+					if lastRun != nil {
+						runInfo = formatDuration(time.Since(*lastRun)) + " ago"
+					}
+					authStatus = fmt.Sprintf("%s✓ running%s %s(last run: %s)%s", green, reset, dim, runInfo, reset)
+				} else {
+					authStatus = fmt.Sprintf("%s✓ configured%s %s(not installed — run 'handler watcher install %s')%s", yellow, reset, dim, svc, reset)
+				}
+			}
+			fmt.Printf("  %-8s %s\n", svc, authStatus)
+		}
+
+		// Active resources being watched
+		allSubs := make(map[string]int)
+		for _, s := range sessions {
+			if s.Status == "archived" {
+				continue
+			}
+			subs, _ := d.ListSubscriptions(s.SessionID, false)
+			for _, sub := range subs {
+				key := sub.ResourceType + ":" + sub.ResourceID
+				allSubs[key]++
+			}
+		}
+		if len(allSubs) > 0 {
+			byType := make(map[string]int)
+			for key := range allSubs {
+				parts := strings.SplitN(key, ":", 2)
+				byType[parts[0]]++
+			}
+			var typeSummary []string
+			for t, c := range byType {
+				typeSummary = append(typeSummary, fmt.Sprintf("%d %s", c, t))
+			}
+			fmt.Printf("\n%s─── Resources ───%s\n", dim, reset)
+			fmt.Printf("  %s%s%s being watched across all sessions\n", bold, strings.Join(typeSummary, ", "), reset)
 		}
 
 		// Count dead sessions
