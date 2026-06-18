@@ -63,6 +63,50 @@ func Uninstall(name string) error {
 	return uninstallCron(name)
 }
 
+// Stop pauses a watcher without removing it. The plist/cron entry remains but is unloaded.
+func Stop(name string) error {
+	if !IsInstalled(name) {
+		return fmt.Errorf("watcher %q is not installed", name)
+	}
+	if runtime.GOOS == "darwin" {
+		plistPath, err := launchdPlistPath(name)
+		if err != nil {
+			return err
+		}
+		exec.Command("launchctl", "unload", plistPath).Run()
+		return nil
+	}
+	return stopCron(name)
+}
+
+// Start resumes a stopped watcher.
+func Start(name string) error {
+	if !IsInstalled(name) {
+		return fmt.Errorf("watcher %q is not installed", name)
+	}
+	if runtime.GOOS == "darwin" {
+		plistPath, err := launchdPlistPath(name)
+		if err != nil {
+			return err
+		}
+		return exec.Command("launchctl", "load", plistPath).Run()
+	}
+	return startCron(name)
+}
+
+// IsRunning checks if the watcher is actively scheduled (installed and not stopped).
+func IsRunning(name string) bool {
+	if !IsInstalled(name) {
+		return false
+	}
+	if runtime.GOOS == "darwin" {
+		label := fmt.Sprintf("com.agent-handler.watcher-%s", name)
+		output, err := exec.Command("launchctl", "list", label).CombinedOutput()
+		return err == nil && len(output) > 0
+	}
+	return isRunningCron(name)
+}
+
 // IsInstalled checks if the watcher is installed on the current platform.
 func IsInstalled(name string) bool {
 	if runtime.GOOS == "darwin" {
@@ -313,4 +357,68 @@ func isInstalledCron(name string) bool {
 
 	commentMarker := fmt.Sprintf("# agent-handler-%s", name)
 	return strings.Contains(string(output), commentMarker)
+}
+
+func stopCron(name string) error {
+	cmd := exec.Command("crontab", "-l")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to read crontab: %w", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	commentMarker := fmt.Sprintf("# agent-handler-%s", name)
+	stoppedMarker := fmt.Sprintf("# agent-handler-%s-stopped", name)
+	var result []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) == commentMarker {
+			result = append(result, stoppedMarker)
+			continue
+		}
+		result = append(result, line)
+	}
+
+	newCrontab := strings.Join(result, "\n")
+	cmd = exec.Command("crontab", "-")
+	cmd.Stdin = strings.NewReader(newCrontab)
+	_, err = cmd.CombinedOutput()
+	return err
+}
+
+func startCron(name string) error {
+	cmd := exec.Command("crontab", "-l")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to read crontab: %w", err)
+	}
+
+	lines := strings.Split(string(output), "\n")
+	stoppedMarker := fmt.Sprintf("# agent-handler-%s-stopped", name)
+	commentMarker := fmt.Sprintf("# agent-handler-%s", name)
+	var result []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) == stoppedMarker {
+			result = append(result, commentMarker)
+			continue
+		}
+		result = append(result, line)
+	}
+
+	newCrontab := strings.Join(result, "\n")
+	cmd = exec.Command("crontab", "-")
+	cmd.Stdin = strings.NewReader(newCrontab)
+	_, err = cmd.CombinedOutput()
+	return err
+}
+
+func isRunningCron(name string) bool {
+	cmd := exec.Command("crontab", "-l")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	commentMarker := fmt.Sprintf("# agent-handler-%s", name)
+	stoppedMarker := fmt.Sprintf("# agent-handler-%s-stopped", name)
+	content := string(output)
+	return strings.Contains(content, commentMarker) && !strings.Contains(content, stoppedMarker)
 }

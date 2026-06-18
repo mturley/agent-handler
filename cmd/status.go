@@ -185,7 +185,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("\n%s─── Watchers ───%s\n", dim, reset)
 		cfg, _ := config.Read(config.DefaultPath())
 		for _, svc := range []string{"github", "jira"} {
-			authStatus := fmt.Sprintf("%s✗ not configured%s", red, reset)
+			status := fmt.Sprintf("%s✗ not configured%s", red, reset)
 			if cfg != nil && cfg.IsServiceConfigured(svc) {
 				if watcherPkg.IsInstalled(svc) {
 					lastRun := watcherPkg.LastRunTime(svc)
@@ -193,12 +193,16 @@ func runStatus(cmd *cobra.Command, args []string) error {
 					if lastRun != nil {
 						runInfo = formatDuration(time.Since(*lastRun)) + " ago"
 					}
-					authStatus = fmt.Sprintf("%s✓ running%s %s(last run: %s)%s", green, reset, dim, runInfo, reset)
+					if watcherPkg.IsRunning(svc) {
+						status = fmt.Sprintf("%s✓ running%s %s(last run: %s)%s", green, reset, dim, runInfo, reset)
+					} else {
+						status = fmt.Sprintf("%s⏸ stopped%s %s(last run: %s — run 'handler watcher start')%s", yellow, reset, dim, runInfo, reset)
+					}
 				} else {
-					authStatus = fmt.Sprintf("%s✓ configured%s %s(not installed — run 'handler watcher install %s')%s", yellow, reset, dim, svc, reset)
+					status = fmt.Sprintf("%s✓ configured%s %s(not installed — run 'handler watcher install %s')%s", yellow, reset, dim, svc, reset)
 				}
 			}
-			fmt.Printf("  %-8s %s\n", svc, authStatus)
+			fmt.Printf("  %-8s %s\n", svc, status)
 		}
 
 		// Active resources being watched
