@@ -7,167 +7,161 @@ import (
 )
 
 func TestReadResources(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, ".worktree-resources")
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
+	os.WriteFile(path, []byte("pr:owner/repo#42 https://github.com/owner/repo/pull/42\njira:RHOAIENG-100 https://redhat.atlassian.net/browse/RHOAIENG-100\n"), 0644)
 
-	// Write a file with 2 entries
-	content := "pr:123 https://github.com/org/repo/pull/123\nissue:456 https://github.com/org/repo/issues/456\n"
-	err := os.WriteFile(filePath, []byte(content), 0644)
+	resources, err := ReadResources(path)
 	if err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
+		t.Fatalf("ReadResources: %v", err)
 	}
-
-	// Read it back
-	resources, err := ReadResources(filePath)
-	if err != nil {
-		t.Fatalf("ReadResources failed: %v", err)
-	}
-
 	if len(resources) != 2 {
-		t.Fatalf("Expected 2 resources, got %d", len(resources))
+		t.Fatalf("expected 2 resources, got %d", len(resources))
 	}
-
-	if resources[0].ID != "pr:123" || resources[0].URL != "https://github.com/org/repo/pull/123" {
-		t.Errorf("First resource mismatch: %+v", resources[0])
+	if resources[0].ID != "pr:owner/repo#42" {
+		t.Errorf("expected pr:owner/repo#42, got %s", resources[0].ID)
 	}
+	if !resources[0].Primary {
+		t.Error("expected first resource to be primary")
+	}
+}
 
-	if resources[1].ID != "issue:456" || resources[1].URL != "https://github.com/org/repo/issues/456" {
-		t.Errorf("Second resource mismatch: %+v", resources[1])
+func TestReadResourcesWithRelated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
+	content := "pr:owner/repo#42 https://github.com/owner/repo/pull/42\n~ pr:owner/repo#40 https://github.com/owner/repo/pull/40\n~ jira:RHOAIENG-99 https://redhat.atlassian.net/browse/RHOAIENG-99\n"
+	os.WriteFile(path, []byte(content), 0644)
+
+	resources, err := ReadResources(path)
+	if err != nil {
+		t.Fatalf("ReadResources: %v", err)
+	}
+	if len(resources) != 3 {
+		t.Fatalf("expected 3 resources, got %d", len(resources))
+	}
+	if !resources[0].Primary {
+		t.Error("expected first resource to be primary")
+	}
+	if resources[1].Primary {
+		t.Error("expected second resource to be related (not primary)")
+	}
+	if resources[1].ID != "pr:owner/repo#40" {
+		t.Errorf("expected pr:owner/repo#40, got %s", resources[1].ID)
+	}
+	if resources[2].Primary {
+		t.Error("expected third resource to be related")
 	}
 }
 
 func TestReadResourcesSkipsMalformed(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, ".worktree-resources")
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
+	os.WriteFile(path, []byte("pr:owner/repo#42 https://url\n\nbadline\njira:X https://y\n"), 0644)
 
-	// Write a file with valid, empty, and malformed lines
-	content := "pr:123 https://github.com/org/repo/pull/123\n\nmalformed-line\nissue:456 https://github.com/org/repo/issues/456\n"
-	err := os.WriteFile(filePath, []byte(content), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
-	}
-
-	// Read it back
-	resources, err := ReadResources(filePath)
-	if err != nil {
-		t.Fatalf("ReadResources failed: %v", err)
-	}
-
-	// Should only get the 2 valid entries
+	resources, _ := ReadResources(path)
 	if len(resources) != 2 {
-		t.Fatalf("Expected 2 resources, got %d", len(resources))
-	}
-
-	if resources[0].ID != "pr:123" {
-		t.Errorf("First resource ID mismatch: %s", resources[0].ID)
-	}
-
-	if resources[1].ID != "issue:456" {
-		t.Errorf("Second resource ID mismatch: %s", resources[1].ID)
+		t.Errorf("expected 2 valid resources (skipping malformed), got %d", len(resources))
 	}
 }
 
 func TestReadResourcesFileNotExist(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, ".worktree-resources")
-
-	// Read non-existent file
-	resources, err := ReadResources(filePath)
+	resources, err := ReadResources("/nonexistent/.worktree-resources")
 	if err != nil {
-		t.Fatalf("Expected no error for missing file, got: %v", err)
+		t.Errorf("expected no error for missing file, got %v", err)
 	}
-
-	if resources != nil {
-		t.Errorf("Expected nil resources for missing file, got: %+v", resources)
+	if len(resources) != 0 {
+		t.Errorf("expected 0 resources, got %d", len(resources))
 	}
 }
 
-func TestAppendResource(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, ".worktree-resources")
+func TestAppendResourcePrimary(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
 
-	// Append to empty file
-	err := AppendResource(filePath, "pr:123", "https://github.com/org/repo/pull/123")
+	err := AppendResource(path, "pr:owner/repo#42", "https://github.com/owner/repo/pull/42", true)
 	if err != nil {
-		t.Fatalf("AppendResource failed: %v", err)
+		t.Fatalf("AppendResource: %v", err)
 	}
 
-	// Read it back
-	resources, err := ReadResources(filePath)
-	if err != nil {
-		t.Fatalf("ReadResources failed: %v", err)
-	}
-
+	resources, _ := ReadResources(path)
 	if len(resources) != 1 {
-		t.Fatalf("Expected 1 resource, got %d", len(resources))
+		t.Fatalf("expected 1, got %d", len(resources))
 	}
+	if !resources[0].Primary {
+		t.Error("expected primary")
+	}
+}
 
-	if resources[0].ID != "pr:123" || resources[0].URL != "https://github.com/org/repo/pull/123" {
-		t.Errorf("Resource mismatch: %+v", resources[0])
+func TestAppendResourceRelated(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
+
+	AppendResource(path, "pr:owner/repo#42", "https://url", true)
+	AppendResource(path, "pr:owner/repo#40", "https://url2", false)
+
+	resources, _ := ReadResources(path)
+	if len(resources) != 2 {
+		t.Fatalf("expected 2, got %d", len(resources))
+	}
+	if !resources[0].Primary {
+		t.Error("expected first to be primary")
+	}
+	if resources[1].Primary {
+		t.Error("expected second to be related")
 	}
 }
 
 func TestAppendResourceDeduplicates(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, ".worktree-resources")
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
 
-	// Append the same ID twice
-	err := AppendResource(filePath, "pr:123", "https://github.com/org/repo/pull/123")
-	if err != nil {
-		t.Fatalf("First AppendResource failed: %v", err)
-	}
+	AppendResource(path, "pr:owner/repo#42", "https://url", true)
+	AppendResource(path, "pr:owner/repo#42", "https://url", true)
 
-	err = AppendResource(filePath, "pr:123", "https://github.com/org/repo/pull/123")
-	if err != nil {
-		t.Fatalf("Second AppendResource failed: %v", err)
-	}
-
-	// Read it back
-	resources, err := ReadResources(filePath)
-	if err != nil {
-		t.Fatalf("ReadResources failed: %v", err)
-	}
-
-	// Should only have 1 entry
+	resources, _ := ReadResources(path)
 	if len(resources) != 1 {
-		t.Fatalf("Expected 1 resource after deduplication, got %d", len(resources))
-	}
-
-	if resources[0].ID != "pr:123" {
-		t.Errorf("Resource ID mismatch: %s", resources[0].ID)
+		t.Errorf("expected 1 (deduplicated), got %d", len(resources))
 	}
 }
 
 func TestRemoveResource(t *testing.T) {
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, ".worktree-resources")
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
+	os.WriteFile(path, []byte("pr:owner/repo#42 https://url1\n~ jira:X https://url2\n"), 0644)
 
-	// Write a file with 2 entries
-	content := "pr:123 https://github.com/org/repo/pull/123\nissue:456 https://github.com/org/repo/issues/456\n"
-	err := os.WriteFile(filePath, []byte(content), 0644)
+	err := RemoveResource(path, "pr:owner/repo#42")
 	if err != nil {
-		t.Fatalf("Failed to write test file: %v", err)
+		t.Fatalf("RemoveResource: %v", err)
 	}
 
-	// Remove one entry
-	err = RemoveResource(filePath, "pr:123")
-	if err != nil {
-		t.Fatalf("RemoveResource failed: %v", err)
-	}
-
-	// Read it back
-	resources, err := ReadResources(filePath)
-	if err != nil {
-		t.Fatalf("ReadResources failed: %v", err)
-	}
-
-	// Should only have 1 entry left
+	resources, _ := ReadResources(path)
 	if len(resources) != 1 {
-		t.Fatalf("Expected 1 resource after removal, got %d", len(resources))
+		t.Fatalf("expected 1, got %d", len(resources))
 	}
+	if resources[0].ID != "jira:X" {
+		t.Errorf("expected jira:X to remain, got %s", resources[0].ID)
+	}
+	if resources[0].Primary {
+		t.Error("expected remaining resource to still be related")
+	}
+}
 
-	if resources[0].ID != "issue:456" {
-		t.Errorf("Remaining resource ID mismatch: %s", resources[0].ID)
+func TestRemoveResourcePreservesMarkers(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".worktree-resources")
+	os.WriteFile(path, []byte("pr:owner/repo#42 https://url1\n~ pr:owner/repo#40 https://url2\njira:X https://url3\n"), 0644)
+
+	RemoveResource(path, "pr:owner/repo#42")
+
+	resources, _ := ReadResources(path)
+	if len(resources) != 2 {
+		t.Fatalf("expected 2, got %d", len(resources))
+	}
+	if resources[0].Primary {
+		t.Error("expected pr#40 to still be related")
+	}
+	if !resources[1].Primary {
+		t.Error("expected jira:X to still be primary")
 	}
 }
 

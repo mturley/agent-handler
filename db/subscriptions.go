@@ -54,6 +54,33 @@ func (db *DB) Subscribe(s Subscription) error {
 	return nil
 }
 
+// SubscribeIfNew creates a subscription only if one doesn't already exist
+// (active or soft-deleted). Unlike Subscribe, this does NOT reinstate
+// soft-deleted subscriptions — used by auto-registration from .worktree-resources
+// to avoid resurrecting subscriptions that were closed by a watcher.
+func (db *DB) SubscribeIfNew(s Subscription) error {
+	var count int
+	err := db.conn.QueryRow(`
+		SELECT COUNT(*) FROM subscriptions
+		WHERE session_id = ? AND resource_type = ? AND resource_id = ?
+	`, s.SessionID, s.ResourceType, s.ResourceID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check existing subscription: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	_, err = db.conn.Exec(`
+		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at)
+		VALUES (?, ?, ?, ?, ?, ?, NULL)
+	`, s.ID, s.SessionID, s.ResourceType, s.ResourceID, s.ResourceURL, s.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to insert subscription: %w", err)
+	}
+	return nil
+}
+
 // Unsubscribe soft-deletes a subscription.
 // Returns an error if no active subscription is found.
 func (db *DB) Unsubscribe(sessionID, resourceType, resourceID string) error {

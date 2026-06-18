@@ -6,13 +6,12 @@ import (
 	"strings"
 )
 
-// Resource represents a resource with an ID and URL
 type Resource struct {
-	ID  string
-	URL string
+	ID      string
+	URL     string
+	Primary bool
 }
 
-// ParseResourceID splits a resource ID on the first colon
 func ParseResourceID(resourceID string) (resourceType, id string) {
 	parts := strings.SplitN(resourceID, ":", 2)
 	if len(parts) == 2 {
@@ -21,7 +20,6 @@ func ParseResourceID(resourceID string) (resourceType, id string) {
 	return "", resourceID
 }
 
-// ReadResources reads resources from a .worktree-resources file
 func ReadResources(path string) ([]Resource, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -40,16 +38,21 @@ func ReadResources(path string) ([]Resource, error) {
 			continue
 		}
 
-		// Split on first whitespace
+		primary := true
+		if strings.HasPrefix(line, "~ ") {
+			primary = false
+			line = strings.TrimPrefix(line, "~ ")
+		}
+
 		parts := strings.Fields(line)
 		if len(parts) < 2 {
-			// Malformed line, skip
 			continue
 		}
 
 		resources = append(resources, Resource{
-			ID:  parts[0],
-			URL: parts[1],
+			ID:      parts[0],
+			URL:     parts[1],
+			Primary: primary,
 		})
 	}
 
@@ -60,42 +63,38 @@ func ReadResources(path string) ([]Resource, error) {
 	return resources, nil
 }
 
-// AppendResource appends a resource to the file, checking for duplicates
-func AppendResource(path, resourceID, url string) error {
-	// Read existing resources
+func AppendResource(path, resourceID, url string, primary bool) error {
 	existing, err := ReadResources(path)
 	if err != nil {
 		return err
 	}
 
-	// Check for duplicates
 	for _, r := range existing {
 		if r.ID == resourceID {
-			// Already exists, don't append
 			return nil
 		}
 	}
 
-	// Append to file
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(resourceID + " " + url + "\n")
+	line := resourceID + " " + url + "\n"
+	if !primary {
+		line = "~ " + line
+	}
+	_, err = file.WriteString(line)
 	return err
 }
 
-// RemoveResource removes a resource from the file
 func RemoveResource(path, resourceID string) error {
-	// Read all resources
 	resources, err := ReadResources(path)
 	if err != nil {
 		return err
 	}
 
-	// Filter out the resource to remove
 	var filtered []Resource
 	for _, r := range resources {
 		if r.ID != resourceID {
@@ -103,7 +102,6 @@ func RemoveResource(path, resourceID string) error {
 		}
 	}
 
-	// Rewrite the file
 	file, err := os.OpenFile(path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -111,8 +109,11 @@ func RemoveResource(path, resourceID string) error {
 	defer file.Close()
 
 	for _, r := range filtered {
-		_, err = file.WriteString(r.ID + " " + r.URL + "\n")
-		if err != nil {
+		line := r.ID + " " + r.URL + "\n"
+		if !r.Primary {
+			line = "~ " + line
+		}
+		if _, err = file.WriteString(line); err != nil {
 			return err
 		}
 	}

@@ -114,7 +114,7 @@ func runRegister(cmd *cobra.Command, args []string) error {
 				continue
 			}
 			urlPtr := &r.URL
-			err = d.Subscribe(db.Subscription{
+			err = d.SubscribeIfNew(db.Subscription{
 				ID:           uuid.New().String(),
 				SessionID:    regSessionID,
 				ResourceType: resourceType,

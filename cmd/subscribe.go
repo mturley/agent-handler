@@ -29,6 +29,7 @@ func init() {
 	subscribeCmd.Flags().StringVar(&subResource, "resource", "", "resource ID (format: type:id, e.g., pr:owner/repo#42)")
 	subscribeCmd.Flags().StringVar(&subURL, "url", "", "resource URL (optional)")
 	subscribeCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
+	subscribeCmd.Flags().Bool("primary", false, "mark as a primary resource for this worktree")
 	subscribeCmd.MarkFlagRequired("resource")
 }
 
@@ -84,7 +85,8 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	// If URL provided, also sync to .worktree-resources
 	if subURL != "" {
 		resourcesPath := ".worktree-resources"
-		if err := worktree.AppendResource(resourcesPath, subResource, subURL); err != nil {
+		primary, _ := cmd.Flags().GetBool("primary")
+		if err := worktree.AppendResource(resourcesPath, subResource, subURL, primary); err != nil {
 			return fmt.Errorf("failed to append to .worktree-resources: %w", err)
 		}
 	}
