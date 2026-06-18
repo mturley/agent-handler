@@ -154,31 +154,54 @@ func runWatching(cmd *cobra.Command, args []string) error {
 }
 
 func runWatchingGlobal(d *db.DB) error {
-	rows, err := d.Conn().Query(`
-		SELECT DISTINCT sub.resource_type, sub.resource_id, COALESCE(sub.resource_url, ''),
-			GROUP_CONCAT(DISTINCT COALESCE(s.session_name, s.branch)) as sessions
+	type sessionInfo struct {
+		SessionID   string `json:"session_id"`
+		SessionName string `json:"session_name,omitempty"`
+		Branch      string `json:"branch"`
+		LastActive  string `json:"last_active"`
+	}
+
+	type globalSub struct {
+		ResourceType string        `json:"resource_type"`
+		ResourceID   string        `json:"resource_id"`
+		ResourceURL  string        `json:"resource_url,omitempty"`
+		Sessions     []sessionInfo `json:"sessions"`
+	}
+
+	resRows, err := d.Conn().Query(`
+		SELECT DISTINCT sub.resource_type, sub.resource_id, COALESCE(sub.resource_url, '')
 		FROM subscriptions sub
 		JOIN sessions s ON s.session_id = sub.session_id
 		WHERE sub.deleted_at IS NULL AND s.status = 'active'
-		GROUP BY sub.resource_type, sub.resource_id
 		ORDER BY sub.resource_type, sub.resource_id
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to query subscriptions: %w", err)
 	}
-	defer rows.Close()
-
-	type globalSub struct {
-		ResourceType string `json:"resource_type"`
-		ResourceID   string `json:"resource_id"`
-		ResourceURL  string `json:"resource_url,omitempty"`
-		Sessions     string `json:"sessions"`
-	}
+	defer resRows.Close()
 
 	var results []globalSub
-	for rows.Next() {
+	for resRows.Next() {
 		var gs globalSub
-		rows.Scan(&gs.ResourceType, &gs.ResourceID, &gs.ResourceURL, &gs.Sessions)
+		resRows.Scan(&gs.ResourceType, &gs.ResourceID, &gs.ResourceURL)
+
+		sessRows, err := d.Conn().Query(`
+			SELECT s.session_id, COALESCE(s.session_name, ''), s.branch, s.last_active
+			FROM subscriptions sub
+			JOIN sessions s ON s.session_id = sub.session_id
+			WHERE sub.resource_type = ? AND sub.resource_id = ?
+				AND sub.deleted_at IS NULL AND s.status = 'active'
+			ORDER BY s.last_active DESC
+		`, gs.ResourceType, gs.ResourceID)
+		if err == nil {
+			for sessRows.Next() {
+				var si sessionInfo
+				sessRows.Scan(&si.SessionID, &si.SessionName, &si.Branch, &si.LastActive)
+				gs.Sessions = append(gs.Sessions, si)
+			}
+			sessRows.Close()
+		}
+
 		results = append(results, gs)
 	}
 
@@ -236,10 +259,18 @@ func runWatchingGlobal(d *db.DB) error {
 		for _, gs := range results {
 			fmt.Printf("  %s:%s\n", gs.ResourceType, gs.ResourceID)
 			if gs.ResourceURL != "" {
-				fmt.Printf("    URL: %s\n", gs.ResourceURL)
+				fmt.Printf("    %s\n", gs.ResourceURL)
 			}
-			if gs.Sessions != "" {
-				fmt.Printf("    Sessions: %s\n", gs.Sessions)
+			for _, si := range gs.Sessions {
+				name := si.SessionName
+				if name == "" {
+					name = si.Branch
+				}
+				lastActive := si.LastActive
+				if t, err := time.Parse(time.RFC3339, si.LastActive); err == nil {
+					lastActive = formatDuration(time.Since(t)) + " ago"
+				}
+				fmt.Printf("    └ %s (%s) — %s\n", name, si.SessionID[:12], lastActive)
 			}
 			fmt.Println()
 		}
