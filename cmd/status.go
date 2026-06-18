@@ -247,6 +247,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Printf("\n%s─── Resources ───%s\n", dim, reset)
 			fmt.Printf("  %s%s%s being watched across all sessions\n", bold, strings.Join(typeSummary, ", "), reset)
+			fmt.Printf("  %sRun 'handler watching --global' for details%s\n", dim, reset)
 		}
 
 		// Count dead sessions
