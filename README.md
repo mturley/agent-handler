@@ -98,6 +98,10 @@ handler watcher run github   # Run once manually
 handler watcher uninstall github
 ```
 
+## .worktree-resources
+
+The `.worktree-resources` file lets any tool declare which external resources a worktree cares about. See [docs/worktree-resources.md](docs/worktree-resources.md) for the format spec and integration guide.
+
 ## Design
 
 See [docs/superpowers/specs/2026-06-15-agent-handler-design.md](docs/superpowers/specs/2026-06-15-agent-handler-design.md) for the full design spec.
