@@ -98,7 +98,7 @@ func runLog(cmd *cobra.Command, args []string) error {
 
 	// Advance cursor if --since-cursor was used
 	if logSinceCursor && len(events) > 0 {
-		if err := d.AdvanceCursor(sessionID, time.Now().UTC().Format(time.RFC3339)); err != nil {
+		if err := d.AdvanceBothCursors(sessionID, time.Now().UTC().Format(time.RFC3339)); err != nil {
 			return fmt.Errorf("failed to advance cursor: %w", err)
 		}
 	}

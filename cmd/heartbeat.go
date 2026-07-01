@@ -18,6 +18,7 @@ func init() {
 	heartbeatCmd.GroupID = "agent"
 	rootCmd.AddCommand(heartbeatCmd)
 	heartbeatCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
+	heartbeatCmd.Flags().Bool("catch-up-human-cursor", false, "advance human cursor to match agent cursor (auto inbox mode)")
 }
 
 func runHeartbeat(cmd *cobra.Command, args []string) error {
@@ -35,6 +36,15 @@ func runHeartbeat(cmd *cobra.Command, args []string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if err := d.BumpLastActive(sessionID, now); err != nil {
 		return err
+	}
+
+	// Catch up human cursor if requested (auto inbox mode)
+	catchUp, _ := cmd.Flags().GetBool("catch-up-human-cursor")
+	if catchUp {
+		session, err := d.GetSession(sessionID)
+		if err == nil && session != nil && session.InboxMode == "auto" {
+			d.CatchUpHumanCursor(sessionID)
+		}
 	}
 
 	// Refresh session name if it changed

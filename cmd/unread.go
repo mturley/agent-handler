@@ -60,7 +60,7 @@ func runUnread(cmd *cobra.Command, args []string) error {
 	}
 
 	if ack && len(events) > 0 {
-		d.AdvanceCursor(sessionID, time.Now().UTC().Format(time.RFC3339))
+		d.AdvanceBothCursors(sessionID, time.Now().UTC().Format(time.RFC3339))
 	}
 
 	if jsonOutput {

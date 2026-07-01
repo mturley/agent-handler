@@ -105,6 +105,11 @@ func runConfigure(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to configure session: %w", err)
 	}
 
+	// Clear human cursor when leaving auto mode
+	if inboxMode != "" && inboxMode != "auto" && session.InboxMode == "auto" {
+		d.ClearHumanCursor(sessionID)
+	}
+
 	// Re-fetch session to get final state
 	session, err = d.GetSession(sessionID)
 	if err != nil {

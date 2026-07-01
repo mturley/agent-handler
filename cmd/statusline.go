@@ -107,6 +107,14 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("%s/inbox-mode%s: %s\n", cmd_color, reset_color, rendered)
 
+	// Auto-delivered count (only in auto mode)
+	if session.InboxMode == "auto" {
+		autoCount, err := d.AutoDeliveredCount(slSessionID)
+		if err == nil && autoCount > 0 {
+			fmt.Printf("  %s● %d auto-delivered since last prompt%s\n", yellow, autoCount, reset_color)
+		}
+	}
+
 	// Output line 3: active subscriptions and watcher status
 	subs, err := d.ListSubscriptions(slSessionID, false)
 	if err != nil {

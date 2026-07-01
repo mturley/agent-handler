@@ -39,7 +39,9 @@ else
 fi
 
 # Heartbeat in background, fully silenced
-handler heartbeat --session-id "$SESSION_ID" >/dev/null 2>&1 &
+# --catch-up-human-cursor advances the human cursor to match the agent cursor
+# when in auto inbox mode, so auto-delivered events are marked as seen by the user
+handler heartbeat --session-id "$SESSION_ID" --catch-up-human-cursor >/dev/null 2>&1 &
 
 # Only inject output if inbox mode is on-submit
 INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")

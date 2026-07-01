@@ -38,7 +38,7 @@ func runAck(cmd *cobra.Command, args []string) error {
 	}
 
 	ts := time.Now().UTC().Format(time.RFC3339)
-	if err := d.AdvanceCursor(sessionID, ts); err != nil {
+	if err := d.AdvanceBothCursors(sessionID, ts); err != nil {
 		return fmt.Errorf("failed to advance cursor: %w", err)
 	}
 

@@ -54,6 +54,17 @@ These are the commands you'll use most often. Run `--help` on each for exact fla
 - `handler query "SELECT ..."` — read-only SQL against the ledger
 - `handler schema` — dump table definitions
 
+### Auto inbox mode and the dual cursor
+
+In auto mode, a cron job polls for unread events and delivers them via `/inbox`. To help the user see what happened while they were away, the system tracks two cursors:
+
+- **Agent cursor** — what the agent has processed (advances when events are acked)
+- **Human cursor** — what the user has seen (advances when the user sends a prompt)
+
+The gap between them appears in the statusline as "N auto-delivered since last prompt". When the user sends a prompt, the human cursor catches up automatically. Manual `/inbox` invocations advance both cursors.
+
+When `/inbox` is invoked by the cron job, events are acked normally (advancing the agent cursor), and the auto-delivered count grows. When the user returns and sends a prompt, the count resets to zero.
+
 ### Resource format
 
 Resources are identified as `type:id`. Supported types: `pr`, `jira`.

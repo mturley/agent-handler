@@ -52,8 +52,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE TABLE IF NOT EXISTS session_cursors (
     session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),
-    last_seen_ts TEXT NOT NULL
+    last_seen_ts TEXT NOT NULL,
+    human_seen_ts TEXT
 );
+
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id TEXT PRIMARY KEY,
