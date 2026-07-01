@@ -80,6 +80,23 @@ Command group: `human`.
 
 ---
 
+## Direct Message Indicator (All Sessions)
+
+The statusline for all sessions (not just handler) gains a direct message indicator. Unread events are split into "watched" (routed via resource subscriptions) and "direct" (routed via `event_recipients` matching session ID, branch, or role).
+
+**Standard session statusline:**
+```
+/inbox: ● 3 unread (2 pr_comment, 1 ci_fail) | ● 1 direct
+```
+
+The `| ● N direct` suffix appears only when there are direct messages. The yellow `●` signals "someone is talking to you" — distinct from passive watcher events.
+
+**Implementation:** The unread query already returns all matching events. To split them, the statusline queries:
+- Total unread count (existing)
+- Direct count: events where an `event_recipients` row matches this session's ID, branch, or role
+
+---
+
 ## Handler Session Statusline
 
 When `role = handler`, the statusline shows a different layout:
