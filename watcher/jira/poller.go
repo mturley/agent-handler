@@ -73,7 +73,7 @@ func processIssue(d *db.DB, cfg *config.Config, issue *IssueData, resource watch
 		body := fmt.Sprintf("%s\nStatus: %s", issue.Key, issue.Status)
 		// Use the most recent timestamp from the issue (latest changelog or comment)
 		latestTS := latestTimestamp(issue)
-		if err := watcher.EmitWatcherEvent(d, "jira", "watch_started", title, &body, latestTS, nil, nil, resource); err != nil {
+		if err := watcher.EmitWatcherEvent(d, "jira", watcher.EventTypeWatchStarted, title, &body, latestTS, nil, nil, resource); err != nil {
 			return eventCount, fmt.Errorf("failed to emit watch_started event: %w", err)
 		}
 		eventCount++
@@ -95,13 +95,13 @@ func processIssue(d *db.DB, cfg *config.Config, issue *IssueData, resource watch
 			continue
 		}
 
-		if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, "jira_comment", comment.CreatedAt) {
+		if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, watcher.EventTypeJiraComment, comment.CreatedAt) {
 			continue
 		}
 
 		title := fmt.Sprintf("Comment by %s on %s", comment.Author, issue.Key)
 		authorType := authorTypeFromUsername(cfg.Services.Jira.BotUsernames, comment.Author)
-		if err := watcher.EmitWatcherEvent(d, "jira", "jira_comment", title, &comment.Body, comment.CreatedAt, &comment.Author, &authorType, resource); err != nil {
+		if err := watcher.EmitWatcherEvent(d, "jira", watcher.EventTypeJiraComment, title, &comment.Body, comment.CreatedAt, &comment.Author, &authorType, resource); err != nil {
 			return eventCount, fmt.Errorf("failed to emit jira_comment event: %w", err)
 		}
 		eventCount++
@@ -117,53 +117,48 @@ func processIssue(d *db.DB, cfg *config.Config, issue *IssueData, resource watch
 		// Process based on field type
 		switch entry.Field {
 		case "status":
-			eventType := "jira_status_change"
-			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, eventType, entry.CreatedAt) {
+			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, watcher.EventTypeJiraStatusChange, entry.CreatedAt) {
 				continue
 			}
 			title := fmt.Sprintf("%s: %s → %s", issue.Key, entry.From, entry.To)
 			authorType := authorTypeFromUsername(cfg.Services.Jira.BotUsernames, entry.Author)
-			if err := watcher.EmitWatcherEvent(d, "jira", eventType, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
+			if err := watcher.EmitWatcherEvent(d, "jira", watcher.EventTypeJiraStatusChange, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
 				return eventCount, fmt.Errorf("failed to emit jira_status_change event: %w", err)
 			}
 			eventCount++
 			logger.Printf("Emitted jira_status_change for %s: %s → %s", resource.ResourceID, entry.From, entry.To)
 
 		case "assignee":
-			eventType := "jira_assigned"
-			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, eventType, entry.CreatedAt) {
+			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, watcher.EventTypeJiraAssigned, entry.CreatedAt) {
 				continue
 			}
 			title := fmt.Sprintf("%s assigned to %s", issue.Key, entry.To)
 			authorType := authorTypeFromUsername(cfg.Services.Jira.BotUsernames, entry.Author)
-			if err := watcher.EmitWatcherEvent(d, "jira", eventType, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
+			if err := watcher.EmitWatcherEvent(d, "jira", watcher.EventTypeJiraAssigned, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
 				return eventCount, fmt.Errorf("failed to emit jira_assigned event: %w", err)
 			}
 			eventCount++
 			logger.Printf("Emitted jira_assigned for %s: %s", resource.ResourceID, entry.To)
 
 		case "description":
-			eventType := "jira_description_changed"
-			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, eventType, entry.CreatedAt) {
+			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, watcher.EventTypeJiraDescChanged, entry.CreatedAt) {
 				continue
 			}
 			title := fmt.Sprintf("%s description changed", issue.Key)
 			authorType := authorTypeFromUsername(cfg.Services.Jira.BotUsernames, entry.Author)
-			if err := watcher.EmitWatcherEvent(d, "jira", eventType, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
+			if err := watcher.EmitWatcherEvent(d, "jira", watcher.EventTypeJiraDescChanged, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
 				return eventCount, fmt.Errorf("failed to emit jira_description_changed event: %w", err)
 			}
 			eventCount++
 			logger.Printf("Emitted jira_description_changed for %s", resource.ResourceID)
 
 		case "labels":
-			eventType := "jira_labels_changed"
-			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, eventType, entry.CreatedAt) {
+			if watcher.IsDuplicate(d, "jira", resource.ResourceType, resource.ResourceID, watcher.EventTypeJiraLabelsChanged, entry.CreatedAt) {
 				continue
 			}
-			// Parse label changes
 			title := labelChangeTitle(issue.Key, entry.From, entry.To)
 			authorType := authorTypeFromUsername(cfg.Services.Jira.BotUsernames, entry.Author)
-			if err := watcher.EmitWatcherEvent(d, "jira", eventType, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
+			if err := watcher.EmitWatcherEvent(d, "jira", watcher.EventTypeJiraLabelsChanged, title, nil, entry.CreatedAt, &entry.Author, &authorType, resource); err != nil {
 				return eventCount, fmt.Errorf("failed to emit jira_labels_changed event: %w", err)
 			}
 			eventCount++
