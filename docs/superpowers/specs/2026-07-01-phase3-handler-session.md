@@ -86,17 +86,32 @@ When `role = handler`, the statusline shows a different layout:
 
 **Line 1** (replaces `/inbox`):
 ```
-/handler: 3 active, 1 blocked | 5 new events
+/handler: 3 active, 1 blocked | 5 new events | ● 1 direct message
 ```
 - Count of active sessions (excluding self)
 - Count of blocked sessions
 - Count of events since the handler's cursor
+- Count of unread messages directed to this session (via `--to handler`), shown with yellow `●` if > 0
 
 **Line 2** (replaces `/inbox-mode`): omitted — handler sessions don't use inbox modes.
 
 **Line 3** (`/watching`): shows global resource count + watcher status (same as `handler watching --global` summary).
 
 When `role` is empty/null, the standard statusline is shown (unchanged).
+
+---
+
+## Role-based Message Routing
+
+`--to handler` in `handler emit` resolves to sessions with `role = 'handler'`. This allows any session to direct a message specifically to the handler session — not just for awareness (the handler sees everything), but as a request for the handler to take action.
+
+**resolveRecipient update:** In `cmd/emit.go`, `resolveRecipient` checks if the target matches a known role before checking session names and branches. If it matches, it creates a `role` recipient type.
+
+**event_recipients:** A new recipient type `role` is supported: `{recipient_type: "role", recipient_value: "handler"}`.
+
+**Unread query update:** The unread query in `db/events.go` gets an additional clause matching `recipient_type = 'role'` against the session's role.
+
+**using-handler skill update:** "To send a message to the handler session, use `--to handler`."
 
 ---
 
@@ -116,7 +131,7 @@ When `role` is empty/null, the standard statusline is shown (unchanged).
      cron: "*/1 * * * *"
      durable: false
      recurring: true
-     prompt: "Run handler log --global --since-cursor --json. If there are new events, summarize them for the user."
+     prompt: "Run handler log --global --since-cursor --json. Also run handler unread --count to check for messages directed to the handler. If there are new events or unread messages, summarize them. For direct messages (--to handler), present them as action items."
    ```
 5. Tell the user what they can ask
 
@@ -163,9 +178,11 @@ Add `role TEXT` column to `sessions` table. Nullable, default empty.
 **Modified:**
 - `cmd/log_cmd.go` — add `--global`, `--since-cursor`, `--since` flags
 - `cmd/configure.go` — add `--role` flag
+- `cmd/emit.go` — resolveRecipient handles role-based targeting
 - `cmd/statusline.go` — handler session layout
 - `cmd/watching.go` — auto-global for handler sessions (optional, or just in skill)
-- `skills/watching/SKILL.md` — use global when handler session
-- `skills/using-handler/SKILL.md` — mention /handler
+- `db/events.go` — unread query matches role-based recipients
 - `db/schema.sql` — add role column
 - `db/sessions.go` — include role in Session struct and queries
+- `skills/watching/SKILL.md` — use global when handler session
+- `skills/using-handler/SKILL.md` — mention /handler and --to handler
