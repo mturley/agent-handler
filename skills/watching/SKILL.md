@@ -11,6 +11,8 @@ description: Show watched resources, watcher status, and recent watcher errors f
 handler watching --json
 ```
 
+If this session has the handler role (`handler configure --get role` returns `handler`), run `handler watching --global --json` instead of `handler watching --json`.
+
 ## After reading the data
 
 1. Present the watched resources grouped by type (PRs, Jira issues)

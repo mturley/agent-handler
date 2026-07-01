@@ -13,6 +13,8 @@ You are running inside a session managed by agent-handler. It provides:
 
 Your statusline shows inbox status, inbox mode, and watched resources.
 
+To turn this session into a handler (command center for all sessions), use `/handler`.
+
 ## Emitting events
 
 **You MUST use `handler emit` proactively throughout your session.** Don't wait to be asked — emit events whenever something significant happens. Other sessions and the handler rely on these events to understand what's going on across the system.
@@ -42,6 +44,7 @@ handler <command> --help          # flags and usage for a specific command
 
 These are the commands you'll use most often. Run `--help` on each for exact flag syntax.
 
+- `/handler` — turn this session into a command center for all sessions
 - `handler emit` — record events (milestone, decision, blocked, handoff, message, etc.)
 - `handler subscribe` / `handler unsubscribe` — watch or unwatch external resources (add `--persist` to also update `.worktree-resources` for future sessions)
 - `handler status` — all sessions with liveness and unread counts
@@ -58,4 +61,4 @@ Examples: `pr:owner/repo#123`, `jira:PROJECT-456`
 
 ### Messaging other sessions
 
-The `--to` flag on `handler emit` accepts session names, branch names, or session UUIDs.
+The `--to` flag on `handler emit` accepts session names, branch names, or session UUIDs. To send a message to the handler session, use `--to handler`.
