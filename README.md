@@ -105,6 +105,20 @@ handler watcher run github   # Run once manually
 handler watcher uninstall    # Remove all watchers (or: handler watcher uninstall github)
 ```
 
+## Handler Session
+
+Use `/handler` in a Claude session to turn it into a command center for managing all active sessions.
+
+```bash
+handler configure --role handler   # Set session as handler
+handler triage                     # What needs attention across all sessions
+handler log --global               # Cross-session event timeline
+handler log --global --since-cursor  # What changed since last check
+handler emit --to handler          # Send a message to the handler session
+```
+
+The handler session gets a custom statusline showing active/blocked session counts and global watcher status.
+
 ## .worktree-resources
 
 The `.worktree-resources` file lets any tool declare which external resources a worktree cares about. See [docs/worktree-resources.md](docs/worktree-resources.md) for the format spec and integration guide.

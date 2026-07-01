@@ -59,6 +59,14 @@ When adding new watcher types:
 - Add the service to `cmd/watcher/auth.go` prompts
 - Add the service to `cmd/watcher/run.go` switch statement
 
+## Handler Session
+
+A session with `role = handler` acts as a command center. The `/handler` skill sets the role and starts a polling loop. The handler statusline shows global session counts and watcher status instead of per-session inbox.
+
+Key commands: `handler triage` (what needs attention), `handler log --global` (cross-session timeline), `--to handler` in emit (role-based message routing).
+
+The `role` column on the `sessions` table drives statusline behavior. `event_recipients` supports `recipient_type = 'role'` for role-based routing.
+
 ## .worktree-resources File
 
 See [docs/worktree-resources.md](docs/worktree-resources.md) for the file format spec and integration guide.
