@@ -70,7 +70,7 @@ func EventCursor(d *db.DB, source, resourceType, resourceID string) string {
 }
 
 // IsDuplicate checks if an event with the given source, resource type, resource ID, event type, and external timestamp already exists.
-func IsDuplicate(d *db.DB, source, resourceType, resourceID, eventType, externalTS string) bool {
+func IsDuplicate(d *db.DB, source, resourceType, resourceID string, eventType EventType, externalTS string) bool {
 	query := `
 		SELECT 1
 		FROM events e
@@ -85,14 +85,14 @@ func IsDuplicate(d *db.DB, source, resourceType, resourceID, eventType, external
 }
 
 // EmitWatcherEvent inserts a watcher event with event_resources.
-func EmitWatcherEvent(d *db.DB, source, eventType, title string, body *string, externalTS string, author, authorType *string, resource Resource) error {
+func EmitWatcherEvent(d *db.DB, source string, eventType EventType, title string, body *string, externalTS string, author, authorType *string, resource Resource) error {
 	event := db.Event{
 		ID:         uuid.New().String(),
 		TS:         time.Now().UTC().Format(time.RFC3339),
 		ExternalTS: &externalTS,
 		Source:     source,
 		SessionID:  nil,
-		Type:       eventType,
+		Type:       string(eventType),
 		Title:      title,
 		Body:       body,
 		Author:     author,
@@ -132,7 +132,7 @@ func EmitWatcherError(d *db.DB, source, title string, body *string, resource Res
 		ExternalTS: nil,
 		Source:     source,
 		SessionID:  nil,
-		Type:       "watcher_error",
+		Type:       string(EventTypeWatcherError),
 		Title:      title,
 		Body:       body,
 		Author:     nil,
