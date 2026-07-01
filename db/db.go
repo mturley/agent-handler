@@ -42,12 +42,6 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to apply schema: %w", err)
 	}
 
-	// Migrations for existing databases
-	if err := runMigrations(conn); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
-	}
-
 	return &DB{conn: conn}, nil
 }
 
@@ -83,22 +77,6 @@ func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
 // Query executes a query that returns rows.
 func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return db.conn.Query(query, args...)
-}
-
-// runMigrations applies incremental schema changes for existing databases.
-func runMigrations(conn *sql.DB) error {
-	// Add human_seen_ts column to session_cursors if it doesn't exist
-	var count int
-	err := conn.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('session_cursors') WHERE name = 'human_seen_ts'`).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check for human_seen_ts column: %w", err)
-	}
-	if count == 0 {
-		if _, err := conn.Exec(`ALTER TABLE session_cursors ADD COLUMN human_seen_ts TEXT`); err != nil {
-			return fmt.Errorf("failed to add human_seen_ts column: %w", err)
-		}
-	}
-	return nil
 }
 
 // HandlerHome returns the agent-handler home directory.
