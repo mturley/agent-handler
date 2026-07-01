@@ -31,10 +31,10 @@ var (
 func init() {
 	emitCmd.GroupID = "agent"
 	rootCmd.AddCommand(emitCmd)
-	emitCmd.Flags().StringVar(&emitType, "type", "", "event type (required)")
+	emitCmd.Flags().StringVar(&emitType, "type", "", "event type: milestone, decision, blocked, unblocked, handoff, followup, status, message (required)")
 	emitCmd.Flags().StringVar(&emitTitle, "title", "", "event title (required)")
 	emitCmd.Flags().StringVar(&emitBody, "body", "", "event body")
-	emitCmd.Flags().StringVar(&emitSessionID, "session-id", "", "target session ID")
+	emitCmd.Flags().StringVar(&emitSessionID, "session-id", "", "source session ID (auto-detected if omitted)")
 	emitCmd.Flags().StringVar(&emitSource, "source", "agent", "event source")
 	emitCmd.Flags().BoolVar(&emitBroadcast, "broadcast", false, "broadcast to all sessions")
 	emitCmd.Flags().StringVar(&emitTags, "tags", "", "comma-separated tags")

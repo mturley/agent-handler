@@ -13,41 +13,49 @@ You are running inside a session managed by agent-handler. It provides:
 
 Your statusline shows inbox status, inbox mode, and watched resources.
 
-## CLI commands you should know
+## Emitting events
 
-Use `handler <command> --help` for full flag details on any command.
+**You MUST use `handler emit` proactively throughout your session.** Don't wait to be asked — emit events whenever something significant happens. Other sessions and the handler rely on these events to understand what's going on across the system.
 
-### Emitting events
+Emit when you:
+- Complete a meaningful unit of work → `milestone`
+- Make an architectural or design choice → `decision`
+- Get stuck or need something from outside this session → `blocked` / `unblocked`
+- Identify work that should happen in another session or later → `handoff` / `followup`
+- Want to communicate with another session → `message` (use `--to`)
+- Want to record current progress → `status`
 
-Record significant events so other sessions and the handler can see what happened:
 ```
-handler emit --type <type> --title "..." [--body "..."] [--to <target>]
+handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--broadcast] [--tags "a,b"]
 ```
-Types: `milestone`, `decision`, `blocked`, `unblocked`, `handoff`, `followup`, `status`
+
+## CLI usage
+
+**Before running any `handler` command, check the CLI help for correct syntax.** Do not guess at subcommand names, argument positions, or flags. The CLI is the source of truth — this skill is just an overview.
+
+```
+handler --help                    # list all commands
+handler <command> --help          # flags and usage for a specific command
+```
+
+### Key commands
+
+These are the commands you'll use most often. Run `--help` on each for exact flag syntax.
+
+- `handler emit` — record events (milestone, decision, blocked, handoff, message, etc.)
+- `handler subscribe` / `handler unsubscribe` — watch or unwatch external resources
+- `handler status` — all sessions with liveness and unread counts
+- `handler watching` — this session's subscriptions + watcher health
+- `handler log` — event timeline for this session
+- `handler tail` — live event stream
+- `handler query "SELECT ..."` — read-only SQL against the ledger
+- `handler schema` — dump table definitions
+
+### Resource format
+
+Resources are identified as `type:id`. Supported types: `pr`, `jira`.
+Examples: `pr:owner/repo#123`, `jira:PROJECT-456`
 
 ### Messaging other sessions
 
-The `--to` flag accepts session names, branch names, or session UUIDs:
-```
-handler emit --type message --title "Check the auth types" --to feature-auth
-```
-
-### Subscribing to resources
-
-```
-handler subscribe --resource "pr:owner/repo#123" --url "https://github.com/owner/repo/pull/123"
-handler unsubscribe --resource "pr:owner/repo#123"
-```
-Resource format is always `--resource "type:id"`. Supported types: `pr`, `jira`.
-
-### Querying
-
-```
-handler status                       # all sessions with liveness and unread
-handler watching                     # this session's subscriptions + watcher health
-handler watching --global            # all subscriptions across all sessions
-handler log                          # event timeline for this session
-handler tail                         # live event stream
-handler query "SELECT ..."           # read-only SQL against the ledger
-handler schema                       # dump table definitions
-```
+The `--to` flag on `handler emit` accepts session names, branch names, or session UUIDs.
