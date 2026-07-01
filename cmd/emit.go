@@ -118,6 +118,13 @@ func resolveRecipient(d *db.DB, to string) (recipientType, recipientValue string
 		return "branch", to, nil
 	}
 
+	// Check if target matches a known role
+	var roleCount int
+	d.Conn().QueryRow(`SELECT COUNT(*) FROM sessions WHERE role = ? AND status = 'active'`, to).Scan(&roleCount)
+	if roleCount > 0 {
+		return "role", to, nil
+	}
+
 	// Try session name match
 	nameRows, err := d.Conn().Query(
 		`SELECT session_id FROM sessions WHERE session_name = ? AND status != 'archived'`, to)

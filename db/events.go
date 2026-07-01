@@ -169,13 +169,14 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
 		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
+		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
 		    OR s.id IS NOT NULL
 		  )
 		ORDER BY e.ts ASC
 	`
 
 	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch)
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread events: %w", err)
 	}
@@ -213,13 +214,14 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
 		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
+		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
 		    OR s.id IS NOT NULL
 		  )
 		GROUP BY e.type
 	`
 
 	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch)
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to count unread events: %w", err)
 	}
@@ -242,6 +244,45 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 	}
 
 	return total, breakdown, nil
+}
+
+// DirectCountForSession returns the count of unread events directly addressed to a session
+// (via event_recipients, not subscription routing).
+func (db *DB) DirectCountForSession(sessionID string) (int, error) {
+	cursor, err := db.GetCursor(sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get cursor: %w", err)
+	}
+	if cursor == "" {
+		cursor = "1970-01-01T00:00:00Z"
+	}
+
+	session, err := db.GetSession(sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get session: %w", err)
+	}
+	if session == nil {
+		return 0, nil
+	}
+
+	repoBranch := session.Repo + ":" + session.Branch
+	var count int
+	err = db.conn.QueryRow(`
+		SELECT COUNT(DISTINCT e.id) FROM events e
+		JOIN event_recipients er ON er.event_id = e.id
+		WHERE e.ts > ?
+		  AND (
+		    (er.recipient_type = 'session' AND er.recipient_value = ?)
+		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
+		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
+		  )
+	`, cursor, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to count direct events: %w", err)
+	}
+
+	return count, nil
 }
 
 // scanEvents is a helper that scans sql.Rows into []Event.
