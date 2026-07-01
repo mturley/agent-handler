@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     status TEXT NOT NULL DEFAULT 'active',
     inbox_mode TEXT NOT NULL DEFAULT 'manual',
     auto_poll_interval INTEGER,
+    role TEXT,
     last_active TEXT NOT NULL,
     registered_at TEXT NOT NULL,
     jsonl_path TEXT NOT NULL

@@ -17,6 +17,7 @@ type Session struct {
 	Status           string
 	InboxMode        string
 	AutoPollInterval *int
+	Role             string
 	LastActive       string
 	RegisteredAt     string
 	JSONLPath        string
@@ -29,8 +30,8 @@ func (db *DB) UpsertSession(s Session) error {
 	query := `
 		INSERT INTO sessions (
 			session_id, harness, repo, branch, session_name, pid, status,
-			inbox_mode, auto_poll_interval, last_active, registered_at, jsonl_path
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			inbox_mode, auto_poll_interval, role, last_active, registered_at, jsonl_path
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			harness = excluded.harness,
 			repo = excluded.repo,
@@ -40,6 +41,7 @@ func (db *DB) UpsertSession(s Session) error {
 			status = excluded.status,
 			inbox_mode = sessions.inbox_mode,
 			auto_poll_interval = COALESCE(excluded.auto_poll_interval, sessions.auto_poll_interval),
+			role = sessions.role,
 			last_active = excluded.last_active,
 			registered_at = excluded.registered_at,
 			jsonl_path = excluded.jsonl_path
@@ -47,7 +49,7 @@ func (db *DB) UpsertSession(s Session) error {
 
 	_, err := db.conn.Exec(query,
 		s.SessionID, s.Harness, s.Repo, s.Branch, s.SessionName, s.PID, s.Status,
-		s.InboxMode, s.AutoPollInterval, s.LastActive, s.RegisteredAt, s.JSONLPath,
+		s.InboxMode, s.AutoPollInterval, s.Role, s.LastActive, s.RegisteredAt, s.JSONLPath,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert session: %w", err)
@@ -67,6 +69,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 			status,
 			inbox_mode,
 			auto_poll_interval,
+			COALESCE(role, '') as role,
 			last_active, registered_at, jsonl_path
 		FROM sessions
 		WHERE session_id = ?
@@ -76,7 +79,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 	err := db.conn.QueryRow(query, sessionID).Scan(
 		&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
 		&s.SessionName, &s.PID, &s.Status,
-		&s.InboxMode, &s.AutoPollInterval,
+		&s.InboxMode, &s.AutoPollInterval, &s.Role,
 		&s.LastActive, &s.RegisteredAt, &s.JSONLPath,
 	)
 
@@ -111,6 +114,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			status,
 			inbox_mode,
 			auto_poll_interval,
+			COALESCE(role, '') as role,
 			last_active, registered_at, jsonl_path
 		FROM sessions
 		%s
@@ -130,7 +134,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 		err := rows.Scan(
 			&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
 			&s.SessionName, &s.PID, &s.Status,
-			&s.InboxMode, &s.AutoPollInterval,
+			&s.InboxMode, &s.AutoPollInterval, &s.Role,
 			&s.LastActive, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
@@ -201,11 +205,11 @@ func (db *DB) ArchiveSessions(sessionIDs []string) (int, error) {
 	return int(rowsAffected), nil
 }
 
-// ConfigureSession updates the inbox_mode and auto_poll_interval for a session.
-func (db *DB) ConfigureSession(sessionID, inboxMode string, autoPollInterval *int) error {
+// ConfigureSession updates the inbox_mode, auto_poll_interval, and role for a session.
+func (db *DB) ConfigureSession(sessionID, inboxMode string, autoPollInterval *int, role *string) error {
 	result, err := db.conn.Exec(
-		"UPDATE sessions SET inbox_mode = ?, auto_poll_interval = ? WHERE session_id = ?",
-		inboxMode, autoPollInterval, sessionID,
+		"UPDATE sessions SET inbox_mode = ?, auto_poll_interval = ?, role = COALESCE(?, role) WHERE session_id = ?",
+		inboxMode, autoPollInterval, role, sessionID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to configure session: %w", err)
