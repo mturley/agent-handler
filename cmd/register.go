@@ -137,7 +137,7 @@ func runRegister(cmd *cobra.Command, args []string) error {
 			service := config.ResourceTypeToService(sub.ResourceType)
 			if service != "" && cfg.IsServiceConfigured(service) {
 				resourcesByService[service] = append(resourcesByService[service],
-					sub.ResourceType+":"+sub.ResourceID)
+					sub.ResourceID)
 			}
 		}
 		for service, resources := range resourcesByService {
