@@ -21,6 +21,7 @@ func init() {
 	rootCmd.AddCommand(unsubscribeCmd)
 	unsubscribeCmd.Flags().StringVar(&unsubResource, "resource", "", "resource ID (format: type:id)")
 	unsubscribeCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
+	unsubscribeCmd.Flags().Bool("persist", false, "also remove from .worktree-resources so future sessions won't auto-subscribe")
 	unsubscribeCmd.MarkFlagRequired("resource")
 }
 
@@ -48,10 +49,13 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to unsubscribe: %w", err)
 	}
 
-	// Sync to .worktree-resources
-	resourcesPath := ".worktree-resources"
-	if err := worktree.RemoveResource(resourcesPath, unsubResource); err != nil {
-		return fmt.Errorf("failed to remove from .worktree-resources: %w", err)
+	// Remove from .worktree-resources if requested
+	persist, _ := cmd.Flags().GetBool("persist")
+	if persist {
+		resourcesPath := ".worktree-resources"
+		if err := worktree.RemoveResource(resourcesPath, unsubResource); err != nil {
+			return fmt.Errorf("failed to remove from .worktree-resources: %w", err)
+		}
 	}
 
 	// Output

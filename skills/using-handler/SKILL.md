@@ -43,7 +43,7 @@ handler <command> --help          # flags and usage for a specific command
 These are the commands you'll use most often. Run `--help` on each for exact flag syntax.
 
 - `handler emit` — record events (milestone, decision, blocked, handoff, message, etc.)
-- `handler subscribe` / `handler unsubscribe` — watch or unwatch external resources
+- `handler subscribe` / `handler unsubscribe` — watch or unwatch external resources (add `--persist` to also update `.worktree-resources` for future sessions)
 - `handler status` — all sessions with liveness and unread counts
 - `handler watching` — this session's subscriptions + watcher health
 - `handler log` — event timeline for this session

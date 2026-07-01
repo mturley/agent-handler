@@ -98,7 +98,7 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 	if cursor == "" {
 		title := fmt.Sprintf("Started watching PR: %s", prData.Title)
 		body := fmt.Sprintf("PR #%d in %s/%s\nState: %s", prData.Number, prData.Owner, prData.Repo, prData.State)
-		if err := watcher.EmitWatcherEvent(d, "github", "watch_started", title, &body, prData.UpdatedAt, nil, nil, resource); err != nil {
+		if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypeWatchStarted, title, &body, prData.UpdatedAt, nil, nil, resource); err != nil {
 			return eventCount, fmt.Errorf("failed to emit watch_started event: %w", err)
 		}
 		eventCount++
@@ -113,21 +113,21 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 		}
 
 		// Skip duplicate events
-		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, eventTypeForReview(review.State), review.SubmittedAt) {
+		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, reviewEventType(review.State), review.SubmittedAt) {
 			continue
 		}
 
 		// Emit event based on review state
 		if review.State == "APPROVED" {
 			title := fmt.Sprintf("PR approved by %s", review.Author)
-			if err := watcher.EmitWatcherEvent(d, "github", "pr_approved", title, &review.Body, review.SubmittedAt, &review.Author, &review.AuthorType, resource); err != nil {
+			if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRApproved, title, &review.Body, review.SubmittedAt, &review.Author, &review.AuthorType, resource); err != nil {
 				return eventCount, fmt.Errorf("failed to emit pr_approved event: %w", err)
 			}
 			eventCount++
 			logger.Printf("Emitted pr_approved for %s by %s", resource.ResourceID, review.Author)
 		} else if review.State == "CHANGES_REQUESTED" {
 			title := fmt.Sprintf("Changes requested by %s", review.Author)
-			if err := watcher.EmitWatcherEvent(d, "github", "pr_review_comment", title, &review.Body, review.SubmittedAt, &review.Author, &review.AuthorType, resource); err != nil {
+			if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRReviewComment, title, &review.Body, review.SubmittedAt, &review.Author, &review.AuthorType, resource); err != nil {
 				return eventCount, fmt.Errorf("failed to emit pr_review_comment event: %w", err)
 			}
 			eventCount++
@@ -141,12 +141,12 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 			continue
 		}
 
-		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, "pr_comment", comment.CreatedAt) {
+		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, watcher.EventTypePRComment, comment.CreatedAt) {
 			continue
 		}
 
 		title := fmt.Sprintf("Comment by %s", comment.Author)
-		if err := watcher.EmitWatcherEvent(d, "github", "pr_comment", title, &comment.Body, comment.CreatedAt, &comment.Author, &comment.AuthorType, resource); err != nil {
+		if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRComment, title, &comment.Body, comment.CreatedAt, &comment.Author, &comment.AuthorType, resource); err != nil {
 			return eventCount, fmt.Errorf("failed to emit pr_comment event: %w", err)
 		}
 		eventCount++
@@ -159,12 +159,12 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 			continue
 		}
 
-		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, "pr_review_comment", reviewComment.CreatedAt) {
+		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, watcher.EventTypePRReviewComment, reviewComment.CreatedAt) {
 			continue
 		}
 
 		title := fmt.Sprintf("Review comment by %s on %s", reviewComment.Author, reviewComment.Path)
-		if err := watcher.EmitWatcherEvent(d, "github", "pr_review_comment", title, &reviewComment.Body, reviewComment.CreatedAt, &reviewComment.Author, &reviewComment.AuthorType, resource); err != nil {
+		if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRReviewComment, title, &reviewComment.Body, reviewComment.CreatedAt, &reviewComment.Author, &reviewComment.AuthorType, resource); err != nil {
 			return eventCount, fmt.Errorf("failed to emit pr_review_comment event: %w", err)
 		}
 		eventCount++
@@ -177,9 +177,8 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 			continue
 		}
 
-		eventType := checkEventType(checkRun.Conclusion)
-		if eventType == "" {
-			// Skip in-progress or unknown conclusions
+		eventType, ok := checkRunEventType(checkRun.Conclusion)
+		if !ok {
 			continue
 		}
 
@@ -197,9 +196,9 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 
 	// Check PR state
 	if prData.State == "MERGED" || prData.State == "CLOSED" {
-		eventType := "pr_merged"
+		eventType := watcher.EventTypePRMerged
 		if prData.State == "CLOSED" {
-			eventType = "pr_closed"
+			eventType = watcher.EventTypePRClosed
 		}
 
 		if !watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, eventType, prData.UpdatedAt) {
@@ -212,71 +211,29 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 			logger.Printf("Emitted %s for %s", eventType, resource.ResourceID)
 		}
 
-		// Soft-delete subscriptions for this PR
-		if err := softDeletePRSubscriptions(d, resource, logger); err != nil {
-			logger.Printf("WARNING: failed to soft-delete subscriptions for %s: %v", resource.ResourceID, err)
-		}
+		// Don't auto-unsubscribe — the terminal event needs to be delivered
+		// to sessions via the subscription join. Let sessions or users
+		// unsubscribe explicitly, or let the subscription go idle.
 	}
 
 	return eventCount, nil
 }
 
-// eventTypeForReview returns the event type for a review based on its state.
-func eventTypeForReview(state string) string {
+func reviewEventType(state string) watcher.EventType {
 	if state == "APPROVED" {
-		return "pr_approved"
+		return watcher.EventTypePRApproved
 	}
-	return "pr_review_comment"
+	return watcher.EventTypePRReviewComment
 }
 
-// checkEventType returns the event type for a check run based on its conclusion.
-func checkEventType(conclusion string) string {
+func checkRunEventType(conclusion string) (watcher.EventType, bool) {
 	switch conclusion {
 	case "SUCCESS", "NEUTRAL", "SKIPPED":
-		return "ci_check_passed"
+		return watcher.EventTypeCICheckPassed, true
 	case "FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "CANCELLED", "STALE":
-		return "ci_check_failed"
+		return watcher.EventTypeCICheckFailed, true
 	default:
-		return "" // Unknown or in-progress
+		return "", false
 	}
 }
 
-// softDeletePRSubscriptions soft-deletes all subscriptions for the given PR resource.
-func softDeletePRSubscriptions(d *db.DB, resource watcher.Resource, logger *log.Logger) error {
-	// Query all sessions with active subscriptions to this resource
-	query := `
-		SELECT DISTINCT session_id
-		FROM subscriptions
-		WHERE resource_type = ? AND resource_id = ? AND deleted_at IS NULL
-	`
-
-	rows, err := d.Query(query, resource.ResourceType, resource.ResourceID)
-	if err != nil {
-		return fmt.Errorf("failed to query subscriptions: %w", err)
-	}
-	defer rows.Close()
-
-	var sessionIDs []string
-	for rows.Next() {
-		var sessionID string
-		if err := rows.Scan(&sessionID); err != nil {
-			return fmt.Errorf("failed to scan session ID: %w", err)
-		}
-		sessionIDs = append(sessionIDs, sessionID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating sessions: %w", err)
-	}
-
-	// Soft-delete subscription for each session
-	for _, sessionID := range sessionIDs {
-		if err := d.Unsubscribe(sessionID, resource.ResourceType, resource.ResourceID); err != nil {
-			logger.Printf("WARNING: failed to unsubscribe session %s from %s: %v", sessionID, resource.ResourceID, err)
-		} else {
-			logger.Printf("Soft-deleted subscription for session %s to %s", sessionID, resource.ResourceID)
-		}
-	}
-
-	return nil
-}

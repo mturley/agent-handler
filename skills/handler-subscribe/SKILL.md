@@ -17,7 +17,18 @@ handler subscribe \
 
 Resource format is `type:id`. Supported types: `pr`, `jira`, `jenkins`, `slack`.
 
-This also updates the `.worktree-resources` file so other tools can see what this worktree cares about.
+## Persistence
+
+By default, subscriptions are session-scoped — they only apply to the current session. To also write the subscription to `.worktree-resources` so future sessions in this worktree auto-subscribe, add `--persist`:
+
+```bash
+handler subscribe \
+    --resource "pr:owner/repo#123" \
+    --url "https://github.com/owner/repo/pull/123" \
+    --persist
+```
+
+**After subscribing, ask the user:** "Want me to persist this subscription for future sessions in this worktree?" If yes, re-run with `--persist` or run an additional subscribe with `--persist`.
 
 ## When to subscribe
 
@@ -30,3 +41,11 @@ This also updates the `.worktree-resources` file so other tools can see what thi
 ```bash
 handler unsubscribe --resource "pr:owner/repo#123"
 ```
+
+To also remove from `.worktree-resources` (stop future sessions from auto-subscribing):
+
+```bash
+handler unsubscribe --resource "pr:owner/repo#123" --persist
+```
+
+**After unsubscribing, ask the user:** "Want me to also remove this from the worktree resources so future sessions won't auto-subscribe?"

@@ -170,12 +170,9 @@ func processIssue(d *db.DB, cfg *config.Config, issue *IssueData, resource watch
 		}
 	}
 
-	// Check if issue is in terminal state
-	if isTerminalStatus(issue.Status) {
-		if err := softDeleteIssueSubscriptions(d, resource, logger); err != nil {
-			logger.Printf("WARNING: failed to soft-delete subscriptions for %s: %v", resource.ResourceID, err)
-		}
-	}
+	// Don't auto-unsubscribe on terminal status — the terminal event needs
+	// to be delivered to sessions via the subscription join. Let sessions
+	// or users unsubscribe explicitly.
 
 	// Update epic relationship if present
 	if issue.EpicKey != nil && *issue.EpicKey != "" {
@@ -256,44 +253,6 @@ func isTerminalStatus(status string) bool {
 		}
 	}
 	return false
-}
-
-// softDeleteIssueSubscriptions soft-deletes all subscriptions for the given issue resource.
-func softDeleteIssueSubscriptions(d *db.DB, resource watcher.Resource, logger *log.Logger) error {
-	query := `
-		SELECT DISTINCT session_id
-		FROM subscriptions
-		WHERE resource_type = ? AND resource_id = ? AND deleted_at IS NULL
-	`
-
-	rows, err := d.Query(query, resource.ResourceType, resource.ResourceID)
-	if err != nil {
-		return fmt.Errorf("failed to query subscriptions: %w", err)
-	}
-	defer rows.Close()
-
-	var sessionIDs []string
-	for rows.Next() {
-		var sessionID string
-		if err := rows.Scan(&sessionID); err != nil {
-			return fmt.Errorf("failed to scan session ID: %w", err)
-		}
-		sessionIDs = append(sessionIDs, sessionID)
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating sessions: %w", err)
-	}
-
-	for _, sessionID := range sessionIDs {
-		if err := d.Unsubscribe(sessionID, resource.ResourceType, resource.ResourceID); err != nil {
-			logger.Printf("WARNING: failed to unsubscribe session %s from %s: %v", sessionID, resource.ResourceID, err)
-		} else {
-			logger.Printf("Soft-deleted subscription for session %s to %s", sessionID, resource.ResourceID)
-		}
-	}
-
-	return nil
 }
 
 // linkEpic creates or updates a resource relationship linking this issue to its epic.

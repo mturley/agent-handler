@@ -91,7 +91,7 @@ func AppendResource(path, resourceID, url string, primary bool) error {
 
 func RemoveResource(path, resourceID string) error {
 	resources, err := ReadResources(path)
-	if err != nil {
+	if err != nil || len(resources) == 0 {
 		return err
 	}
 
@@ -102,7 +102,11 @@ func RemoveResource(path, resourceID string) error {
 		}
 	}
 
-	file, err := os.OpenFile(path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
+	if len(filtered) == 0 {
+		return os.Remove(path)
+	}
+
+	file, err := os.OpenFile(path, os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
