@@ -5,22 +5,24 @@ description: Check and act on unread events from the agent-handler ledger
 
 # /inbox — Check Unread Events
 
+**MANDATORY: You MUST call the Bash tool to run the command below. NEVER skip the Bash call. NEVER assume there are no messages without running the command first. Even if previous checks returned nothing, you MUST run the command every time.**
+
 ## Usage
 
 If invoked with `--auto` (e.g. `/inbox --auto`), use `--agent-only` so only the agent cursor advances:
 ```bash
-handler unread --ack --agent-only --json
+handler unread --ack --agent-only --json 2>/dev/null
 ```
 
 Otherwise (manual invocation), advance both cursors:
 ```bash
-handler unread --ack --json
+handler unread --ack --json 2>/dev/null
 ```
 
 ## After reading events
 
-1. Present the events to the user in a clear summary, grouped by type
-2. For each actionable event, suggest what to do about it (e.g. "There's a PR review comment — want me to look at it and address the feedback?")
+- If the output is `null` or empty: say "No new messages."
+- Otherwise: present the events in a clear summary grouped by type, and for each actionable event suggest what to do about it (e.g. "There's a PR review comment — want me to look at it and address the feedback?")
 
 ## Available CLI commands for deeper queries
 
