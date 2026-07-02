@@ -202,21 +202,8 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		// Emit mandate — this lands in the conversation as a system-reminder
 		// and ensures every session knows to emit events without needing skill invocation.
 		fmt.Println("")
-		fmt.Println("IMPORTANT — agent-handler tracks your session. You MUST do the following:")
-		fmt.Println("")
-		fmt.Println("1. INVOKE /using-handler before starting work (once per session). It has the")
-		fmt.Println("   full context you need for emitting events and using handler.")
-		fmt.Println("")
-		fmt.Println("2. EMIT EVENTS throughout your session using `handler emit`:")
-		fmt.Println("   After commits/code changes  → --type milestone")
-		fmt.Println("   After pushing to remote     → --type milestone")
-		fmt.Println("   When choosing an approach    → --type decision")
-		fmt.Println("   When blocked or unblocked    → --type blocked / unblocked")
-		fmt.Println("   When identifying future work → --type followup")
-		fmt.Println("   Periodically as a check-in   → --type status (\"here's where I am\")")
-		fmt.Println("   Emit --type status regularly so the ledger never goes long without an update.")
-		fmt.Println("   Syntax: handler emit --type <type> --title \"...\" [--body \"...\"]")
-		fmt.Println("   A noisy ledger is better than a silent one. When in doubt, emit.")
+		fmt.Println("IMPORTANT: You must emit events regularly with `handler emit` so the ledger")
+		fmt.Println("reflects what you're doing. Invoke /using-handler (once per session) for details.")
 	}
 
 	return nil
