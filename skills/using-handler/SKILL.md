@@ -65,6 +65,8 @@ The gap between them appears in the statusline as "N auto-delivered since last p
 
 When `/inbox` is invoked by the cron job, events are acked normally (advancing the agent cursor), and the auto-delivered count grows. When the user returns and sends a prompt, the count resets to zero.
 
+**Session resume cleanup:** If you see a `/inbox --auto` cron running (check with CronList) but inbox mode is not `auto` (check with `handler configure --get inbox-mode`), delete the stale cron with CronDelete. This can happen when a session is resumed after being closed in auto mode.
+
 ### Resource format
 
 Resources are identified as `type:id`. Supported types: `pr`, `jira`.
