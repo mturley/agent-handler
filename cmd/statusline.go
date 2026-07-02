@@ -310,7 +310,7 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	// Auto-delivered count for handler
 	autoCount, err := d.AutoDeliveredCountAll(session.SessionID)
 	if err == nil && autoCount > 0 {
-		fmt.Printf("%s  ● %d consumed since last prompt%s\n", yellow, autoCount, reset_color)
+		fmt.Printf("%s  ● %d events seen since last prompt%s\n", yellow, autoCount, reset_color)
 	}
 
 	// Line 3: Watching with GLOBAL resource count
