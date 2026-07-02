@@ -202,8 +202,8 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		// Emit mandate — this lands in the conversation as a system-reminder
 		// and ensures every session knows to emit events without needing skill invocation.
 		fmt.Println("")
-		fmt.Println("IMPORTANT: You must emit events regularly with `handler emit` so the ledger")
-		fmt.Println("reflects what you're doing. Invoke /using-handler (once per session) for details.")
+		fmt.Println("IMPORTANT: You MUST invoke /using-handler before starting work (once per session).")
+		fmt.Println("It teaches you how to emit events to the ledger, which you must do regularly.")
 	}
 
 	return nil
