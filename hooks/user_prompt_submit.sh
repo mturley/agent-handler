@@ -44,7 +44,7 @@ fi
 handler heartbeat --session-id "$SESSION_ID" --catch-up-human-cursor >/dev/null 2>&1 &
 
 # Only inject output if inbox mode is on-submit
-INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
+INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "on-submit")
 
 if [ "$INBOX_MODE" = "on-submit" ]; then
     UNREAD_COUNT=$(handler unread --session-id "$SESSION_ID" --count 2>/dev/null)

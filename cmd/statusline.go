@@ -95,7 +95,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 
 	modes := map[string]string{"manual": "manual", "on-submit": "on-submit", "auto": "auto"}
 	rendered := ""
-	for i, mode := range []string{"manual", "on-submit", "auto"} {
+	for i, mode := range []string{"on-submit", "manual", "auto"} {
 		if i > 0 {
 			rendered += fmt.Sprintf("%s | %s", dim, reset)
 		}
