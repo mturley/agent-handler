@@ -1,6 +1,6 @@
 ---
 name: using-handler
-description: "Use when starting any session — loads awareness of agent-handler capabilities. agent-handler is installed and active: it tracks your sessions, watches external resources (PRs, Jira issues), and provides an inbox for cross-session messaging. This skill teaches you the available commands and skills."
+description: "Invoke once per session before starting work — loads agent-handler context for emitting events, messaging, and CLI usage. If you haven't invoked this skill yet in this session, do so now."
 ---
 
 # agent-handler
@@ -17,19 +17,25 @@ To turn this session into a handler (command center for all sessions), use `/han
 
 ## Emitting events
 
-**You MUST use `handler emit` proactively throughout your session.** Don't wait to be asked — emit events whenever something significant happens. Other sessions and the handler rely on these events to understand what's going on across the system.
-
-Emit when you:
-- Complete a meaningful unit of work → `milestone`
-- Make an architectural or design choice → `decision`
-- Get stuck or need something from outside this session → `blocked` / `unblocked`
-- Identify work that should happen in another session or later → `handoff` / `followup`
-- Want to communicate with another session → `message` (use `--to`)
-- Want to record current progress → `status`
-
 ```
 handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--broadcast] [--tags "a,b"]
 ```
+
+Event types: `milestone`, `status`, `decision`, `blocked`, `unblocked`, `handoff`, `followup`, `message`.
+
+| Trigger | Type | Example title |
+|---------|------|---------------|
+| Finish a commit or meaningful code change | `milestone` | "Implemented retry logic for API client" |
+| Push to remote | `milestone` | "Pushed feature branch auth-refactor" |
+| Find the root cause of a bug | `milestone` | "Root cause: token validated against wrong key" |
+| Choose between approaches | `decision` | "Chose RS256 over HS256 for token signing" |
+| Get stuck on something outside this session | `blocked` | "Need review on PR #42 before proceeding" |
+| Resume after being blocked | `unblocked` | "PR #42 approved, continuing" |
+| Identify work for another session or later | `handoff` / `followup` | "Tech debt: error messages need i18n" |
+| Want to tell another session something | `message` | (use `--to <target>`) |
+| Starting a new phase, or periodic check-in | `status` | "Still debugging token refresh — narrowed to middleware" |
+
+Use `--body` for details beyond what fits in the title. Use `--tags` for lightweight categorization.
 
 ## CLI usage
 
