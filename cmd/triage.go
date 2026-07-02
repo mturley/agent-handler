@@ -163,7 +163,7 @@ func runTriage(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Find dead sessions
+	// Find dead sessions and adjust active count
 	for _, s := range sessions {
 		if s.Status != "active" {
 			continue
@@ -175,6 +175,7 @@ func runTriage(cmd *cobra.Command, args []string) error {
 				LastActive: s.LastActive,
 			})
 			output.SessionsDead++
+			output.SessionsActive--
 		}
 	}
 

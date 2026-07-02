@@ -6,6 +6,7 @@ import (
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
+	"github.com/mturley/agent-handler/discover"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
 )
@@ -248,6 +249,9 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	activeCount := 0
 	for _, s := range sessions {
 		if s.Status == "active" && s.SessionID != session.SessionID {
+			if s.PID > 0 && !discover.IsProcessAlive(s.PID) {
+				continue
+			}
 			activeCount++
 		}
 	}
