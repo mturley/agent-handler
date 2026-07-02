@@ -59,6 +59,8 @@ These are the commands you'll use most often. Run `--help` on each for exact fla
 - `handler tail` — live event stream
 - `handler query "SELECT ..."` — read-only SQL against the ledger
 - `handler schema` — dump table definitions
+- `handler claude` — start Claude in a peekable terminal (use instead of bare `claude`)
+- `handler peek --session <id>` — capture terminal content of another session
 
 ### Auto inbox mode and the dual cursor
 

@@ -42,8 +42,27 @@ CronCreate:
 - "Tell the auth session about X" → `handler emit --type message --title "X" --to <target>`
 - "Show me everything about PR #123" → `handler resource history pr:owner/repo#123`
 - "Which sessions are related to X?" → `handler resource related --session <id>`
+- "What is session X doing?" → spawn subagent with `handler peek --session <id> --json`
+- "Check on all sessions" → peek at each peekable session via subagents, summarize
 
 Use `handler <command> --help` for flag details on any command.
+
+## Peeking at sessions
+
+When you need to understand what a session is doing (stuck, waiting for approval, idle):
+
+1. Check `handler status --json` — look for peekable sessions (`"peekable": true`)
+2. For each session you want to inspect, spawn a subagent
+3. The subagent runs `handler peek --session <id> --json` and interprets the raw terminal content
+4. The subagent returns a 1-2 sentence summary: what the session appears to be doing
+
+**Important:** Always use subagents for peek — raw captures can be hundreds of lines and will flood your context. Each subagent distills the capture to a short summary.
+
+**When to peek:**
+- Sessions that appear stuck (active but no recent heartbeat)
+- Sessions that are blocked
+- When the user asks "what's session X doing?"
+- During triage, for sessions with unread events they haven't processed
 
 ## Idempotent
 
