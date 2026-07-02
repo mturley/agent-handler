@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     inbox_mode TEXT NOT NULL DEFAULT 'manual',
     auto_poll_interval INTEGER,
     role TEXT,
+    terminal_type TEXT,
+    terminal_id TEXT,
     last_active TEXT NOT NULL,
     registered_at TEXT NOT NULL,
     jsonl_path TEXT NOT NULL

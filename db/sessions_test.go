@@ -302,3 +302,99 @@ func TestArchiveDeadSessions(t *testing.T) {
 		t.Errorf("s2 Status: got %q, want %q", got2.Status, "archived")
 	}
 }
+
+func TestSessionTerminalFields(t *testing.T) {
+	d := testDB(t)
+
+	now := "2026-07-02T10:00:00Z"
+	err := d.UpsertSession(Session{
+		SessionID:    "terminal-test",
+		Harness:      "claude-code",
+		Repo:         "test/repo",
+		Branch:       "main",
+		PID:          1234,
+		Status:       "active",
+		InboxMode:    "manual",
+		LastActive:   now,
+		RegisteredAt: now,
+		JSONLPath:    "/tmp/test.jsonl",
+		TerminalType: "cmux",
+		TerminalID:   "surface-uuid-123",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSession failed: %v", err)
+	}
+
+	session, err := d.GetSession("terminal-test")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+	if session.TerminalType != "cmux" {
+		t.Errorf("expected TerminalType 'cmux', got %q", session.TerminalType)
+	}
+	if session.TerminalID != "surface-uuid-123" {
+		t.Errorf("expected TerminalID 'surface-uuid-123', got %q", session.TerminalID)
+	}
+
+	// Upsert should update terminal fields on re-registration
+	err = d.UpsertSession(Session{
+		SessionID:    "terminal-test",
+		Harness:      "claude-code",
+		Repo:         "test/repo",
+		Branch:       "main",
+		PID:          5678,
+		Status:       "active",
+		InboxMode:    "manual",
+		LastActive:   now,
+		RegisteredAt: now,
+		JSONLPath:    "/tmp/test.jsonl",
+		TerminalType: "tmux",
+		TerminalID:   "%42",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSession (update) failed: %v", err)
+	}
+
+	session, err = d.GetSession("terminal-test")
+	if err != nil {
+		t.Fatalf("GetSession (after update) failed: %v", err)
+	}
+	if session.TerminalType != "tmux" {
+		t.Errorf("expected TerminalType 'tmux', got %q", session.TerminalType)
+	}
+	if session.TerminalID != "%42" {
+		t.Errorf("expected TerminalID '%%42', got %q", session.TerminalID)
+	}
+}
+
+func TestSessionTerminalFieldsEmpty(t *testing.T) {
+	d := testDB(t)
+
+	now := "2026-07-02T10:00:00Z"
+	err := d.UpsertSession(Session{
+		SessionID:    "no-terminal-test",
+		Harness:      "claude-code",
+		Repo:         "test/repo",
+		Branch:       "main",
+		PID:          1234,
+		Status:       "active",
+		InboxMode:    "manual",
+		LastActive:   now,
+		RegisteredAt: now,
+		JSONLPath:    "/tmp/test.jsonl",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSession failed: %v", err)
+	}
+
+	session, err := d.GetSession("no-terminal-test")
+	if err != nil {
+		t.Fatalf("GetSession failed: %v", err)
+	}
+	if session.TerminalType != "" {
+		t.Errorf("expected empty TerminalType, got %q", session.TerminalType)
+	}
+	if session.TerminalID != "" {
+		t.Errorf("expected empty TerminalID, got %q", session.TerminalID)
+	}
+}

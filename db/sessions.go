@@ -18,6 +18,8 @@ type Session struct {
 	InboxMode        string
 	AutoPollInterval *int
 	Role             string
+	TerminalType     string
+	TerminalID       string
 	LastActive       string
 	RegisteredAt     string
 	JSONLPath        string
@@ -30,8 +32,9 @@ func (db *DB) UpsertSession(s Session) error {
 	query := `
 		INSERT INTO sessions (
 			session_id, harness, repo, branch, session_name, pid, status,
-			inbox_mode, auto_poll_interval, role, last_active, registered_at, jsonl_path
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			inbox_mode, auto_poll_interval, role, terminal_type, terminal_id,
+			last_active, registered_at, jsonl_path
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			harness = excluded.harness,
 			repo = excluded.repo,
@@ -42,6 +45,8 @@ func (db *DB) UpsertSession(s Session) error {
 			inbox_mode = sessions.inbox_mode,
 			auto_poll_interval = COALESCE(excluded.auto_poll_interval, sessions.auto_poll_interval),
 			role = sessions.role,
+			terminal_type = excluded.terminal_type,
+			terminal_id = excluded.terminal_id,
 			last_active = excluded.last_active,
 			registered_at = excluded.registered_at,
 			jsonl_path = excluded.jsonl_path
@@ -49,7 +54,8 @@ func (db *DB) UpsertSession(s Session) error {
 
 	_, err := db.conn.Exec(query,
 		s.SessionID, s.Harness, s.Repo, s.Branch, s.SessionName, s.PID, s.Status,
-		s.InboxMode, s.AutoPollInterval, s.Role, s.LastActive, s.RegisteredAt, s.JSONLPath,
+		s.InboxMode, s.AutoPollInterval, s.Role, s.TerminalType, s.TerminalID,
+		s.LastActive, s.RegisteredAt, s.JSONLPath,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert session: %w", err)
@@ -70,6 +76,8 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 			inbox_mode,
 			auto_poll_interval,
 			COALESCE(role, '') as role,
+			COALESCE(terminal_type, '') as terminal_type,
+			COALESCE(terminal_id, '') as terminal_id,
 			last_active, registered_at, jsonl_path
 		FROM sessions
 		WHERE session_id = ?
@@ -80,6 +88,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 		&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
 		&s.SessionName, &s.PID, &s.Status,
 		&s.InboxMode, &s.AutoPollInterval, &s.Role,
+		&s.TerminalType, &s.TerminalID,
 		&s.LastActive, &s.RegisteredAt, &s.JSONLPath,
 	)
 
@@ -115,6 +124,8 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			inbox_mode,
 			auto_poll_interval,
 			COALESCE(role, '') as role,
+			COALESCE(terminal_type, '') as terminal_type,
+			COALESCE(terminal_id, '') as terminal_id,
 			last_active, registered_at, jsonl_path
 		FROM sessions
 		%s
@@ -135,6 +146,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
+			&s.TerminalType, &s.TerminalID,
 			&s.LastActive, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
