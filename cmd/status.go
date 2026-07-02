@@ -63,7 +63,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		// Determine display state
 		displayState := "archived"
 		if s.Status != "archived" {
-			processAlive := discover.IsProcessAlive(s.PID)
+			processAlive := discover.IsSessionProcess(s.PID, s.SessionID)
 			if !processAlive {
 				displayState = "dead"
 			} else {

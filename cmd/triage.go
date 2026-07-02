@@ -168,7 +168,7 @@ func runTriage(cmd *cobra.Command, args []string) error {
 		if s.Status != "active" {
 			continue
 		}
-		if s.PID > 0 && !discover.IsProcessAlive(s.PID) {
+		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
 			output.DeadSessions = append(output.DeadSessions, deadSession{
 				SessionID:  s.SessionID,
 				SessionName: s.SessionName,

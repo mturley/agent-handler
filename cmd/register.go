@@ -67,6 +67,14 @@ func runRegister(cmd *cobra.Command, args []string) error {
 	existingSession, _ := d.GetSession(regSessionID)
 	isReregistration := existingSession != nil
 
+	// Archive any other session that claims this PID (stale from PID reuse)
+	staleSessions, _ := d.ListSessions(false, 100, 0)
+	for _, s := range staleSessions {
+		if s.PID == regPID && s.SessionID != regSessionID && s.Status == "active" {
+			d.ArchiveSessions([]string{s.SessionID})
+		}
+	}
+
 	// Upsert session
 	now := time.Now().UTC().Format(time.RFC3339)
 	err = d.UpsertSession(db.Session{

@@ -49,7 +49,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 	for _, s := range sessions {
 		// Check process liveness
-		processAlive := discover.IsProcessAlive(s.PID)
+		processAlive := discover.IsSessionProcess(s.PID, s.SessionID)
 		if !processAlive {
 			toArchive = append(toArchive, s.SessionID)
 			continue

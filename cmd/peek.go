@@ -45,7 +45,7 @@ func runPeek(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("session is not peekable (not started via handler claude or not in a supported terminal)")
 	}
 
-	if !discover.IsProcessAlive(session.PID) {
+	if !discover.IsSessionProcess(session.PID, session.SessionID) {
 		return fmt.Errorf("session process is not running (PID %d not found)", session.PID)
 	}
 
