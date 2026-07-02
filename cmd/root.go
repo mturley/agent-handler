@@ -18,7 +18,7 @@ var rootCmd = &cobra.Command{
 	Short: "Agent handler CLI for managing Claude Code agent sessions",
 	Long:  `A CLI tool backed by SQLite for managing Claude Code agent sessions.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" {
+		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "claude" {
 			return nil
 		}
 		dbPath := db.DefaultPath()
