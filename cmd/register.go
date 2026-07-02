@@ -59,6 +59,10 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to discover session name: %w", err)
 	}
 
+	// Check if this session already exists (re-registration vs brand new)
+	existingSession, _ := d.GetSession(regSessionID)
+	isReregistration := existingSession != nil
+
 	// Upsert session
 	now := time.Now().UTC().Format(time.RFC3339)
 	err = d.UpsertSession(db.Session{
@@ -87,17 +91,12 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to write PID cache: %w", err)
 	}
 
-	// Initialize cursor if this session doesn't have one yet
-	existingCursor, _ := d.GetCursor(regSessionID)
-	if existingCursor == "" {
-		// Try to inherit from the most recent archived session on this branch
-		inheritedCursor, _ := d.InheritCursorForBranch(regRepo, regBranch)
-		if inheritedCursor != "" {
-			d.AdvanceCursor(regSessionID, inheritedCursor)
-		} else {
-			// Brand new branch — start with cursor = now so old broadcasts don't appear
-			d.AdvanceCursor(regSessionID, now)
-		}
+	// Initialize cursor
+	if isReregistration {
+		// Re-registering an existing session — keep its cursor
+	} else {
+		// Brand new session — start with cursor = now
+		d.AdvanceCursor(regSessionID, now)
 	}
 
 	// Auto-subscribe to resources from .worktree-resources
