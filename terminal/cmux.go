@@ -11,7 +11,7 @@ import (
 type CmuxBackend struct{}
 
 func (b *CmuxBackend) Capture(terminalID string, lines int) (string, error) {
-	args := []string{"capture-pane", "--surface", terminalID}
+	args := []string{"capture-pane", "--surface", terminalID, "--window", "window:1"}
 	if lines > 0 {
 		args = append(args, "--lines", strconv.Itoa(lines))
 	}
@@ -28,7 +28,7 @@ func (b *CmuxBackend) Capture(terminalID string, lines int) (string, error) {
 }
 
 func (b *CmuxBackend) Notify(terminalID string, title, body string) error {
-	args := []string{"notify", "--surface", terminalID, "--title", title}
+	args := []string{"notify", "--surface", terminalID, "--window", "window:1", "--title", title}
 	if body != "" {
 		args = append(args, "--body", body)
 	}
@@ -39,7 +39,7 @@ func (b *CmuxBackend) Notify(terminalID string, title, body string) error {
 }
 
 func (b *CmuxBackend) Flash(terminalID string) error {
-	if err := exec.Command("cmux", "trigger-flash", "--surface", terminalID).Run(); err != nil {
+	if err := exec.Command("cmux", "trigger-flash", "--surface", terminalID, "--window", "window:1").Run(); err != nil {
 		return fmt.Errorf("cmux trigger-flash failed: %w", err)
 	}
 	return nil
