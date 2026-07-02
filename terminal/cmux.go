@@ -15,8 +15,13 @@ func (b *CmuxBackend) Capture(terminalID string, lines int) (string, error) {
 	if lines > 0 {
 		args = append(args, "--lines", strconv.Itoa(lines))
 	}
-	out, err := exec.Command("cmux", args...).Output()
+	cmd := exec.Command("cmux", args...)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return "", fmt.Errorf("cmux capture-pane: %s", msg)
+		}
 		return "", fmt.Errorf("cmux capture-pane failed: %w", err)
 	}
 	return strings.TrimRight(string(out), "\n"), nil

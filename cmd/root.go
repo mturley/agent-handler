@@ -72,3 +72,38 @@ func resolveSessionID(cmd *cobra.Command) (string, error) {
 	}
 	return discover.ResolveSessionID(db.HandlerHome())
 }
+
+// resolveSessionByTarget finds a session by UUID, name, or branch.
+func resolveSessionByTarget(d *db.DB, target string) (*db.Session, error) {
+	// Try exact session ID match first
+	session, err := d.GetSession(target)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	if session != nil {
+		return session, nil
+	}
+
+	// Try session name match
+	sessions, err := d.ListSessions(false, 100, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	var matches []*db.Session
+	for i := range sessions {
+		s := &sessions[i]
+		if s.SessionName == target || s.Branch == target {
+			matches = append(matches, s)
+		}
+	}
+
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("multiple sessions match %q — use full session ID", target)
+	}
+
+	return nil, fmt.Errorf("session %q not found", target)
+}

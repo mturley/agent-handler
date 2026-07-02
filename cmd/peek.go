@@ -36,12 +36,9 @@ func runPeek(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	session, err := d.GetSession(peekSessionID)
+	session, err := resolveSessionByTarget(d, peekSessionID)
 	if err != nil {
-		return fmt.Errorf("failed to get session: %w", err)
-	}
-	if session == nil {
-		return fmt.Errorf("session %q not found", peekSessionID)
+		return err
 	}
 
 	if session.TerminalType == "" || session.TerminalID == "" {
