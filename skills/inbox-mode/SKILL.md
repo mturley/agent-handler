@@ -35,7 +35,7 @@ CronCreate with:
   cron: "*/1 * * * *"
   durable: false
   recurring: true
-  prompt: "Check handler unread --count. If the count is greater than 0, invoke /inbox."
+  prompt: "/inbox"
 ```
 
 The cron job is session-scoped and will not survive session restarts. Inbox mode resets to on-submit when the session ends.
