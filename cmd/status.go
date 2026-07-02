@@ -50,6 +50,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		Status       string         `json:"status"`
 		DisplayState string         `json:"display_state"`
 		InboxMode    string         `json:"inbox_mode"`
+		Peekable     bool           `json:"peekable"`
+		TerminalType string         `json:"terminal_type,omitempty"`
 		UnreadCount  int            `json:"unread_count"`
 		LastActive   string         `json:"last_active"`
 		Breakdown    map[string]int `json:"unread_breakdown,omitempty"`
@@ -99,6 +101,8 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			Status:       s.Status,
 			DisplayState: displayState,
 			InboxMode:    s.InboxMode,
+			Peekable:     s.TerminalType != "",
+			TerminalType: s.TerminalType,
 			UnreadCount:  unreadCount,
 			LastActive:   s.LastActive,
 			Breakdown:    breakdown,
@@ -158,7 +162,12 @@ func runStatus(cmd *cobra.Command, args []string) error {
 				name = st.Branch
 			}
 
-			fmt.Printf("  %s%s%s %s%s%s\n", bold, name, reset, stateColor, st.DisplayState, reset)
+			peekableStr := ""
+			if st.Peekable {
+				peekableStr = fmt.Sprintf(" %s👁%s", dim, reset)
+			}
+
+			fmt.Printf("  %s%s%s %s%s%s%s\n", bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
 			fmt.Printf("  %s%s%s @ %s%s%s\n", dim, sessions[i].Repo, reset, dim, st.Branch, reset)
 
 			// Unread
