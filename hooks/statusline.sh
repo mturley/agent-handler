@@ -39,7 +39,7 @@ fi
 
 # Extract unread count from output for notification
 if [ -n "$SESSION_ID" ]; then
-    UNREAD_COUNT=$(echo "$OUTPUT" | grep -oP '● \K\d+(?= unread)' 2>/dev/null || echo "0")
+    UNREAD_COUNT=$(echo "$OUTPUT" | grep -o '● [0-9]* unread' 2>/dev/null | grep -o '[0-9]*' || echo "0")
     if [ "$UNREAD_COUNT" -gt 0 ] 2>/dev/null; then
         # Build notification message from the output
         NOTIFY_MSG=$(echo "$OUTPUT" | head -1 | sed 's/.*● //' | sed 's/\x1b\[[0-9;]*m//g')
