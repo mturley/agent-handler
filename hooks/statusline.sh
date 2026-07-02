@@ -37,4 +37,16 @@ if echo "$OUTPUT" | grep -q "not registered"; then
     ) &
 fi
 
+# Extract unread count from output for notification
+if [ -n "$SESSION_ID" ]; then
+    UNREAD_COUNT=$(echo "$OUTPUT" | grep -oP '● \K\d+(?= unread)' 2>/dev/null || echo "0")
+    if [ "$UNREAD_COUNT" -gt 0 ] 2>/dev/null; then
+        # Build notification message from the output
+        NOTIFY_MSG=$(echo "$OUTPUT" | head -1 | sed 's/.*● //' | sed 's/\x1b\[[0-9;]*m//g')
+        handler notify --session "$SESSION_ID" --count "$UNREAD_COUNT" --message "$NOTIFY_MSG" 2>/dev/null &
+    else
+        handler notify --session "$SESSION_ID" --count 0 2>/dev/null &
+    fi
+fi
+
 echo "$OUTPUT"
