@@ -118,3 +118,34 @@ func (db *DB) AutoDeliveredCount(sessionID string) (int, error) {
 
 	return count, nil
 }
+
+// AutoDeliveredCountAll returns the number of all events between the human
+// cursor and agent cursor, regardless of routing rules.
+// Used by the handler session which sees all events globally.
+func (db *DB) AutoDeliveredCountAll(sessionID string) (int, error) {
+	var agentCursor string
+	var humanCursor *string
+	err := db.conn.QueryRow(`
+		SELECT last_seen_ts, human_seen_ts FROM session_cursors WHERE session_id = ?
+	`, sessionID).Scan(&agentCursor, &humanCursor)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to get cursors for session %q: %w", sessionID, err)
+	}
+
+	if humanCursor == nil || *humanCursor == agentCursor {
+		return 0, nil
+	}
+
+	var count int
+	err = db.conn.QueryRow(`
+		SELECT COUNT(*) FROM events WHERE ts > ? AND ts <= ?
+	`, *humanCursor, agentCursor).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count auto-delivered events: %w", err)
+	}
+
+	return count, nil
+}

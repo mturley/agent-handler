@@ -30,6 +30,7 @@ func init() {
 	logCmd.Flags().StringVar(&logSince, "since", "", "show events since this timestamp (RFC3339)")
 	logCmd.Flags().BoolVar(&logGlobal, "global", false, "show events from all sessions and watchers")
 	logCmd.Flags().BoolVar(&logSinceCursor, "since-cursor", false, "show events since this session's cursor and advance it")
+	logCmd.Flags().Bool("agent-only", false, "with --since-cursor, advance only the agent cursor (not human)")
 }
 
 func runLog(cmd *cobra.Command, args []string) error {
@@ -98,8 +99,16 @@ func runLog(cmd *cobra.Command, args []string) error {
 
 	// Advance cursor if --since-cursor was used
 	if logSinceCursor && len(events) > 0 {
-		if err := d.AdvanceBothCursors(sessionID, time.Now().UTC().Format(time.RFC3339)); err != nil {
-			return fmt.Errorf("failed to advance cursor: %w", err)
+		agentOnly, _ := cmd.Flags().GetBool("agent-only")
+		ts := time.Now().UTC().Format(time.RFC3339)
+		if agentOnly {
+			if err := d.AdvanceCursor(sessionID, ts); err != nil {
+				return fmt.Errorf("failed to advance cursor: %w", err)
+			}
+		} else {
+			if err := d.AdvanceBothCursors(sessionID, ts); err != nil {
+				return fmt.Errorf("failed to advance cursor: %w", err)
+			}
 		}
 	}
 

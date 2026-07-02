@@ -29,7 +29,7 @@ CronCreate:
   cron: "*/1 * * * *"
   durable: false
   recurring: true
-  prompt: "Run handler log --global --since-cursor --json. Also run handler unread --count to check for direct messages. If there are new events or direct messages, summarize them. For direct messages, present them as action items."
+  prompt: "MANDATORY: You MUST call the Bash tool to run: handler log --global --since-cursor --agent-only --json 2>/dev/null. NEVER skip this Bash call. Also run handler unread --count to check for direct messages. If there are new events or direct messages, summarize them. For direct messages, present them as action items. If no events, say 'No new events.'"
 ```
 
 5. Tell the user what they can ask.

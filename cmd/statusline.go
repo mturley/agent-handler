@@ -249,7 +249,7 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	activeCount := 0
 	for _, s := range sessions {
 		if s.Status == "active" && s.SessionID != session.SessionID {
-			if s.PID > 0 && !discover.IsProcessAlive(s.PID) {
+			if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
 				continue
 			}
 			activeCount++
@@ -307,7 +307,11 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	}
 	fmt.Println()
 
-	// Line 2: Omitted (no inbox-mode line for handler)
+	// Auto-delivered count for handler
+	autoCount, err := d.AutoDeliveredCountAll(session.SessionID)
+	if err == nil && autoCount > 0 {
+		fmt.Printf("%s  ● %d consumed since last prompt%s\n", yellow, autoCount, reset_color)
+	}
 
 	// Line 3: Watching with GLOBAL resource count
 	// Count all subscriptions across all sessions
