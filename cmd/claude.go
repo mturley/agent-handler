@@ -56,20 +56,13 @@ func runClaude(cmd *cobra.Command, args []string) error {
 		if answer == "y" || answer == "yes" {
 			suffix, _ := rand.Int(rand.Reader, big.NewInt(99999))
 			sessionName := fmt.Sprintf("handler-%05d", suffix.Int64())
-			// Build the claude command string for tmux
-			claudeArgs := strings.Join(args, " ")
-			claudeCommand := claudeBin
-			if claudeArgs != "" {
-				claudeCommand = claudeBin + " " + claudeArgs
-			}
-			tmuxCmd := exec.Command("tmux", "new-session", "-s", sessionName,
-				"-e", "HANDLER_MANAGED=1",
-				claudeCommand)
+			// Pass claude binary and args separately to tmux
+			tmuxArgs := []string{"new-session", "-s", sessionName, "-e", "HANDLER_MANAGED=1", claudeBin}
+			tmuxArgs = append(tmuxArgs, args...)
+			tmuxCmd := exec.Command("tmux", tmuxArgs...)
 			tmuxCmd.Stdin = os.Stdin
 			tmuxCmd.Stdout = os.Stdout
 			tmuxCmd.Stderr = os.Stderr
-			// Set the pane title after session creation
-			exec.Command("tmux", "select-pane", "-t", sessionName, "-T", "handler:pending").Run()
 			return tmuxCmd.Run()
 		}
 
