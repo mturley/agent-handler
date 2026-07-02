@@ -35,7 +35,7 @@ CronCreate with:
   cron: "*/1 * * * *"
   durable: false
   recurring: true
-  prompt: "/inbox"
+  prompt: "/inbox --auto"
 ```
 
 The cron job is session-scoped and will not survive session restarts. Inbox mode resets to on-submit when the session ends.

@@ -20,6 +20,7 @@ func init() {
 	rootCmd.AddCommand(unreadCmd)
 	unreadCmd.Flags().String("session-id", "", "session ID (defaults to session from PID cache)")
 	unreadCmd.Flags().Bool("ack", false, "acknowledge events after reading")
+	unreadCmd.Flags().Bool("agent-only", false, "with --ack, advance only the agent cursor (not human cursor)")
 	unreadCmd.Flags().Bool("count", false, "only print the unread count")
 }
 
@@ -60,7 +61,13 @@ func runUnread(cmd *cobra.Command, args []string) error {
 	}
 
 	if ack && len(events) > 0 {
-		d.AdvanceBothCursors(sessionID, time.Now().UTC().Format(time.RFC3339))
+		agentOnly, _ := cmd.Flags().GetBool("agent-only")
+		ts := time.Now().UTC().Format(time.RFC3339)
+		if agentOnly {
+			d.AdvanceCursor(sessionID, ts)
+		} else {
+			d.AdvanceBothCursors(sessionID, ts)
+		}
 	}
 
 	if jsonOutput {
