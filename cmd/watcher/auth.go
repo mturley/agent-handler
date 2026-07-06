@@ -186,6 +186,12 @@ func configureJira(reader *bufio.Reader, cfg *config.Config) (bool, error) {
 
 	fmt.Printf("✓ Valid credentials for: %s\n", displayName)
 
+	fmt.Println("")
+	fmt.Println("  Custom Jira fields can be configured in config.yaml under services.jira.custom_fields.")
+	fmt.Println("  Adding custom fields (e.g. priority, blocked status, epic links) provides additional")
+	fmt.Println("  context when the handler session triages work across sessions.")
+	fmt.Println("  See the commented examples in config.yaml for common fields.")
+
 	// Save credentials
 	if cfg.Services.Jira == nil {
 		cfg.Services.Jira = &config.JiraConfig{}
