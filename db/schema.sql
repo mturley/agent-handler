@@ -90,3 +90,12 @@ CREATE TABLE IF NOT EXISTS resource_relationships (
     source TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS resource_state (
+    resource_type TEXT NOT NULL,
+    resource_id TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    resource_updated_at TEXT NOT NULL,
+    watcher_updated_at TEXT NOT NULL,
+    PRIMARY KEY (resource_type, resource_id)
+);
