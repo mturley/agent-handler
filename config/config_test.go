@@ -228,3 +228,55 @@ func TestIsServiceConfigured(t *testing.T) {
 		})
 	}
 }
+
+func TestJiraCustomFieldsConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	content := `services:
+  jira:
+    url: https://jira.example.com
+    email: test@example.com
+    token: test-token
+    custom_fields:
+      epic_key: "customfield_10014"
+      blocked: "customfield_10517"
+      story_points: "customfield_10028"
+`
+	os.WriteFile(path, []byte(content), 0600)
+
+	cfg, err := Read(path)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if cfg.Services.Jira == nil {
+		t.Fatal("expected Jira config")
+	}
+	if len(cfg.Services.Jira.CustomFields) != 3 {
+		t.Errorf("expected 3 custom fields, got %d", len(cfg.Services.Jira.CustomFields))
+	}
+	if cfg.Services.Jira.CustomFields["epic_key"] != "customfield_10014" {
+		t.Errorf("expected epic_key = customfield_10014, got %q", cfg.Services.Jira.CustomFields["epic_key"])
+	}
+}
+
+func TestJiraNoCustomFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+
+	content := `services:
+  jira:
+    url: https://jira.example.com
+    email: test@example.com
+    token: test-token
+`
+	os.WriteFile(path, []byte(content), 0600)
+
+	cfg, err := Read(path)
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if cfg.Services.Jira.CustomFields != nil && len(cfg.Services.Jira.CustomFields) != 0 {
+		t.Errorf("expected nil or empty custom fields, got %v", cfg.Services.Jira.CustomFields)
+	}
+}

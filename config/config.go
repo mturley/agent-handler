@@ -26,10 +26,11 @@ type GitHubConfig struct {
 
 // JiraConfig contains Jira API configuration
 type JiraConfig struct {
-	URL          string   `yaml:"url"`
-	Email        string   `yaml:"email"`
-	Token        string   `yaml:"token"`
-	BotUsernames []string `yaml:"bot_usernames,omitempty"`
+	URL          string            `yaml:"url"`
+	Email        string            `yaml:"email"`
+	Token        string            `yaml:"token"`
+	BotUsernames []string          `yaml:"bot_usernames,omitempty"`
+	CustomFields map[string]string `yaml:"custom_fields,omitempty"`
 }
 
 // DefaultPath returns the default configuration file path
