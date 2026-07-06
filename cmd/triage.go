@@ -3,8 +3,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +32,8 @@ type triageOutput struct {
 	WatcherErrors         []watcherError        `json:"watcher_errors"`
 	EventsSinceLastCheck  int                   `json:"events_since_last_check"`
 	DeadSessions          []deadSession         `json:"dead_sessions"`
+	SessionResources      []sessionResource     `json:"session_resources"`
+	StaleResources        []staleResource       `json:"stale_resources"`
 }
 
 type blockedSession struct {
@@ -56,6 +61,27 @@ type deadSession struct {
 	LastActive string `json:"last_active"`
 }
 
+type sessionResource struct {
+	SessionID    string            `json:"session_id"`
+	SessionName  string            `json:"session_name"`
+	Resources    []resourceDetail  `json:"resources"`
+}
+
+type resourceDetail struct {
+	ResourceType     string          `json:"resource_type"`
+	ResourceID       string          `json:"resource_id"`
+	ResourceURL      *string         `json:"resource_url,omitempty"`
+	State            json.RawMessage `json:"state"`
+	WatcherUpdatedAt string          `json:"watcher_updated_at,omitempty"`
+}
+
+type staleResource struct {
+	ResourceType     string `json:"resource_type"`
+	ResourceID       string `json:"resource_id"`
+	WatcherUpdatedAt string `json:"watcher_updated_at"`
+	StaleMinutes     int    `json:"stale_minutes"`
+}
+
 func runTriage(cmd *cobra.Command, args []string) error {
 	d, err := openReadOnlyDB()
 	if err != nil {
@@ -68,6 +94,8 @@ func runTriage(cmd *cobra.Command, args []string) error {
 		SessionsWithUnread: []sessionUnread{},
 		WatcherErrors:      []watcherError{},
 		DeadSessions:       []deadSession{},
+		SessionResources:   []sessionResource{},
+		StaleResources:     []staleResource{},
 	}
 
 	// Get all active sessions
@@ -179,6 +207,86 @@ func runTriage(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Gather resource state per session
+	staleThreshold := 5 * time.Minute
+	seenResources := make(map[string]bool) // dedup stale resources across sessions
+
+	for _, s := range sessions {
+		if s.Status != "active" {
+			continue
+		}
+		// Skip dead sessions
+		isDead := false
+		for _, ds := range output.DeadSessions {
+			if ds.SessionID == s.SessionID {
+				isDead = true
+				break
+			}
+		}
+		if isDead {
+			continue
+		}
+
+		states, err := d.ListResourceStatesForSession(s.SessionID)
+		if err != nil || len(states) == 0 {
+			continue
+		}
+
+		sr := sessionResource{
+			SessionID:   s.SessionID,
+			SessionName: s.SessionName,
+			Resources:   []resourceDetail{},
+		}
+
+		for _, rs := range states {
+			rd := resourceDetail{
+				ResourceType:     rs.ResourceType,
+				ResourceID:       rs.ResourceID,
+				ResourceURL:      rs.ResourceURL,
+				State:            json.RawMessage(rs.StateJSON),
+				WatcherUpdatedAt: rs.WatcherUpdatedAt,
+			}
+			sr.Resources = append(sr.Resources, rd)
+
+			// Check staleness
+			key := rs.ResourceType + ":" + rs.ResourceID
+			if !seenResources[key] && rs.WatcherUpdatedAt != "" {
+				seenResources[key] = true
+				wut, err := time.Parse(time.RFC3339, rs.WatcherUpdatedAt)
+				if err == nil && time.Since(wut) > staleThreshold {
+					output.StaleResources = append(output.StaleResources, staleResource{
+						ResourceType:     rs.ResourceType,
+						ResourceID:       rs.ResourceID,
+						WatcherUpdatedAt: rs.WatcherUpdatedAt,
+						StaleMinutes:     int(time.Since(wut).Minutes()),
+					})
+				}
+			}
+		}
+
+		output.SessionResources = append(output.SessionResources, sr)
+	}
+
+	// Trigger catch-up for stale resources (best-effort, non-blocking)
+	if len(output.StaleResources) > 0 {
+		cfg, _ := config.Read(config.DefaultPath())
+		if cfg != nil {
+			staleByService := make(map[string][]string)
+			for _, sr := range output.StaleResources {
+				svc := config.ResourceTypeToService(sr.ResourceType)
+				if svc != "" && cfg.IsServiceConfigured(svc) {
+					staleByService[svc] = append(staleByService[svc], sr.ResourceID)
+				}
+			}
+			for svc, resources := range staleByService {
+				resourceList := strings.Join(resources, ",")
+				go func(s, r string) {
+					exec.Command("handler", "watcher", "run", s, "--resources", r).Run()
+				}(svc, resourceList)
+			}
+		}
+	}
+
 	// Output
 	if jsonOutput {
 		enc := json.NewEncoder(cmd.OutOrStdout())
@@ -247,6 +355,33 @@ func runTriage(cmd *cobra.Command, args []string) error {
 				name = ds.SessionID[:8]
 			}
 			fmt.Printf("  %s - last active %s\n", name, ds.LastActive)
+		}
+	}
+
+	if len(output.SessionResources) > 0 {
+		fmt.Println("\nSession Resources:")
+		for _, sr := range output.SessionResources {
+			name := sr.SessionName
+			if name == "" {
+				name = sr.SessionID[:8]
+			}
+			for _, r := range sr.Resources {
+				fmt.Printf("  %s → %s:%s", name, r.ResourceType, r.ResourceID)
+				if r.WatcherUpdatedAt != "" {
+					wut, err := time.Parse(time.RFC3339, r.WatcherUpdatedAt)
+					if err == nil {
+						fmt.Printf(" (updated %s ago)", formatDuration(time.Since(wut)))
+					}
+				}
+				fmt.Println()
+			}
+		}
+	}
+
+	if len(output.StaleResources) > 0 {
+		fmt.Println("\nStale Resources (catch-up triggered):")
+		for _, sr := range output.StaleResources {
+			fmt.Printf("  %s:%s — last updated %dm ago\n", sr.ResourceType, sr.ResourceID, sr.StaleMinutes)
 		}
 	}
 
