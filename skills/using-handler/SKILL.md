@@ -15,16 +15,32 @@ Your statusline shows inbox status, inbox mode, and watched resources.
 
 To turn this session into a handler (command center for all sessions), use `/handler`.
 
-## Emitting events
+## Emitting events — MANDATORY
+
+**You MUST call `handler emit` regularly throughout your session. This is not optional.**
+
+The entire purpose of agent-handler is a centralized record of what all sessions are doing. A session that doesn't emit is invisible — the user and other sessions have no idea what you're working on, what progress you've made, or whether you're stuck. **Silent sessions are broken sessions.**
+
+Do not wait until work is "done" to emit. Emit as you go:
+- Starting a task? Emit `status`.
+- Made progress? Emit `milestone`.
+- Hit a wall? Emit `blocked`.
+- Made a choice? Emit `decision`.
+- Periodic check-in on where you are? Emit `status`.
+
+If you've been working for a while without emitting, you're overdue. **When in doubt, emit.**
+
+### Syntax
 
 ```
 handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--broadcast] [--tags "a,b"]
 ```
 
-Event types: `milestone`, `status`, `decision`, `blocked`, `unblocked`, `handoff`, `followup`, `message`.
+### Event types and triggers
 
 | Trigger | Type | Example title |
 |---------|------|---------------|
+| Starting work on a task | `status` | "Beginning auth middleware refactor" |
 | Finish a commit or meaningful code change | `milestone` | "Implemented retry logic for API client" |
 | Push to remote | `milestone` | "Pushed feature branch auth-refactor" |
 | Find the root cause of a bug | `milestone` | "Root cause: token validated against wrong key" |
@@ -33,7 +49,7 @@ Event types: `milestone`, `status`, `decision`, `blocked`, `unblocked`, `handoff
 | Resume after being blocked | `unblocked` | "PR #42 approved, continuing" |
 | Identify work for another session or later | `handoff` / `followup` | "Tech debt: error messages need i18n" |
 | Want to tell another session something | `message` | (use `--to <target>`) |
-| Starting a new phase, or periodic check-in | `status` | "Still debugging token refresh — narrowed to middleware" |
+| Periodic check-in on current work | `status` | "Still debugging token refresh — narrowed to middleware" |
 
 Use `--body` for details beyond what fits in the title. Use `--tags` for lightweight categorization.
 
