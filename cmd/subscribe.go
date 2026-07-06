@@ -64,6 +64,14 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Auto-fill URL from config if not provided
+	if subURL == "" {
+		cfg, cfgErr := config.Read(config.DefaultPath())
+		if cfgErr == nil && cfg != nil {
+			subURL = cfg.DefaultResourceURL(resourceType, resourceID)
+		}
+	}
+
 	// Subscribe
 	now := time.Now().UTC().Format(time.RFC3339)
 	var urlPtr *string

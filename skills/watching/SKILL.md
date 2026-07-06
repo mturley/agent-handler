@@ -16,6 +16,7 @@ If this session has the handler role (`handler configure --get role` returns `ha
 ## After reading the data
 
 1. Present the watched resources grouped by type (PRs, Jira issues)
+   - **Always render resource IDs as clickable markdown links** using the `resource_url` field from the JSON. Example: instead of `jira:RHOAIENG-69748`, show `[RHOAIENG-69748](https://redhat.atlassian.net/browse/RHOAIENG-69748)`. For PRs: `[owner/repo#123](https://github.com/owner/repo/pull/123)`.
 2. Show watcher status: configured, installed, running, last run time
 3. For any watcher in an error state (where `last_error` is more recent than `last_success` in the watcher status), show the error message and help troubleshoot:
    - "Could not resolve to a Repository" → the repo may be private and the GitHub token needs `repo` scope. Suggest re-running `handler watcher auth github` with a new token.

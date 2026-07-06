@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -101,4 +102,36 @@ func ResourceTypeToService(resourceType string) string {
 	default:
 		return ""
 	}
+}
+
+// DefaultResourceURL constructs a URL for a resource from its type and ID.
+// For PRs, resourceID is "owner/repo#123" → "https://github.com/owner/repo/pull/123".
+// For Jira, resourceID is "PROJECT-123" → "{jira_base_url}/browse/PROJECT-123".
+// Returns empty string if the URL cannot be constructed.
+func (c *Config) DefaultResourceURL(resourceType, resourceID string) string {
+	switch resourceType {
+	case "pr":
+		return prResourceURL(resourceID)
+	case "jira":
+		if c.Services.Jira != nil && c.Services.Jira.URL != "" {
+			return strings.TrimRight(c.Services.Jira.URL, "/") + "/browse/" + resourceID
+		}
+		return ""
+	default:
+		return ""
+	}
+}
+
+// prResourceURL converts "owner/repo#123" to "https://github.com/owner/repo/pull/123"
+func prResourceURL(resourceID string) string {
+	idx := strings.LastIndex(resourceID, "#")
+	if idx < 0 {
+		return ""
+	}
+	repo := resourceID[:idx]
+	num := resourceID[idx+1:]
+	if repo == "" || num == "" {
+		return ""
+	}
+	return "https://github.com/" + repo + "/pull/" + num
 }

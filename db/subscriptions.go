@@ -7,13 +7,13 @@ import (
 
 // Subscription represents a session's subscription to a resource.
 type Subscription struct {
-	ID          string
-	SessionID   string
-	ResourceType string
-	ResourceID  string
-	ResourceURL *string
-	CreatedAt   string
-	DeletedAt   *string
+	ID           string  `json:"id"`
+	SessionID    string  `json:"session_id"`
+	ResourceType string  `json:"resource_type"`
+	ResourceID   string  `json:"resource_id"`
+	ResourceURL  *string `json:"resource_url,omitempty"`
+	CreatedAt    string  `json:"created_at"`
+	DeletedAt    *string `json:"deleted_at,omitempty"`
 }
 
 // Subscribe subscribes a session to a resource.

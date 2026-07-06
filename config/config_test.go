@@ -98,6 +98,56 @@ func TestReadMissingFile(t *testing.T) {
 	}
 }
 
+func TestDefaultResourceURL(t *testing.T) {
+	cfg := &Config{
+		Services: Services{
+			Jira: &JiraConfig{URL: "https://jira.example.com"},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		resourceType string
+		resourceID   string
+		expected     string
+	}{
+		{"PR", "pr", "owner/repo#123", "https://github.com/owner/repo/pull/123"},
+		{"PR with org", "pr", "my-org/my-repo#42", "https://github.com/my-org/my-repo/pull/42"},
+		{"PR missing hash", "pr", "owner/repo", ""},
+		{"PR empty number", "pr", "owner/repo#", ""},
+		{"Jira", "jira", "PROJ-456", "https://jira.example.com/browse/PROJ-456"},
+		{"Jira trailing slash", "jira", "PROJ-1", "https://jira.example.com/browse/PROJ-1"},
+		{"Unknown type", "slack", "chan-123", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := cfg.DefaultResourceURL(tt.resourceType, tt.resourceID)
+			if result != tt.expected {
+				t.Errorf("DefaultResourceURL(%s, %s) = %q, want %q", tt.resourceType, tt.resourceID, result, tt.expected)
+			}
+		})
+	}
+
+	// Test with trailing slash on Jira URL
+	cfgSlash := &Config{
+		Services: Services{
+			Jira: &JiraConfig{URL: "https://jira.example.com/"},
+		},
+	}
+	result := cfgSlash.DefaultResourceURL("jira", "PROJ-1")
+	if result != "https://jira.example.com/browse/PROJ-1" {
+		t.Errorf("Trailing slash: got %q, want %q", result, "https://jira.example.com/browse/PROJ-1")
+	}
+
+	// Test with no Jira config
+	cfgNoJira := &Config{}
+	result = cfgNoJira.DefaultResourceURL("jira", "PROJ-1")
+	if result != "" {
+		t.Errorf("No Jira config: got %q, want empty", result)
+	}
+}
+
 func TestIsServiceConfigured(t *testing.T) {
 	tests := []struct {
 		name     string

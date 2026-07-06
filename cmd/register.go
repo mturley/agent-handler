@@ -121,12 +121,20 @@ func runRegister(cmd *cobra.Command, args []string) error {
 	resourcesPath := filepath.Join(cwd, ".worktree-resources")
 	resources, err := worktree.ReadResources(resourcesPath)
 	if err == nil && len(resources) > 0 {
+		resCfg, _ := config.Read(config.DefaultPath())
 		for _, r := range resources {
 			resourceType, resourceID := worktree.ParseResourceID(r.ID)
 			if resourceType == "" {
 				continue
 			}
-			urlPtr := &r.URL
+			resURL := r.URL
+			if resURL == "" && resCfg != nil {
+				resURL = resCfg.DefaultResourceURL(resourceType, resourceID)
+			}
+			var urlPtr *string
+			if resURL != "" {
+				urlPtr = &resURL
+			}
 			err = d.SubscribeIfNew(db.Subscription{
 				ID:           uuid.New().String(),
 				SessionID:    regSessionID,
