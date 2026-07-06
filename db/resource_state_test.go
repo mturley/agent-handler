@@ -94,3 +94,28 @@ func TestListResourceStatesForSession(t *testing.T) {
 		t.Errorf("expected 2 results, got %d", len(results))
 	}
 }
+
+func TestResourceStateCleanupOnLastUnsubscribe(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "cleanup-sess-1")
+	seedSession(t, d, "cleanup-sess-2")
+
+	now := "2026-07-06T10:00:00Z"
+	d.Subscribe(Subscription{ID: "sub-a", SessionID: "cleanup-sess-1", ResourceType: "pr", ResourceID: "owner/repo#1", CreatedAt: now})
+	d.Subscribe(Subscription{ID: "sub-b", SessionID: "cleanup-sess-2", ResourceType: "pr", ResourceID: "owner/repo#1", CreatedAt: now})
+	d.UpsertResourceState("pr", "owner/repo#1", `{"state":"open"}`, now, now)
+
+	// Unsubscribe first session — state should remain (other session still subscribed)
+	d.Unsubscribe("cleanup-sess-1", "pr", "owner/repo#1")
+	rs, _ := d.GetResourceState("pr", "owner/repo#1")
+	if rs == nil {
+		t.Fatal("resource state should still exist after first unsubscribe")
+	}
+
+	// Unsubscribe second session — state should be deleted (no more subscribers)
+	d.Unsubscribe("cleanup-sess-2", "pr", "owner/repo#1")
+	rs, _ = d.GetResourceState("pr", "owner/repo#1")
+	if rs != nil {
+		t.Fatal("resource state should be deleted after last unsubscribe")
+	}
+}
