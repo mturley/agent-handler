@@ -17,14 +17,18 @@ type Client struct {
 
 // IssueData represents Jira issue data with changelog and comments.
 type IssueData struct {
-	Key       string
-	Summary   string
-	Status    string
-	Assignee  *string
-	EpicKey   *string
-	Labels    []string
-	Comments  []IssueComment
-	Changelog []ChangelogEntry
+	Key          string
+	Summary      string
+	Status       string
+	Priority     string
+	IssueType    string
+	Assignee     *string
+	Labels       []string
+	CreatedAt    string
+	UpdatedAt    string
+	Comments     []IssueComment
+	Changelog    []ChangelogEntry
+	CustomFields map[string]interface{}
 }
 
 // IssueComment represents a Jira issue comment.
@@ -44,8 +48,12 @@ type ChangelogEntry struct {
 }
 
 // FetchIssue fetches issue data from Jira API v3.
-func (c *Client) FetchIssue(issueKey string) (*IssueData, error) {
-	url := fmt.Sprintf("%s/rest/api/3/issue/%s?expand=changelog&fields=summary,status,assignee,labels,comment,customfield_12311140", c.BaseURL, issueKey)
+func (c *Client) FetchIssue(issueKey string, customFieldIDs map[string]string) (*IssueData, error) {
+	fields := "summary,status,assignee,labels,comment,priority,issuetype,created,updated"
+	for _, fieldID := range customFieldIDs {
+		fields += "," + fieldID
+	}
+	url := fmt.Sprintf("%s/rest/api/3/issue/%s?expand=changelog&fields=%s", c.BaseURL, issueKey, fields)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -67,6 +75,12 @@ func (c *Client) FetchIssue(issueKey string) (*IssueData, error) {
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
+	// Buffer response body for dual decode (typed struct + raw map)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
 	var raw struct {
 		Key    string `json:"key"`
 		Fields struct {
@@ -74,17 +88,24 @@ func (c *Client) FetchIssue(issueKey string) (*IssueData, error) {
 			Status   struct {
 				Name string `json:"name"`
 			} `json:"status"`
+			Priority struct {
+				Name string `json:"name"`
+			} `json:"priority"`
+			IssueType struct {
+				Name string `json:"name"`
+			} `json:"issuetype"`
 			Assignee *struct {
 				DisplayName string `json:"displayName"`
 			} `json:"assignee"`
-			Labels    []string `json:"labels"`
-			EpicLink  *string  `json:"customfield_12311140"` // Red Hat's epic link field
-			Comment   struct {
+			Labels  []string `json:"labels"`
+			Created string   `json:"created"`
+			Updated string   `json:"updated"`
+			Comment struct {
 				Comments []struct {
 					Author struct {
 						DisplayName string `json:"displayName"`
 					} `json:"author"`
-					Created string `json:"created"`
+					Created string      `json:"created"`
 					Body    interface{} `json:"body"` // ADF JSON
 				} `json:"comments"`
 			} `json:"comment"`
@@ -104,24 +125,43 @@ func (c *Client) FetchIssue(issueKey string) (*IssueData, error) {
 		} `json:"changelog"`
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+	// Decode typed fields
+	if err := json.Unmarshal(bodyBytes, &raw); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Decode raw for custom fields
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(bodyBytes, &rawMap); err != nil {
+		return nil, fmt.Errorf("failed to decode raw response: %w", err)
+	}
+	var fieldsMap map[string]json.RawMessage
+	if rawFields, ok := rawMap["fields"]; ok {
+		json.Unmarshal(rawFields, &fieldsMap)
 	}
 
 	// Build IssueData
 	issue := &IssueData{
-		Key:     raw.Key,
-		Summary: raw.Fields.Summary,
-		Status:  raw.Fields.Status.Name,
-		Labels:  raw.Fields.Labels,
+		Key:          raw.Key,
+		Summary:      raw.Fields.Summary,
+		Status:       raw.Fields.Status.Name,
+		Priority:     raw.Fields.Priority.Name,
+		IssueType:    raw.Fields.IssueType.Name,
+		Labels:       raw.Fields.Labels,
+		CreatedAt:    raw.Fields.Created,
+		UpdatedAt:    raw.Fields.Updated,
+		CustomFields: make(map[string]interface{}),
 	}
 
 	if raw.Fields.Assignee != nil {
 		issue.Assignee = &raw.Fields.Assignee.DisplayName
 	}
 
-	if raw.Fields.EpicLink != nil {
-		issue.EpicKey = raw.Fields.EpicLink
+	// Extract custom fields
+	for displayName, fieldID := range customFieldIDs {
+		if rawVal, ok := fieldsMap[fieldID]; ok {
+			issue.CustomFields[displayName] = extractFieldValue(rawVal)
+		}
 	}
 
 	// Parse comments
@@ -149,4 +189,36 @@ func (c *Client) FetchIssue(issueKey string) (*IssueData, error) {
 	}
 
 	return issue, nil
+}
+
+// extractFieldValue extracts a display value from a Jira field's raw JSON.
+// Objects with .value or .name use that string. Strings, numbers, nulls are direct.
+func extractFieldValue(raw json.RawMessage) interface{} {
+	var str string
+	if json.Unmarshal(raw, &str) == nil {
+		return str
+	}
+
+	var num float64
+	if json.Unmarshal(raw, &num) == nil {
+		return num
+	}
+
+	var obj map[string]interface{}
+	if json.Unmarshal(raw, &obj) == nil {
+		if v, ok := obj["value"]; ok {
+			return v
+		}
+		if v, ok := obj["name"]; ok {
+			return v
+		}
+		return obj
+	}
+
+	var arr []interface{}
+	if json.Unmarshal(raw, &arr) == nil {
+		return arr
+	}
+
+	return nil
 }

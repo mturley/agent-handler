@@ -1,6 +1,7 @@
 package jira
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -24,6 +25,11 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 		Token:   cfg.Services.Jira.Token,
 	}
 
+	customFields := make(map[string]string)
+	if cfg.Services.Jira != nil && cfg.Services.Jira.CustomFields != nil {
+		customFields = cfg.Services.Jira.CustomFields
+	}
+
 	eventCount := 0
 	for _, resource := range resources {
 		// Parse issue key from resource ID (it's just the key)
@@ -31,7 +37,7 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 
 		// Fetch issue from Jira
 		logger.Printf("Fetching issue %s...", issueKey)
-		issueData, err := client.FetchIssue(issueKey)
+		issueData, err := client.FetchIssue(issueKey, customFields)
 		if err != nil {
 			logger.Printf("ERROR: failed to fetch issue %s: %v", issueKey, err)
 			errBody := fmt.Sprintf("Failed to fetch issue: %v", err)
@@ -53,6 +59,13 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 			continue
 		}
 		eventCount += count
+
+		// Write resource state
+		stateJSON := buildJiraStateJSON(issueData)
+		now := time.Now().UTC().Format(time.RFC3339)
+		if err := d.UpsertResourceState("jira", issueKey, stateJSON, issueData.UpdatedAt, now); err != nil {
+			logger.Printf("WARNING: failed to upsert resource state for %s: %v", issueKey, err)
+		}
 	}
 
 	logger.Printf("Emitted %d events", eventCount)
@@ -78,13 +91,6 @@ func processIssue(d *db.DB, cfg *config.Config, issue *IssueData, resource watch
 		}
 		eventCount++
 		logger.Printf("Emitted watch_started for %s", resource.ResourceID)
-
-		// Write epic relationship if present
-		if issue.EpicKey != nil && *issue.EpicKey != "" {
-			if err := linkEpic(d, resource, *issue.EpicKey, logger); err != nil {
-				logger.Printf("WARNING: failed to link epic for %s: %v", resource.ResourceID, err)
-			}
-		}
 
 		return eventCount, nil
 	}
@@ -173,13 +179,6 @@ func processIssue(d *db.DB, cfg *config.Config, issue *IssueData, resource watch
 	// Don't auto-unsubscribe on terminal status — the terminal event needs
 	// to be delivered to sessions via the subscription join. Let sessions
 	// or users unsubscribe explicitly.
-
-	// Update epic relationship if present
-	if issue.EpicKey != nil && *issue.EpicKey != "" {
-		if err := linkEpic(d, resource, *issue.EpicKey, logger); err != nil {
-			logger.Printf("WARNING: failed to link epic for %s: %v", resource.ResourceID, err)
-		}
-	}
 
 	return eventCount, nil
 }
@@ -300,4 +299,23 @@ func latestTimestamp(issue *IssueData) string {
 		latest = "2000-01-01T00:00:00.000+0000"
 	}
 	return latest
+}
+
+// buildJiraStateJSON builds a JSON representation of a Jira issue's current state.
+func buildJiraStateJSON(issue *IssueData) string {
+	state := map[string]interface{}{
+		"summary":    issue.Summary,
+		"status":     issue.Status,
+		"priority":   issue.Priority,
+		"assignee":   issue.Assignee,
+		"issue_type": issue.IssueType,
+		"labels":     issue.Labels,
+		"created_at": issue.CreatedAt,
+		"updated_at": issue.UpdatedAt,
+	}
+	for k, v := range issue.CustomFields {
+		state[k] = v
+	}
+	data, _ := json.Marshal(state)
+	return string(data)
 }
