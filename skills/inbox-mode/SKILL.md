@@ -9,8 +9,8 @@ Three modes control how you receive unread events:
 
 | Mode | Behavior |
 |------|----------|
-| `on-submit` (default) | You are notified of new messages on each prompt submit. |
-| `manual` | Status line shows unread count. You check with `/inbox` when ready. |
+| `manual` (default) | Status line shows unread count. You check with `/inbox` when ready. |
+| `on-submit` | You are notified of new messages on each prompt submit. |
 | `auto` | A cron job polls for new events and invokes /inbox when messages arrive. |
 
 ## Switching to manual or on-submit
@@ -38,4 +38,4 @@ CronCreate with:
   prompt: "/inbox --auto"
 ```
 
-The cron job is session-scoped and will not survive session restarts. Inbox mode resets to on-submit when the session ends.
+The cron job is session-scoped and will not survive session restarts. Inbox mode resets to manual when the session ends.

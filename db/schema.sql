@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     session_name TEXT,
     pid INTEGER,
     status TEXT NOT NULL DEFAULT 'active',
-    inbox_mode TEXT NOT NULL DEFAULT 'on-submit',
+    inbox_mode TEXT NOT NULL DEFAULT 'manual',
     auto_poll_interval INTEGER,
     role TEXT,
     terminal_type TEXT,

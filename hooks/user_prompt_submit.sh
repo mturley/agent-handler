@@ -12,30 +12,47 @@ CLAUDE_PID="$PPID"
 SESSIONS_DIR="${HANDLER_HOME:-$HOME/.agent-handler}/data/sessions"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Discover the actual current session ID from the JSONL
-source "${SCRIPT_DIR}/common.sh"
-ACTUAL_SESSION_ID=$(discover_session_id 2>/dev/null || echo "")
+# Read session ID from stdin JSON (provided by Claude Code)
+HOOK_STDIN=$(cat)
+SESSION_ID=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null)
 
-# Check PID cache
-CACHED_SESSION_ID=""
-if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
-    CACHED_SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
-fi
-
-# Register if: no cache, or cache points to wrong session
-if [ -z "$CACHED_SESSION_ID" ] || [ "$CACHED_SESSION_ID" != "$ACTUAL_SESSION_ID" ]; then
-    if [ -n "$ACTUAL_SESSION_ID" ]; then
-        discover_and_register "$CLAUDE_PID" >/dev/null 2>&1 || true
-        if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
-            SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
-        else
-            exit 0
-        fi
+if [ -z "$SESSION_ID" ]; then
+    # Fallback to PID cache if stdin doesn't have session_id
+    if [ -f "${SESSIONS_DIR}/${CLAUDE_PID}" ]; then
+        SESSION_ID=$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")
     else
         exit 0
     fi
-else
-    SESSION_ID="$CACHED_SESSION_ID"
+fi
+
+# Register if not yet registered (PID cache miss)
+if [ ! -f "${SESSIONS_DIR}/${CLAUDE_PID}" ] || [ "$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")" != "$SESSION_ID" ]; then
+    JSONL_PATH=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
+    if [ -n "$JSONL_PATH" ]; then
+        source "${SCRIPT_DIR}/common.sh"
+        BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+        REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:/]//' | sed 's/\.git$//' || echo "unknown")
+
+        TERMINAL_TYPE=""
+        TERMINAL_ID=""
+        if [ -n "${CMUX_SURFACE_ID:-}" ]; then
+            TERMINAL_TYPE="cmux"
+            TERMINAL_ID="$CMUX_SURFACE_ID"
+        fi
+
+        TERMINAL_FLAGS=""
+        if [ -n "$TERMINAL_TYPE" ]; then
+            TERMINAL_FLAGS="--terminal-type $TERMINAL_TYPE --terminal-id $TERMINAL_ID"
+        fi
+
+        handler register \
+            --session-id "$SESSION_ID" \
+            --branch "$BRANCH" \
+            --repo "$REPO" \
+            --pid "$CLAUDE_PID" \
+            --jsonl-path "$JSONL_PATH" \
+            $TERMINAL_FLAGS >/dev/null 2>&1 || true
+    fi
 fi
 
 # Heartbeat in background, fully silenced
@@ -44,7 +61,7 @@ fi
 handler heartbeat --session-id "$SESSION_ID" --catch-up-human-cursor >/dev/null 2>&1 &
 
 # Only inject output if inbox mode is on-submit
-INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "on-submit")
+INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
 
 if [ "$INBOX_MODE" = "on-submit" ]; then
     UNREAD_COUNT=$(handler unread --session-id "$SESSION_ID" --count 2>/dev/null)
