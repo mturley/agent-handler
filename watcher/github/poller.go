@@ -1,8 +1,10 @@
 package github
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
@@ -216,6 +218,13 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 		// unsubscribe explicitly, or let the subscription go idle.
 	}
 
+	// Write resource state
+	stateJSON := buildPRStateJSON(prData)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := d.UpsertResourceState("pr", resource.ResourceID, stateJSON, prData.UpdatedAt, now); err != nil {
+		logger.Printf("WARNING: failed to upsert resource state for %s: %v", resource.ResourceID, err)
+	}
+
 	return eventCount, nil
 }
 
@@ -235,5 +244,92 @@ func checkRunEventType(conclusion string) (watcher.EventType, bool) {
 	default:
 		return "", false
 	}
+}
+
+// derivePRReviewDecision computes the overall review decision based on latest review per author.
+func derivePRReviewDecision(reviews []Review) string {
+	latestByAuthor := make(map[string]Review)
+	for _, r := range reviews {
+		if r.State == "DISMISSED" {
+			continue
+		}
+		existing, ok := latestByAuthor[r.Author]
+		if !ok || r.SubmittedAt > existing.SubmittedAt {
+			latestByAuthor[r.Author] = r
+		}
+	}
+
+	if len(latestByAuthor) == 0 {
+		return "NONE"
+	}
+
+	for _, r := range latestByAuthor {
+		if r.State == "CHANGES_REQUESTED" {
+			return "CHANGES_REQUESTED"
+		}
+	}
+
+	allApproved := true
+	for _, r := range latestByAuthor {
+		if r.State != "APPROVED" {
+			allApproved = false
+			break
+		}
+	}
+	if allApproved {
+		return "APPROVED"
+	}
+
+	return "REVIEW_REQUIRED"
+}
+
+// deriveCIStatus computes the overall CI status based on check runs.
+func deriveCIStatus(checkRuns []CheckRun) string {
+	if len(checkRuns) == 0 {
+		return "NONE"
+	}
+	hasPending := false
+	for _, cr := range checkRuns {
+		switch cr.Conclusion {
+		case "FAILURE", "TIMED_OUT", "ACTION_REQUIRED", "CANCELLED":
+			return "FAILURE"
+		case "":
+			hasPending = true
+		}
+	}
+	if hasPending {
+		return "PENDING"
+	}
+	return "SUCCESS"
+}
+
+// hasNewCommitsSinceReview checks if there are commits after the latest review.
+func hasNewCommitsSinceReview(prData PRData) bool {
+	if prData.Commits.LatestDate == "" {
+		return false
+	}
+	latestReviewDate := ""
+	for _, r := range prData.Reviews {
+		if r.SubmittedAt > latestReviewDate {
+			latestReviewDate = r.SubmittedAt
+		}
+	}
+	if latestReviewDate == "" {
+		return false
+	}
+	return prData.Commits.LatestDate > latestReviewDate
+}
+
+// buildPRStateJSON constructs the state JSON for a PR.
+func buildPRStateJSON(prData PRData) string {
+	state := map[string]interface{}{
+		"title":                        prData.Title,
+		"state":                        prData.State,
+		"review_decision":              derivePRReviewDecision(prData.Reviews),
+		"has_new_commits_since_review": hasNewCommitsSinceReview(prData),
+		"ci_status":                    deriveCIStatus(prData.CheckRuns),
+	}
+	data, _ := json.Marshal(state)
+	return string(data)
 }
 

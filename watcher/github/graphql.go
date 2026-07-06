@@ -63,6 +63,7 @@ type ReviewComment struct {
 type CommitInfo struct {
 	TotalCount int
 	LatestSHA  string
+	LatestDate string
 }
 
 // CheckRun represents a check run status.
@@ -217,6 +218,7 @@ func buildBatchedPRQuery(prs []PRRef) string {
           nodes {
             commit {
               oid
+              committedDate
               checkSuites(last: 10) {
                 nodes {
                   checkRuns(last: 20) {
@@ -370,8 +372,9 @@ type commitsConnection struct {
 
 type commitNode struct {
 	Commit struct {
-		OID         string                `json:"oid"`
-		CheckSuites checkSuitesConnection `json:"checkSuites"`
+		OID           string                `json:"oid"`
+		CommittedDate string                `json:"committedDate"`
+		CheckSuites   checkSuitesConnection `json:"checkSuites"`
 	} `json:"commit"`
 }
 
@@ -447,6 +450,7 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 	data.Commits.TotalCount = node.Commits.TotalCount
 	if len(node.Commits.Nodes) > 0 {
 		data.Commits.LatestSHA = node.Commits.Nodes[0].Commit.OID
+		data.Commits.LatestDate = node.Commits.Nodes[0].Commit.CommittedDate
 	}
 
 	// Parse check runs (nested under commits → commit → checkSuites)
