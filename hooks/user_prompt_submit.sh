@@ -10,7 +10,6 @@ fi
 
 CLAUDE_PID="$PPID"
 SESSIONS_DIR="${HANDLER_HOME:-$HOME/.agent-handler}/data/sessions"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Read session ID from stdin JSON (provided by Claude Code)
 HOOK_STDIN=$(cat)
@@ -29,7 +28,6 @@ fi
 if [ ! -f "${SESSIONS_DIR}/${CLAUDE_PID}" ] || [ "$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")" != "$SESSION_ID" ]; then
     JSONL_PATH=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
     if [ -n "$JSONL_PATH" ]; then
-        source "${SCRIPT_DIR}/common.sh"
         BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
         REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:/]//' | sed 's/\.git$//' || echo "unknown")
 
@@ -55,14 +53,23 @@ if [ ! -f "${SESSIONS_DIR}/${CLAUDE_PID}" ] || [ "$(cat "${SESSIONS_DIR}/${CLAUD
     fi
 fi
 
+# Check inbox mode before heartbeat (heartbeat may advance cursors)
+INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
+
+# In auto mode, check for auto-delivered events before catching up the human cursor
+if [ "$INBOX_MODE" = "auto" ]; then
+    AUTO_COUNT=$(handler auto-delivered --session-id "$SESSION_ID" 2>/dev/null || echo "0")
+    if [ -n "$AUTO_COUNT" ] && [ "$AUTO_COUNT" != "0" ]; then
+        echo "The user is back. While they were away, ${AUTO_COUNT} event(s) were auto-delivered to your inbox. Before responding to their prompt, briefly summarize what happened since their last prompt (look back through your conversation for the auto-delivered inbox results)."
+    fi
+fi
+
 # Heartbeat in background, fully silenced
 # --catch-up-human-cursor advances the human cursor to match the agent cursor
 # when in auto inbox mode, so auto-delivered events are marked as seen by the user
 handler heartbeat --session-id "$SESSION_ID" --catch-up-human-cursor >/dev/null 2>&1 &
 
-# Only inject output if inbox mode is on-submit
-INBOX_MODE=$(handler configure --session-id "$SESSION_ID" --get inbox-mode 2>/dev/null || echo "manual")
-
+# In on-submit mode, notify about unread events
 if [ "$INBOX_MODE" = "on-submit" ]; then
     UNREAD_COUNT=$(handler unread --session-id "$SESSION_ID" --count 2>/dev/null)
     if [ -n "$UNREAD_COUNT" ] && [ "$UNREAD_COUNT" != "0" ]; then
