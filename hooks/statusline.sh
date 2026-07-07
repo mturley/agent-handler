@@ -32,9 +32,7 @@ fi
 if echo "$OUTPUT" | grep -q "not registered"; then
     JSONL_PATH=$(echo "$SESSION_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
     if [ -n "$SESSION_ID" ] && [ -n "$JSONL_PATH" ]; then
-        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
         (
-            source "${SCRIPT_DIR}/common.sh"
             BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
             REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:/]//' | sed 's/\.git$//' || echo "unknown")
             SESSION_NAME=$(echo "$SESSION_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_name',''))" 2>/dev/null)

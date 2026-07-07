@@ -59,11 +59,9 @@ func runRegister(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	// Use provided session name, or try to discover from JSONL (non-fatal if file doesn't exist yet)
+	// Session name comes from --session-name flag (passed by hooks from Claude's stdin data).
+	// The statusline hook syncs name changes every 10 seconds.
 	sessionName := regSessionName
-	if sessionName == "" {
-		sessionName, _ = discover.DiscoverSessionName(regJSONLPath)
-	}
 
 	// Check if this session already exists (re-registration vs brand new)
 	existingSession, _ := d.GetSession(regSessionID)
