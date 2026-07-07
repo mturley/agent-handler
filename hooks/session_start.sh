@@ -14,6 +14,7 @@ source "${SCRIPT_DIR}/common.sh"
 HOOK_STDIN=$(cat)
 SESSION_ID=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_id',''))" 2>/dev/null)
 JSONL_PATH=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
+SESSION_TITLE=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_title',''))" 2>/dev/null)
 
 if [ -n "$SESSION_ID" ] && [ -n "$JSONL_PATH" ]; then
     # Use session ID from stdin — accurate even with multiple sessions in same worktree
@@ -36,13 +37,22 @@ if [ -n "$SESSION_ID" ] && [ -n "$JSONL_PATH" ]; then
         TERMINAL_FLAGS="--terminal-type $TERMINAL_TYPE --terminal-id $TERMINAL_ID"
     fi
 
-    handler register \
-        --session-id "$SESSION_ID" \
-        --branch "$BRANCH" \
-        --repo "$REPO" \
-        --pid "$PPID" \
-        --jsonl-path "$JSONL_PATH" \
-        $TERMINAL_FLAGS
+    # Build args array to handle spaces in session names
+    REGISTER_ARGS=(
+        --session-id "$SESSION_ID"
+        --branch "$BRANCH"
+        --repo "$REPO"
+        --pid "$PPID"
+        --jsonl-path "$JSONL_PATH"
+    )
+    if [ -n "$TERMINAL_TYPE" ]; then
+        REGISTER_ARGS+=(--terminal-type "$TERMINAL_TYPE" --terminal-id "$TERMINAL_ID")
+    fi
+    if [ -n "$SESSION_TITLE" ]; then
+        REGISTER_ARGS+=(--session-name "$SESSION_TITLE")
+    fi
+
+    handler register "${REGISTER_ARGS[@]}"
 else
     # Fallback to JSONL discovery (for older Claude Code versions without stdin JSON)
     discover_and_register "$PPID" || exit 0

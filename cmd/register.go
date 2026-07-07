@@ -31,6 +31,7 @@ var (
 	regJSONLPath    string
 	regTerminalType string
 	regTerminalID   string
+	regSessionName  string
 )
 
 func init() {
@@ -43,6 +44,7 @@ func init() {
 	registerCmd.Flags().StringVar(&regJSONLPath, "jsonl-path", "", "path to Claude JSONL file")
 	registerCmd.Flags().StringVar(&regTerminalType, "terminal-type", "", "terminal backend type (cmux, tmux)")
 	registerCmd.Flags().StringVar(&regTerminalID, "terminal-id", "", "terminal surface/pane ID")
+	registerCmd.Flags().StringVar(&regSessionName, "session-name", "", "session display name (from hook stdin)")
 	registerCmd.MarkFlagRequired("session-id")
 	registerCmd.MarkFlagRequired("branch")
 	registerCmd.MarkFlagRequired("repo")
@@ -57,10 +59,10 @@ func runRegister(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	// Discover session name from JSONL
-	sessionName, err := discover.DiscoverSessionName(regJSONLPath)
-	if err != nil {
-		return fmt.Errorf("failed to discover session name: %w", err)
+	// Use provided session name, or try to discover from JSONL (non-fatal if file doesn't exist yet)
+	sessionName := regSessionName
+	if sessionName == "" {
+		sessionName, _ = discover.DiscoverSessionName(regJSONLPath)
 	}
 
 	// Check if this session already exists (re-registration vs brand new)

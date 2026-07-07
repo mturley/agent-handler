@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +18,7 @@ func init() {
 	rootCmd.AddCommand(heartbeatCmd)
 	heartbeatCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
 	heartbeatCmd.Flags().Bool("catch-up-human-cursor", false, "advance human cursor to match agent cursor (auto inbox mode)")
+	heartbeatCmd.Flags().String("session-name", "", "update session display name")
 }
 
 func runHeartbeat(cmd *cobra.Command, args []string) error {
@@ -47,14 +47,13 @@ func runHeartbeat(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Refresh session name if it changed
-	session, err := d.GetSession(sessionID)
-	if err != nil || session.JSONLPath == "" {
-		return nil
-	}
-	currentName := discover.DiscoverSessionNameFast(session.JSONLPath)
-	if currentName != "" && currentName != session.SessionName {
-		d.Conn().Exec(`UPDATE sessions SET session_name = ? WHERE session_id = ?`, currentName, sessionID)
+	// Update session name if provided via flag
+	nameFlag, _ := cmd.Flags().GetString("session-name")
+	if nameFlag != "" {
+		session, err := d.GetSession(sessionID)
+		if err == nil && session != nil && session.SessionName != nameFlag {
+			d.Conn().Exec(`UPDATE sessions SET session_name = ? WHERE session_id = ?`, nameFlag, sessionID)
+		}
 	}
 
 	return nil

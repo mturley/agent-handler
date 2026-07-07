@@ -30,11 +30,30 @@ fi
 
 # If session is not registered, try to register in the background
 if echo "$OUTPUT" | grep -q "not registered"; then
-    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-    (
-        source "${SCRIPT_DIR}/common.sh"
-        discover_and_register "$PPID" >/dev/null 2>&1
-    ) &
+    JSONL_PATH=$(echo "$SESSION_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
+    if [ -n "$SESSION_ID" ] && [ -n "$JSONL_PATH" ]; then
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        (
+            source "${SCRIPT_DIR}/common.sh"
+            BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+            REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:/]//' | sed 's/\.git$//' || echo "unknown")
+            SESSION_NAME=$(echo "$SESSION_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_name',''))" 2>/dev/null)
+            REGISTER_ARGS=(--session-id "$SESSION_ID" --branch "$BRANCH" --repo "$REPO" --pid "$PPID" --jsonl-path "$JSONL_PATH")
+            if [ -n "${CMUX_SURFACE_ID:-}" ]; then
+                REGISTER_ARGS+=(--terminal-type cmux --terminal-id "$CMUX_SURFACE_ID")
+            fi
+            if [ -n "$SESSION_NAME" ]; then
+                REGISTER_ARGS+=(--session-name "$SESSION_NAME")
+            fi
+            handler register "${REGISTER_ARGS[@]}" >/dev/null 2>&1
+        ) &
+    fi
+fi
+
+# Sync session name if it changed (statusline gets the current name from Claude)
+CURRENT_NAME=$(echo "$SESSION_DATA" | python3 -c "import sys,json; print(json.load(sys.stdin).get('session_name',''))" 2>/dev/null)
+if [ -n "$CURRENT_NAME" ] && [ -n "$SESSION_ID" ]; then
+    handler heartbeat --session-id "$SESSION_ID" --session-name "$CURRENT_NAME" >/dev/null 2>&1 &
 fi
 
 # Extract unread count from output for notification
