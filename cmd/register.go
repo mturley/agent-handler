@@ -77,7 +77,7 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		SessionName:  sessionName,
 		PID:          regPID,
 		Status:       "active",
-		InboxMode:    "on-submit",
+		InboxMode:    "manual",
 		LastActive:   now,
 		RegisteredAt: now,
 		JSONLPath:    regJSONLPath,
