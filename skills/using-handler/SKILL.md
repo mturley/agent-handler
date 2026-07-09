@@ -53,6 +53,17 @@ handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--broad
 
 Use `--body` for details beyond what fits in the title. Use `--tags` for lightweight categorization.
 
+## Subscribing to resources — MANDATORY
+
+**When you create a PR or Jira issue, you MUST subscribe to it immediately** so watchers can deliver updates (reviews, comments, status changes) to your inbox.
+
+```
+handler subscribe --resource "pr:owner/repo#123" --url "https://github.com/owner/repo/pull/123"
+handler subscribe --resource "jira:PROJECT-456" --url "https://your-jira.atlassian.net/browse/PROJECT-456"
+```
+
+Also subscribe when you start working on an existing PR or Jira issue. Use `/handler-subscribe` for full syntax and persistence options.
+
 ## CLI usage
 
 **Before running any `handler` command, check the CLI help for correct syntax.** Do not guess at subcommand names, argument positions, or flags. The CLI is the source of truth — this skill is just an overview.
