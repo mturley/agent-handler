@@ -51,7 +51,7 @@ Chronological list of events since last report (from `handler log --global --sin
 
 ### Session Overview
 
-Table of all sessions with: name, branch, display state, peek summary, subscribed resources with their current state (priority, status, review decision, CI status).
+Table of all sessions with: name, repo, branch, display state, peek summary, subscribed resources with their current state (priority, status, review decision, CI status).
 
 ### Formatting references as clickable links
 
