@@ -252,8 +252,9 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 				url = cfg.DefaultResourceURL(sub.ResourceType, sub.ResourceID)
 			}
 			if url != "" {
+				blue := "\033[34m"
 				underline := "\033[4m"
-				links = append(links, fmt.Sprintf("%s%s\033]8;;%s\033\\%s\033]8;;\033\\%s", dim, underline, url, label, reset))
+				links = append(links, fmt.Sprintf("%s%s\033]8;;%s\033\\%s\033]8;;\033\\%s", blue, underline, url, label, reset))
 			} else {
 				links = append(links, fmt.Sprintf("%s%s%s", dim, label, reset))
 			}
