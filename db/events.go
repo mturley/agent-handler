@@ -246,6 +246,53 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 	return total, breakdown, nil
 }
 
+// UnreadResourcesForSession returns the set of resource "type:id" strings that have unread events.
+func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, error) {
+	cursor, err := db.GetCursor(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cursor: %w", err)
+	}
+	session, err := db.GetSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	if session == nil {
+		return nil, fmt.Errorf("session %q not found", sessionID)
+	}
+
+	query := `
+		SELECT DISTINCT eres.resource_type, eres.resource_id
+		FROM events e
+		LEFT JOIN event_recipients er ON e.id = er.event_id
+		JOIN event_resources eres ON e.id = eres.event_id
+		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
+		WHERE e.ts > ?
+		  AND (
+		    e.broadcast = 1
+		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
+		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
+		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
+		    OR s.id IS NOT NULL
+		  )
+	`
+	repoBranch := session.Repo + ":" + session.Branch
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query unread resources: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]bool)
+	for rows.Next() {
+		var resType, resID string
+		if err := rows.Scan(&resType, &resID); err != nil {
+			return nil, fmt.Errorf("failed to scan resource: %w", err)
+		}
+		result[resType+":"+resID] = true
+	}
+	return result, rows.Err()
+}
+
 // GlobalUnreadForSession returns ALL events since the session's cursor, regardless of targeting.
 func (db *DB) GlobalUnreadForSession(sessionID string) ([]Event, error) {
 	cursor, err := db.GetCursor(sessionID)

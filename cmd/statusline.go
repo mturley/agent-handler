@@ -239,11 +239,14 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build resource links
+	unreadResources, _ := d.UnreadResourcesForSession(slSessionID)
 	resourceLinks := ""
 	if len(subs) > 0 {
 		var links []string
 		for _, sub := range subs {
 			label := shortResourceLabel(sub.ResourceType, sub.ResourceID)
+			resKey := sub.ResourceType + ":" + sub.ResourceID
+			hasUnread := unreadResources[resKey]
 			url := ""
 			if sub.ResourceURL != nil {
 				url = *sub.ResourceURL
@@ -251,12 +254,15 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 			if url == "" {
 				url = cfg.DefaultResourceURL(sub.ResourceType, sub.ResourceID)
 			}
+			linkColor := "\033[34m" // blue
+			if hasUnread {
+				linkColor = yellow
+			}
 			if url != "" {
-				blue := "\033[34m"
 				underline := "\033[4m"
-				links = append(links, fmt.Sprintf("%s%s\033]8;;%s\033\\%s\033]8;;\033\\%s", blue, underline, url, label, reset))
+				links = append(links, fmt.Sprintf("%s%s\033]8;;%s\033\\%s\033]8;;\033\\%s", linkColor, underline, url, label, reset))
 			} else {
-				links = append(links, fmt.Sprintf("%s%s%s", dim, label, reset))
+				links = append(links, fmt.Sprintf("%s%s%s", linkColor, label, reset))
 			}
 		}
 		joined := links[0]
