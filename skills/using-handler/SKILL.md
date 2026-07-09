@@ -99,4 +99,4 @@ Examples: `pr:owner/repo#123`, `jira:PROJECT-456`
 
 ### Messaging other sessions
 
-The `--to` flag on `handler emit` accepts session names, branch names, or session UUIDs. To send a message to the handler session, use `--to handler`.
+Use `/message` to send messages to other sessions. It handles `handler emit --type message` with proper sender identification so recipients can reply. The `--to` flag accepts session names, branch names, or session UUIDs. To message the handler session, use `--to handler`.

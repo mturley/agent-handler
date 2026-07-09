@@ -28,6 +28,7 @@ var skillNames = []string{
 	"using-handler",
 	"inbox",
 	"inbox-mode",
+	"message",
 	"watching",
 	"handler",
 	"handler-subscribe",

@@ -75,9 +75,13 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	reset_color := "\033[0m"
 	yellow := "\033[33m" // yellow
 
+	dim := "\033[2m" // dim
+	reset := "\033[0m"
+
 	// Output line 1: inbox status
 	if unreadCount == 0 {
-		fmt.Printf("%s/inbox%s: No new messages", cmd_color, reset_color)
+		fmt.Printf("%s/inbox%s: No new messages %s— %s%s/message%s%s to talk to other sessions%s",
+			cmd_color, reset_color, dim, dim, cmd_color, reset, dim, reset)
 	} else {
 		// Build breakdown string
 		var breakdownParts []string
@@ -113,8 +117,6 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	// TODO: Detect if polling is stopped for auto mode
 	// For now, just show the mode
 	active := "\033[1;32m"  // bold green
-	dim := "\033[2m"       // dim
-	reset := "\033[0m"
 
 	modes := map[string]string{"manual": "manual", "on-submit": "on-submit", "auto": "auto"}
 	rendered := ""
