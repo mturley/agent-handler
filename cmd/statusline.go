@@ -238,9 +238,8 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
-
-	// Indented resource links line (only when there are subscriptions)
+	// Build resource links
+	resourceLinks := ""
 	if len(subs) > 0 {
 		var links []string
 		for _, sub := range subs {
@@ -253,7 +252,6 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 				url = cfg.DefaultResourceURL(sub.ResourceType, sub.ResourceID)
 			}
 			if url != "" {
-				// OSC 8 hyperlink
 				links = append(links, fmt.Sprintf("%s\033]8;;%s\033\\%s\033]8;;\033\\%s", dim, url, label, reset))
 			} else {
 				links = append(links, fmt.Sprintf("%s%s%s", dim, label, reset))
@@ -263,7 +261,16 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		for i := 1; i < len(links); i++ {
 			joined += fmt.Sprintf("%s, %s", dim, reset) + links[i]
 		}
-		fmt.Printf("%s  ↳ %s%s\n", dim, reset, joined)
+		resourceLinks = joined
+	}
+
+	if resourceLinks != "" && len(subs) <= 4 {
+		fmt.Printf("%s/watching%s: %s%s%s%s %s| %s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset, dim, reset, resourceLinks)
+	} else {
+		fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
+		if resourceLinks != "" {
+			fmt.Printf("%s  ↳ %s%s\n", dim, reset, resourceLinks)
+		}
 	}
 
 	return nil
