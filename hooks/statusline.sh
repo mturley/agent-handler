@@ -40,7 +40,7 @@ lines = [
 git_vars = {
     'IN_GIT': 0, 'GIT_BRANCH': '', 'GIT_DEFAULT': 'main', 'GIT_AHEAD': 0, 'GIT_BEHIND': 0,
     'GIT_CADDS': 0, 'GIT_CDELS': 0, 'GIT_MODIFIED': 0, 'GIT_UNTRACKED': 0,
-    'GIT_UADDS': 0, 'GIT_UDELS': 0,
+    'GIT_UADDS': 0, 'GIT_UDELS': 0, 'GIT_REBASING': 0, 'GIT_REBASE_BRANCH': '',
 }
 
 def git(*args):
@@ -70,6 +70,23 @@ if check.returncode == 0:
 
         git_vars['GIT_BRANCH'] = branch
         git_vars['GIT_DEFAULT'] = default_branch
+
+        # Detect interactive rebase
+        import os
+        git_dir = subprocess.run(['git', '-C', cwd, 'rev-parse', '--git-dir'],
+                                 capture_output=True, text=True).stdout.strip()
+        if git_dir:
+            for rebase_dir in ['rebase-merge', 'rebase-apply']:
+                head_name_file = os.path.join(git_dir, rebase_dir, 'head-name')
+                if os.path.isfile(head_name_file):
+                    git_vars['GIT_REBASING'] = 1
+                    with open(head_name_file) as f:
+                        ref = f.read().strip()
+                    git_vars['GIT_REBASE_BRANCH'] = ref.replace('refs/heads/', '')
+                    if branch == 'HEAD':
+                        branch = git_vars['GIT_REBASE_BRANCH']
+                        git_vars['GIT_BRANCH'] = branch
+                    break
 
         # Phase 2: merge-base dependent (parallel)
         if branch and branch != default_branch:
@@ -225,8 +242,10 @@ fi
 # --- Build git status line ---
 GIT_LINE=""
 if [ "$SHOW_GIT" = "1" ] && [ "$IS_HANDLER" = "false" ] && [ "$IN_GIT" = "1" ]; then
-    # Branch name
-    if [ "$GIT_BRANCH" = "$GIT_DEFAULT" ]; then
+    # Rebase indicator + branch name
+    if [ "$GIT_REBASING" = "1" ] 2>/dev/null; then
+        GIT_LINE="${YELLOW}rebasing${RESET} ${BOLD_WHITE}${GIT_BRANCH}${RESET}"
+    elif [ "$GIT_BRANCH" = "$GIT_DEFAULT" ]; then
         GIT_LINE="on ${BOLD_WHITE}${GIT_BRANCH}${RESET}"
     else
         GIT_LINE="${BOLD_WHITE}${GIT_BRANCH}${RESET}"
