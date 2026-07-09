@@ -45,6 +45,20 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		return runHandlerStatusline(cmd, d, session)
 	}
 
+	// Emit config prefix for the shell hook
+	cfg, err := config.Read(config.DefaultPath())
+	if err != nil {
+		cfg = &config.Config{}
+	}
+	ctxFlag, gitFlag := 0, 0
+	if cfg.StatuslineShowContext() {
+		ctxFlag = 1
+	}
+	if cfg.StatuslineShowGit() {
+		gitFlag = 1
+	}
+	fmt.Printf("__cfg:context=%d,git=%d\n", ctxFlag, gitFlag)
+
 	// Query unread count
 	unreadCount, breakdown, err := d.UnreadCountForSession(slSessionID)
 	if err != nil {
@@ -192,11 +206,6 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check watcher status
-	cfg, err := config.Read(config.DefaultPath())
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-
 	watcherStatus := ""
 	green := "\033[32m" // green
 	red := "\033[31m"   // red
@@ -232,6 +241,20 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 }
 
 func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) error {
+	// Emit config prefix for the shell hook
+	hcfg, err := config.Read(config.DefaultPath())
+	if err != nil {
+		hcfg = &config.Config{}
+	}
+	ctxFlag, gitFlag := 0, 0
+	if hcfg.StatuslineShowContext() {
+		ctxFlag = 1
+	}
+	if hcfg.StatuslineShowGit() {
+		gitFlag = 1
+	}
+	fmt.Printf("__cfg:context=%d,git=%d\n", ctxFlag, gitFlag)
+
 	cmd_color := "\033[36m" // cyan
 	reset_color := "\033[0m"
 	yellow := "\033[33m" // yellow
@@ -369,15 +392,10 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	}
 
 	// Check watcher status
-	cfg, err := config.Read(config.DefaultPath())
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-
 	watcherStatus := ""
 	services := []string{}
 	for _, svc := range []string{"github", "jira"} {
-		if cfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
+		if hcfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
 			lastRun := watcher.LastRunTime(svc)
 			ago := ""
 			if lastRun != nil {

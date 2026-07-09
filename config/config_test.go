@@ -260,6 +260,52 @@ func TestJiraCustomFieldsConfig(t *testing.T) {
 	}
 }
 
+func TestStatuslineShowContext(t *testing.T) {
+	tr := true
+	fa := false
+
+	tests := []struct {
+		name     string
+		config   *Config
+		expected bool
+	}{
+		{"nil statusline", &Config{}, true},
+		{"nil show_context", &Config{Statusline: &StatuslineConfig{}}, true},
+		{"explicit true", &Config{Statusline: &StatuslineConfig{ShowContext: &tr}}, true},
+		{"explicit false", &Config{Statusline: &StatuslineConfig{ShowContext: &fa}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.config.StatuslineShowContext(); got != tt.expected {
+				t.Errorf("StatuslineShowContext() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStatuslineShowGit(t *testing.T) {
+	tr := true
+	fa := false
+
+	tests := []struct {
+		name     string
+		config   *Config
+		expected bool
+	}{
+		{"nil statusline", &Config{}, true},
+		{"nil show_git", &Config{Statusline: &StatuslineConfig{}}, true},
+		{"explicit true", &Config{Statusline: &StatuslineConfig{ShowGit: &tr}}, true},
+		{"explicit false", &Config{Statusline: &StatuslineConfig{ShowGit: &fa}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.config.StatuslineShowGit(); got != tt.expected {
+				t.Errorf("StatuslineShowGit() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestJiraNoCustomFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")

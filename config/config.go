@@ -10,7 +10,8 @@ import (
 
 // Config represents the agent-handler configuration
 type Config struct {
-	Services Services `yaml:"services"`
+	Services   Services         `yaml:"services"`
+	Statusline *StatuslineConfig `yaml:"statusline,omitempty"`
 }
 
 // Services contains configuration for external services
@@ -31,6 +32,22 @@ type JiraConfig struct {
 	Token        string            `yaml:"token"`
 	BotUsernames []string          `yaml:"bot_usernames,omitempty"`
 	CustomFields map[string]string `yaml:"custom_fields,omitempty"`
+}
+
+// StatuslineConfig controls which extra lines appear in the statusline
+type StatuslineConfig struct {
+	ShowContext *bool `yaml:"show_context,omitempty"`
+	ShowGit     *bool `yaml:"show_git,omitempty"`
+}
+
+// StatuslineShowContext returns whether the model/context/cost line is shown (default true)
+func (c *Config) StatuslineShowContext() bool {
+	return c.Statusline == nil || c.Statusline.ShowContext == nil || *c.Statusline.ShowContext
+}
+
+// StatuslineShowGit returns whether the git status line is shown (default true)
+func (c *Config) StatuslineShowGit() bool {
+	return c.Statusline == nil || c.Statusline.ShowGit == nil || *c.Statusline.ShowGit
 }
 
 // DefaultPath returns the default configuration file path
