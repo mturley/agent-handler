@@ -38,7 +38,7 @@ lines = [
 
 # Git fields
 git_vars = {
-    'IN_GIT': 0, 'GIT_BRANCH': '', 'GIT_DEFAULT': 'main', 'GIT_AHEAD': 0,
+    'IN_GIT': 0, 'GIT_BRANCH': '', 'GIT_DEFAULT': 'main', 'GIT_AHEAD': 0, 'GIT_BEHIND': 0,
     'GIT_CADDS': 0, 'GIT_CDELS': 0, 'GIT_MODIFIED': 0, 'GIT_UNTRACKED': 0,
     'GIT_UADDS': 0, 'GIT_UDELS': 0,
 }
@@ -75,10 +75,12 @@ if check.returncode == 0:
         if branch and branch != default_branch:
             merge_base = git('merge-base', default_branch, 'HEAD')
             if merge_base:
-                with ThreadPoolExecutor(max_workers=2) as ex:
+                with ThreadPoolExecutor(max_workers=3) as ex:
                     f_ahead = ex.submit(git, 'rev-list', '--count', f'{merge_base}..HEAD')
+                    f_behind = ex.submit(git, 'rev-list', '--count', f'HEAD..{default_branch}')
                     f_log = ex.submit(git, 'log', '--shortstat', '--format=', f'{merge_base}..HEAD')
                 git_vars['GIT_AHEAD'] = int(f_ahead.result() or 0)
+                git_vars['GIT_BEHIND'] = int(f_behind.result() or 0)
                 log_stat = f_log.result()
                 for line in log_stat.split('\n'):
                     m = re.search(r'(\d+) insertion', line)
@@ -256,6 +258,11 @@ if [ "$SHOW_GIT" = "1" ] && [ "$IS_HANDLER" = "false" ] && [ "$IN_GIT" = "1" ]; 
         fi
     else
         GIT_LINE+=" | ${DIM_GREEN}clean${RESET}"
+    fi
+
+    # Behind default branch
+    if [ "$GIT_BEHIND" -gt 0 ] 2>/dev/null; then
+        GIT_LINE+=" ${DIM}↓${GIT_BEHIND} behind ${GIT_DEFAULT}${RESET}"
     fi
 fi
 
