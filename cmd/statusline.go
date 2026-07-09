@@ -266,15 +266,15 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		resourceLinks = joined
 	}
 
-	// The trailing segment after watcher status: resource links, /watch hint, or nothing
-	trailingSegment := ""
+	// Segment between sub summary and watcher status: resource links or /watch hint
+	middleSegment := ""
 	if resourceLinks != "" && len(subs) <= 4 {
-		trailingSegment = fmt.Sprintf(" %s| %s%s", dim, reset, resourceLinks)
+		middleSegment = fmt.Sprintf(" %s| %s%s", dim, reset, resourceLinks)
 	} else if len(subs) == 0 {
-		trailingSegment = fmt.Sprintf(" %s| %s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, reset, dim, reset)
+		middleSegment = fmt.Sprintf(" %s| %s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, reset, dim, reset)
 	}
 
-	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset, trailingSegment)
+	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", cmd_color, reset_color, subSummary, middleSegment, dim, watcherStatus, reset)
 	if resourceLinks != "" && len(subs) > 4 {
 		fmt.Printf("%s  ↳ %s%s\n", dim, reset, resourceLinks)
 	}
