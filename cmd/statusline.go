@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mturley/agent-handler/config"
@@ -239,6 +240,32 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
 
+	// Indented resource links line (only when there are subscriptions)
+	if len(subs) > 0 {
+		var links []string
+		for _, sub := range subs {
+			label := shortResourceLabel(sub.ResourceType, sub.ResourceID)
+			url := ""
+			if sub.ResourceURL != nil {
+				url = *sub.ResourceURL
+			}
+			if url == "" {
+				url = cfg.DefaultResourceURL(sub.ResourceType, sub.ResourceID)
+			}
+			if url != "" {
+				// OSC 8 hyperlink
+				links = append(links, fmt.Sprintf("%s\033]8;;%s\033\\%s\033]8;;\033\\%s", dim, url, label, reset))
+			} else {
+				links = append(links, fmt.Sprintf("%s%s%s", dim, label, reset))
+			}
+		}
+		joined := links[0]
+		for i := 1; i < len(links); i++ {
+			joined += fmt.Sprintf("%s, %s", dim, reset) + links[i]
+		}
+		fmt.Printf("  %s\n", joined)
+	}
+
 	return nil
 }
 
@@ -248,14 +275,11 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	if err != nil {
 		hcfg = &config.Config{}
 	}
-	ctxFlag, gitFlag := 0, 0
+	ctxFlag := 0
 	if hcfg.StatuslineShowContext() {
 		ctxFlag = 1
 	}
-	if hcfg.StatuslineShowGit() {
-		gitFlag = 1
-	}
-	fmt.Printf("__cfg:context=%d,git=%d\n", ctxFlag, gitFlag)
+	fmt.Printf("__cfg:context=%d,git=0\n", ctxFlag)
 
 	cmd_color := "\033[36m" // cyan
 	reset_color := "\033[0m"
@@ -303,20 +327,9 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		blockedRows.Scan(&blockedCount)
 	}
 
-	// Count events since handler's cursor
-	cursor, err := d.GetCursor(session.SessionID)
-	if err != nil {
-		return fmt.Errorf("failed to get cursor: %w", err)
-	}
-	if cursor == "" {
-		cursor = "1970-01-01T00:00:00Z"
-	}
-
-	newEventCount := 0
-	err = d.QueryRow(`SELECT COUNT(*) FROM events WHERE ts > ?`, cursor).Scan(&newEventCount)
-	if err != nil {
-		return fmt.Errorf("failed to count new events: %w", err)
-	}
+	// Line 1: Sessions overview
+	fmt.Printf("%sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
+		"\033[1m", reset, activeCount, blockedCount, dim, cmd_color, reset, dim, reset)
 
 	// Get direct message count
 	directCount, err := d.DirectCountForSession(session.SessionID)
@@ -324,19 +337,59 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		return fmt.Errorf("failed to query direct count: %w", err)
 	}
 
-	// Line 1: Handler status
-	fmt.Printf("%s/handler%s: %d active, %d blocked | %d new events",
-		cmd_color, reset_color, activeCount, blockedCount, newEventCount)
+	// Get global unread count (handler sees all events, not just targeted ones)
+	unreadCount, breakdown, err := d.GlobalUnreadCountForSession(session.SessionID)
+	if err != nil {
+		return fmt.Errorf("failed to query unread count: %w", err)
+	}
+
+	// Line 2: Inbox status (global — all events across all sessions)
+	if unreadCount == 0 {
+		fmt.Printf("%s/inbox%s: No new events %s— %s%s/message%s%s to talk to other sessions%s",
+			cmd_color, reset_color, dim, dim, cmd_color, reset, dim, reset)
+	} else {
+		var breakdownParts []string
+		for eventType, count := range breakdown {
+			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, watcher.EventType(eventType).DisplayName()))
+		}
+		breakdownStr := ""
+		if len(breakdownParts) > 0 {
+			joined := breakdownParts[0]
+			for i := 1; i < len(breakdownParts); i++ {
+				joined += fmt.Sprintf(", %s", breakdownParts[i])
+			}
+			breakdownStr = fmt.Sprintf(" (%s)", joined)
+		}
+		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", cmd_color, reset_color, yellow, unreadCount, reset_color, breakdownStr)
+	}
 	if directCount > 0 {
 		fmt.Printf(" | %s● %d direct%s", yellow, directCount, reset_color)
 	}
 	fmt.Println()
 
-	// Auto-delivered count for handler
-	autoCount, err := d.AutoDeliveredCountAll(session.SessionID)
-	if err == nil && autoCount > 0 {
-		fmt.Printf("%s  ● %d events seen since last prompt%s\n", yellow, autoCount, reset_color)
+	// Auto-delivered count (only in auto mode)
+	if session.InboxMode == "auto" {
+		autoCount, err := d.AutoDeliveredCount(session.SessionID)
+		if err == nil && autoCount > 0 {
+			fmt.Printf("%s  ● %d auto-delivered since last prompt%s\n", yellow, autoCount, reset_color)
+		}
 	}
+
+	// Line 3: Inbox mode
+	active := "\033[1;32m" // bold green
+	modes := map[string]string{"manual": "manual", "on-submit": "on-submit", "auto": "auto"}
+	rendered := ""
+	for i, mode := range []string{"manual", "on-submit", "auto"} {
+		if i > 0 {
+			rendered += fmt.Sprintf("%s | %s", dim, reset)
+		}
+		if session.InboxMode == mode {
+			rendered += fmt.Sprintf("%s%s%s", active, modes[mode], reset)
+		} else {
+			rendered += fmt.Sprintf("%s%s%s", dim, modes[mode], reset)
+		}
+	}
+	fmt.Printf("%s/inbox-mode%s: %s\n", cmd_color, reset_color, rendered)
 
 	// Line 3: Watching with GLOBAL resource count
 	// Count all subscriptions across all sessions
@@ -424,4 +477,15 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
 
 	return nil
+}
+
+// shortResourceLabel returns a compact label for a resource.
+// PRs: "owner/repo#123" → "#123", Jira: "RHOAIENG-456" → "RHOAIENG-456"
+func shortResourceLabel(resourceType, resourceID string) string {
+	if resourceType == "pr" {
+		if idx := strings.LastIndex(resourceID, "#"); idx >= 0 {
+			return resourceID[idx:]
+		}
+	}
+	return resourceID
 }
