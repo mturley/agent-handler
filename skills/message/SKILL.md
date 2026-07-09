@@ -7,6 +7,23 @@ description: Send a message to another session via handler emit. Use when the us
 
 Send a cross-session message using `handler emit`. This is NOT the same as Claude's built-in agent messaging (which only works for subagents). This uses the handler ledger so any session can message any other session by name, branch, or UUID.
 
+## If invoked with no arguments
+
+If the user runs `/message` with no arguments, explain how cross-session messaging works and show active sessions they can message. Do NOT prompt for input — just explain and let them invoke `/message <target> <message>` when ready.
+
+Print something like:
+
+> **Cross-session messaging** lets you talk to other Claude sessions through the handler ledger.
+>
+> **Usage:** `/message <session-name> <what to say>`
+> **Broadcast:** `/message all <what to say>`
+>
+> Messages are delivered to the recipient's `/inbox`. They'll see them on their next inbox check (automatically in `on-submit` or `auto` mode, or manually via `/inbox`). The recipient can reply with their own `/message` back to this session.
+
+Then run `handler status` and list the active sessions by name so the user can see who's available.
+
+After printing the explanation and session list, stop — do not proceed to the send steps below.
+
 ## Step 1: Check emit capabilities
 
 Run `handler emit --help` to see the current flags and supported options.
