@@ -102,15 +102,14 @@ if check.returncode == 0:
                 with ThreadPoolExecutor(max_workers=3) as ex:
                     f_ahead = ex.submit(git, 'rev-list', '--count', f'{merge_base}..HEAD')
                     f_behind = ex.submit(git, 'rev-list', '--count', f'HEAD..{base_ref}')
-                    f_log = ex.submit(git, 'log', '--shortstat', '--format=', f'{merge_base}..HEAD')
+                    f_diff = ex.submit(git, 'diff', '--shortstat', f'{merge_base}..HEAD')
                 git_vars['GIT_AHEAD'] = int(f_ahead.result() or 0)
                 git_vars['GIT_BEHIND'] = int(f_behind.result() or 0)
-                log_stat = f_log.result()
-                for line in log_stat.split('\n'):
-                    m = re.search(r'(\d+) insertion', line)
-                    if m: git_vars['GIT_CADDS'] += int(m.group(1))
-                    m = re.search(r'(\d+) deletion', line)
-                    if m: git_vars['GIT_CDELS'] += int(m.group(1))
+                diff_stat = f_diff.result()
+                m = re.search(r'(\d+) insertion', diff_stat)
+                if m: git_vars['GIT_CADDS'] = int(m.group(1))
+                m = re.search(r'(\d+) deletion', diff_stat)
+                if m: git_vars['GIT_CDELS'] = int(m.group(1))
 
         # Parse porcelain
         for l in porcelain.split('\n'):
