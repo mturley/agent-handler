@@ -24,13 +24,11 @@ If this session has the handler role (`handler configure --get role` returns `ha
    - "rate limit" → suggest increasing the polling interval with `handler watcher uninstall <name>` then `handler watcher install <name> --interval 10m`.
    - For other errors, show the error message and suggest `handler watcher logs <name>` for details.
 4. If watchers are not installed for subscribed resource types, suggest running `handler watcher install`
-5. Tell the user:
+5. Tell the user about `/watch` and `/unwatch`:
 
-You can ask me to watch or unwatch a resource by its ID, number, or URL. For example:
-- "watch PR #123" or "watch https://github.com/owner/repo/pull/123"
-- "watch RHOAIENG-456" or "watch https://redhat.atlassian.net/browse/RHOAIENG-456"
-- "unwatch PR #123"
-- "unwatch RHOAIENG-456"
+> Use `/watch` to start watching a PR or Jira issue, or `/unwatch` to stop. For example:
+> - `/watch #123` or `/watch RHOAIENG-456`
+> - `/unwatch #123` or `/unwatch RHOAIENG-456`
 
 ## CLI reference
 

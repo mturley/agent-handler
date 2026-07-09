@@ -200,7 +200,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 
 	subSummary := ""
 	if len(subParts) == 0 {
-		subSummary = fmt.Sprintf("%sno active subscriptions%s", dim, reset)
+		subSummary = fmt.Sprintf("%s%s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, dim, reset, dim+reset)
 	} else {
 		subSummary = subParts[0]
 		for i := 1; i < len(subParts); i++ {
