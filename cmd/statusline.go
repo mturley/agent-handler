@@ -200,7 +200,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 
 	subSummary := ""
 	if len(subParts) == 0 {
-		subSummary = fmt.Sprintf("%s%s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, dim, reset, dim+reset)
+		subSummary = fmt.Sprintf("%sno active subscriptions%s", dim, reset)
 	} else {
 		subSummary = subParts[0]
 		for i := 1; i < len(subParts); i++ {
@@ -265,13 +265,18 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		resourceLinks = joined
 	}
 
+	// The trailing segment after watcher status: resource links, /watch hint, or nothing
+	trailingSegment := ""
 	if resourceLinks != "" && len(subs) <= 4 {
-		fmt.Printf("%s/watching%s: %s%s%s%s %s| %s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset, dim, reset, resourceLinks)
-	} else {
-		fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
-		if resourceLinks != "" {
-			fmt.Printf("%s  ↳ %s%s\n", dim, reset, resourceLinks)
-		}
+		trailingSegment = fmt.Sprintf(" %s| %s%s", dim, reset, resourceLinks)
+	} else if len(subs) == 0 {
+		watchHint := fmt.Sprintf("%s%s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, dim, reset, dim+reset)
+		trailingSegment = fmt.Sprintf(" %s| %s%s", dim, reset, watchHint)
+	}
+
+	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset, trailingSegment)
+	if resourceLinks != "" && len(subs) > 4 {
+		fmt.Printf("%s  ↳ %s%s\n", dim, reset, resourceLinks)
 	}
 
 	return nil
