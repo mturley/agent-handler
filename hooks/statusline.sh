@@ -89,12 +89,19 @@ if check.returncode == 0:
                     break
 
         # Phase 2: merge-base dependent (parallel)
+        # Pick the best ref for merge-base: upstream > origin > local
+        base_ref = default_branch
+        for candidate in [f'upstream/{default_branch}', f'origin/{default_branch}']:
+            if git('rev-parse', '--verify', candidate):
+                base_ref = candidate
+                break
+
         if branch and branch != default_branch:
-            merge_base = git('merge-base', default_branch, 'HEAD')
+            merge_base = git('merge-base', base_ref, 'HEAD')
             if merge_base:
                 with ThreadPoolExecutor(max_workers=3) as ex:
                     f_ahead = ex.submit(git, 'rev-list', '--count', f'{merge_base}..HEAD')
-                    f_behind = ex.submit(git, 'rev-list', '--count', f'HEAD..{default_branch}')
+                    f_behind = ex.submit(git, 'rev-list', '--count', f'HEAD..{base_ref}')
                     f_log = ex.submit(git, 'log', '--shortstat', '--format=', f'{merge_base}..HEAD')
                 git_vars['GIT_AHEAD'] = int(f_ahead.result() or 0)
                 git_vars['GIT_BEHIND'] = int(f_behind.result() or 0)
