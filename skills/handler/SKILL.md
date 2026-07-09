@@ -5,10 +5,19 @@ description: "Turn this session into the handler — a command center for managi
 
 # /handler — Handler Session
 
+## CLI discovery — never guess
+
+Before running any `handler` command for the first time in a session, run `handler --help` to learn the available commands. Before using a command's flags for the first time, run `handler <command> --help` to learn its flags. **Never invent commands or flags** — if you're unsure whether a command or flag exists, check `--help` first. The CLI is the source of truth; this skill intentionally does not duplicate the command reference.
+
+Key commands you'll use (verify with `--help`):
+- `handler status` — list all sessions (not `handler sessions` or `handler list`)
+- `handler log --global --since-cursor` — show new events AND advance the cursor (there is no separate advance command)
+
 ## On invocation
 
-1. Set this session's role (if not already set):
+1. Run `handler --help` to learn available commands, then set this session's role (if not already set):
 ```bash
+handler --help
 handler configure --role handler
 ```
 
@@ -44,15 +53,18 @@ Chronological list of events since last report (from `handler log --global --sin
 
 Table of all sessions with: name, branch, display state, peek summary, subscribed resources with their current state (priority, status, review decision, CI status).
 
-5. Advance the cursor after presenting.
+### Formatting references as clickable links
 
-6. Set up a polling loop (check CronList first — skip if already exists):
-```
-CronCreate:
-  cron: "*/1 * * * *"
-  durable: false
-  recurring: true
-  prompt: "MANDATORY: You MUST call the Bash tool to run: handler log --global --since-cursor --agent-only --json 2>/dev/null. NEVER skip this Bash call. Also run handler unread --count to check for direct messages. If there are new events or direct messages, summarize them. For direct messages, present them as action items. If no events, say 'No new events.'"
+When mentioning Jira issues or GitHub PRs anywhere in the briefing, always render them as markdown links:
+
+- **GitHub PR**: `[owner/repo#123](https://github.com/owner/repo/pull/123)` — extract owner/repo from event data
+- **Jira**: `[PROJECT-123](https://<jira-host>/browse/PROJECT-123)` — use the Jira host from your conversation context (e.g. CLAUDE.md, MCP config); if unknown, check `resource_url` fields in triage data
+
+5. The cursor is already advanced — `handler log --since-cursor` advances it as a side effect when it runs in step 2.
+
+6. Set inbox mode to `on-submit` so the handler receives events on each prompt (like any other session):
+```bash
+handler configure --inbox-mode on-submit
 ```
 
 7. Tell the user what they can ask.
@@ -68,7 +80,7 @@ CronCreate:
 - "What is session X doing?" → spawn a subagent with `handler peek --session <id> --json`
 - "Check on all sessions" → peek at each peekable session via subagents, summarize
 
-Use `handler <command> --help` for flag details on any command.
+When you need a command or flag not listed above, run `handler <command> --help` — don't guess.
 
 ## Peeking at sessions
 
@@ -83,4 +95,4 @@ Use Haiku for peek subagents — the task is focused (detect permission prompts/
 
 ## Idempotent
 
-Re-invoking /handler re-runs the full briefing. If the cron job already exists, don't create a duplicate.
+Re-invoking /handler re-runs the full briefing. Inbox mode is already set, so step 6 is a no-op on re-invocation.

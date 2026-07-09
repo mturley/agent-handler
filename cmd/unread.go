@@ -22,6 +22,7 @@ func init() {
 	unreadCmd.Flags().Bool("ack", false, "acknowledge events after reading")
 	unreadCmd.Flags().Bool("agent-only", false, "with --ack, advance only the agent cursor (not human cursor)")
 	unreadCmd.Flags().Bool("count", false, "only print the unread count")
+	unreadCmd.Flags().Bool("global", false, "show all events since cursor, not just those targeted at this session (for handler sessions)")
 }
 
 func runUnread(cmd *cobra.Command, args []string) error {
@@ -45,9 +46,15 @@ func runUnread(cmd *cobra.Command, args []string) error {
 	}
 
 	countOnly, _ := cmd.Flags().GetBool("count")
+	global, _ := cmd.Flags().GetBool("global")
 
 	if countOnly {
-		count, _, err := d.UnreadCountForSession(sessionID)
+		var count int
+		if global {
+			count, _, err = d.GlobalUnreadCountForSession(sessionID)
+		} else {
+			count, _, err = d.UnreadCountForSession(sessionID)
+		}
 		if err != nil {
 			return fmt.Errorf("failed to count unread events: %w", err)
 		}
@@ -55,7 +62,12 @@ func runUnread(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	events, err := d.UnreadForSession(sessionID)
+	var events []db.Event
+	if global {
+		events, err = d.GlobalUnreadForSession(sessionID)
+	} else {
+		events, err = d.UnreadForSession(sessionID)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to query unread events: %w", err)
 	}

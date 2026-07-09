@@ -246,6 +246,68 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 	return total, breakdown, nil
 }
 
+// GlobalUnreadForSession returns ALL events since the session's cursor, regardless of targeting.
+func (db *DB) GlobalUnreadForSession(sessionID string) ([]Event, error) {
+	cursor, err := db.GetCursor(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cursor: %w", err)
+	}
+
+	query := `
+		SELECT DISTINCT e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags
+		FROM events e
+		WHERE e.ts > ?
+		ORDER BY e.ts ASC
+	`
+
+	rows, err := db.conn.Query(query, cursor)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query global unread events: %w", err)
+	}
+	defer rows.Close()
+
+	return scanEvents(rows)
+}
+
+// GlobalUnreadCountForSession returns the total count and breakdown by type of ALL events since the session's cursor.
+func (db *DB) GlobalUnreadCountForSession(sessionID string) (int, map[string]int, error) {
+	cursor, err := db.GetCursor(sessionID)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get cursor: %w", err)
+	}
+
+	query := `
+		SELECT e.type, COUNT(*) as count
+		FROM events e
+		WHERE e.ts > ?
+		GROUP BY e.type
+	`
+
+	rows, err := db.conn.Query(query, cursor)
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to count global unread events: %w", err)
+	}
+	defer rows.Close()
+
+	breakdown := make(map[string]int)
+	total := 0
+	for rows.Next() {
+		var eventType string
+		var count int
+		if err := rows.Scan(&eventType, &count); err != nil {
+			return 0, nil, fmt.Errorf("failed to scan count: %w", err)
+		}
+		breakdown[eventType] = count
+		total += count
+	}
+
+	if err := rows.Err(); err != nil {
+		return 0, nil, fmt.Errorf("error iterating counts: %w", err)
+	}
+
+	return total, breakdown, nil
+}
+
 // DirectCountForSession returns the count of unread events directly addressed to a session
 // (via event_recipients, not subscription routing).
 func (db *DB) DirectCountForSession(sessionID string) (int, error) {
