@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -238,10 +239,19 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Build resource links
+	// Build resource links (unread resources first)
 	unreadResources, _ := d.UnreadResourcesForSession(slSessionID)
 	resourceLinks := ""
 	if len(subs) > 0 {
+		sort.Slice(subs, func(i, j int) bool {
+			iKey := subs[i].ResourceType + ":" + subs[i].ResourceID
+			jKey := subs[j].ResourceType + ":" + subs[j].ResourceID
+			iUnread, jUnread := unreadResources[iKey], unreadResources[jKey]
+			if iUnread != jUnread {
+				return iUnread
+			}
+			return false
+		})
 		var links []string
 		for _, sub := range subs {
 			label := shortResourceLabel(sub.ResourceType, sub.ResourceID)
