@@ -11,15 +11,13 @@ Send a cross-session message using `handler emit`. This is NOT the same as Claud
 
 Run `handler emit --help` to see the current flags and supported options.
 
-## Step 2: Identify your session name
-
-Your session name appears in your statusline output and was set when the session registered. If you don't know it, run:
+## Step 2: Get your session name
 
 ```bash
-handler status --json 2>/dev/null | python3 -c "import sys,json; [print(s['session_name']) for s in json.load(sys.stdin) if s.get('session_id')=='YOUR_SESSION_ID']"
+handler session-name
 ```
 
-You'll include this in the message body so the recipient knows who sent it and can reply.
+Include this in the message body so the recipient can reply. Names can change during a session (via `/rename`), so always look it up rather than caching it.
 
 ## Step 3: Identify the target
 

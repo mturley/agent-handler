@@ -261,12 +261,12 @@ fi
 
 # --- Assemble final output ---
 FINAL=""
-if [ -n "$MODEL_LINE" ]; then
-    FINAL+="$MODEL_LINE"
-fi
 if [ -n "$GIT_LINE" ]; then
-    [ -n "$FINAL" ] && FINAL+="\n"
     FINAL+="$GIT_LINE"
+fi
+if [ -n "$MODEL_LINE" ]; then
+    [ -n "$FINAL" ] && FINAL+="\n"
+    FINAL+="$MODEL_LINE"
 fi
 if [ -n "$OUTPUT" ]; then
     [ -n "$FINAL" ] && FINAL+="\n"
