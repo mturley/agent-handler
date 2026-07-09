@@ -36,9 +36,17 @@ handler session-name
 
 Include this in the message body so the recipient can reply. Names can change during a session (via `/rename`), so always look it up rather than caching it.
 
-## Step 3: Identify the target
+## Step 3: Resolve the target
 
-The user will specify a target — a session name, branch name, or session UUID. If unclear, run `handler status` to show active sessions and let the user pick.
+The user's args contain a target name — but it may be informal or abbreviated. **Always resolve it against actual sessions before sending:**
+
+```bash
+handler status
+```
+
+Find the active session whose name best matches what the user said. Use the **exact session name** from the output as the `--to` value. If no session matches, tell the user and show the available sessions.
+
+Do NOT pass the user's raw input as `--to` — always look up the real name first.
 
 ## Step 4: Compose and send
 
