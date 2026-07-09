@@ -263,7 +263,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		for i := 1; i < len(links); i++ {
 			joined += fmt.Sprintf("%s, %s", dim, reset) + links[i]
 		}
-		fmt.Printf("%s  ↳ %s%s\n", dim, reset, joined)
+		fmt.Printf("%s  %s%s\n", dim, reset, joined)
 	}
 
 	return nil
