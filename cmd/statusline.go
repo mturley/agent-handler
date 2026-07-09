@@ -270,7 +270,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	if resourceLinks != "" && len(subs) <= 4 {
 		trailingSegment = fmt.Sprintf(" %s| %s%s", dim, reset, resourceLinks)
 	} else if len(subs) == 0 {
-		trailingSegment = fmt.Sprintf(" %s| %s/watch%s to follow PRs or Jira issues%s", dim, cmd_color, dim, reset)
+		trailingSegment = fmt.Sprintf(" %s| %s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, reset, dim, reset)
 	}
 
 	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset, trailingSegment)
