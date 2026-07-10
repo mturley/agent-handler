@@ -1,6 +1,6 @@
 ---
 name: catchup
-description: Summarize events auto-delivered while the user was away, then advance the human cursor
+description: Summarize events auto-delivered while the user was away
 ---
 
 # /catchup — Catch Up on Auto-Delivered Events
