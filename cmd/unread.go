@@ -68,6 +68,18 @@ func runUnread(cmd *cobra.Command, args []string) error {
 	} else {
 		events, err = d.UnreadForSession(sessionID)
 	}
+
+	// In global mode, filter out events originated by this session
+	if global && len(events) > 0 {
+		filtered := make([]db.Event, 0, len(events))
+		for _, e := range events {
+			if e.SessionID != nil && *e.SessionID == sessionID {
+				continue
+			}
+			filtered = append(filtered, e)
+		}
+		events = filtered
+	}
 	if err != nil {
 		return fmt.Errorf("failed to query unread events: %w", err)
 	}

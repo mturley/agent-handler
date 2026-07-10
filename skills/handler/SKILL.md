@@ -51,7 +51,7 @@ Chronological list of events since last report (from `handler log --global --sin
 
 ### Session Overview
 
-Table of all sessions with: name, repo, branch, display state, peek summary, subscribed resources with their current state (priority, status, review decision, CI status).
+Table of **all** sessions from `handler status --json` — not just sessions with subscriptions. For each session show: name, repo, branch, display state, peek summary. Where a session has subscribed resources (from triage `session_resources`), include their current state (priority, status, review decision, CI status). Sessions without subscriptions still appear in the table.
 
 ### Formatting references as clickable links
 
@@ -62,12 +62,7 @@ When mentioning Jira issues or GitHub PRs anywhere in the briefing, always rende
 
 5. The cursor is already advanced — `handler log --since-cursor` advances it as a side effect when it runs in step 2.
 
-6. Set inbox mode to `on-submit` so the handler receives events on each prompt (like any other session):
-```bash
-handler configure --inbox-mode on-submit
-```
-
-7. Tell the user what they can ask.
+6. Tell the user what they can ask.
 
 ## What the user can ask
 
@@ -95,4 +90,4 @@ Use Haiku for peek subagents — the task is focused (detect permission prompts/
 
 ## Idempotent
 
-Re-invoking /handler re-runs the full briefing. Inbox mode is already set, so step 6 is a no-op on re-invocation.
+Re-invoking /handler re-runs the full briefing.
