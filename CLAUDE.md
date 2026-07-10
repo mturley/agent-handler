@@ -28,7 +28,7 @@ go test ./...
 - `db/` — SQLite data layer. All DB access goes through typed Go functions here.
 - `discover/` — Claude session ID/name discovery from JSONL, PID cache, process liveness.
 - `worktree/` — `.worktree-resources` file read/write.
-- `hooks/` — Shell scripts for Claude Code hooks (SessionStart, UserPromptSubmit, PreCompact).
+- `hooks/` — Shell scripts for Claude Code hooks (SessionStart, UserPromptSubmit, PreCompact). See `docs/claude-hook-stdin.md` for the JSON fields available on stdin for each hook type.
 - `skills/` — Claude Code skill markdown files. Each skill is a directory with a `SKILL.md`.
 
 ## Installation Model
