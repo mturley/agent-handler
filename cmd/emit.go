@@ -65,8 +65,9 @@ func runEmit(cmd *cobra.Command, args []string) error {
 	if emitBody != "" {
 		evt.Body = &emitBody
 	}
-	if emitSessionID != "" {
-		evt.SessionID = &emitSessionID
+	sessionID, err := resolveSessionID(cmd)
+	if err == nil && sessionID != "" {
+		evt.SessionID = &sessionID
 	}
 	if emitTags != "" {
 		evt.Tags = &emitTags
