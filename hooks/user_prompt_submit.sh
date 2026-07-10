@@ -67,8 +67,8 @@ if [ "$PROMPT_TEXT" = "/inbox --auto" ]; then
 fi
 
 # In auto mode, invoke /catchup if there are auto-delivered events
-# Only do this for real user prompts, not cron-fired /inbox --auto
-if [ "$INBOX_MODE" = "auto" ] && [ "$IS_AUTO_INBOX" = false ]; then
+# Skip for cron-fired /inbox --auto and when the user already invoked /catchup
+if [ "$INBOX_MODE" = "auto" ] && [ "$IS_AUTO_INBOX" = false ] && [ "$PROMPT_TEXT" != "/catchup" ]; then
     AUTO_COUNT=$(handler auto-delivered --session-id "$SESSION_ID" 2>/dev/null || echo "0")
     if [ -n "$AUTO_COUNT" ] && [ "$AUTO_COUNT" != "0" ]; then
         echo "Invoke the /catchup skill now before responding to the user's prompt."
