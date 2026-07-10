@@ -35,6 +35,7 @@ var skillNames = []string{
 	"handler",
 	"handler-subscribe",
 	"handler-snapshot",
+	"done",
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {
