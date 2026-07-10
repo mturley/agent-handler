@@ -55,6 +55,7 @@ The binary and skill/hook configuration will be cleaned up, but your database an
 
 ```bash
 handler status      # Show all sessions with liveness and unread counts
+handler session-name # Print the current session's name
 handler emit        # Write an event to the ledger
 handler unread      # Check unread events for a session
 handler subscribe   # Subscribe to external resource events
@@ -79,6 +80,7 @@ Hooks wire Claude Code session lifecycle events to handler:
 
 Skills teach agents how to interact with handler:
 - `/inbox` -- check and act on unread events
+- `/inbox-clear` -- dismiss unread events without reading them
 - `/inbox-mode` -- configure manual, on-submit, or auto delivery
 - `/watch` / `/unwatch` -- subscribe to PRs and Jira issues
 - `/watching` -- show watched resources and watcher status
