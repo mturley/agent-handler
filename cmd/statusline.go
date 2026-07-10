@@ -319,6 +319,7 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	red := "\033[31m"   // red
 	dim := "\033[2m"    // dim
 	reset := "\033[0m"
+	purple := "\033[35m" // purple
 
 	// Count active sessions (excluding self)
 	sessions, err := d.ListSessions(false, 1000, 0)
@@ -359,8 +360,8 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	}
 
 	// Line 1: Sessions overview
-	fmt.Printf("%sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
-		"\033[1m", reset, activeCount, blockedCount, dim, cmd_color, reset, dim, reset)
+	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
+		purple, reset, "\033[1m", reset, activeCount, blockedCount, dim, cmd_color, reset, dim, reset)
 
 	// Get direct message count
 	directCount, err := d.DirectCountForSession(session.SessionID)

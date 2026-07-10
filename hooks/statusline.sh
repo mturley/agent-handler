@@ -293,16 +293,28 @@ fi
 
 # --- Assemble final output ---
 FINAL=""
-if [ -n "$GIT_LINE" ]; then
-    FINAL+="$GIT_LINE"
-fi
-if [ -n "$MODEL_LINE" ]; then
-    [ -n "$FINAL" ] && FINAL+="\n"
-    FINAL+="$MODEL_LINE"
-fi
-if [ -n "$OUTPUT" ]; then
-    [ -n "$FINAL" ] && FINAL+="\n"
-    FINAL+="$OUTPUT"
+if [ "$IS_HANDLER" = "true" ]; then
+    # Handler: handler output first, then model line
+    if [ -n "$OUTPUT" ]; then
+        FINAL+="$OUTPUT"
+    fi
+    if [ -n "$MODEL_LINE" ]; then
+        [ -n "$FINAL" ] && FINAL+="\n"
+        FINAL+="$MODEL_LINE"
+    fi
+else
+    # Regular: git, model, handler output
+    if [ -n "$GIT_LINE" ]; then
+        FINAL+="$GIT_LINE"
+    fi
+    if [ -n "$MODEL_LINE" ]; then
+        [ -n "$FINAL" ] && FINAL+="\n"
+        FINAL+="$MODEL_LINE"
+    fi
+    if [ -n "$OUTPUT" ]; then
+        [ -n "$FINAL" ] && FINAL+="\n"
+        FINAL+="$OUTPUT"
+    fi
 fi
 
 printf "%b\n" "$FINAL"
