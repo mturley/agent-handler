@@ -295,7 +295,7 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 		fmt.Printf("%s  ↳ %s%s\n", dim, reset, resourceLinks)
 	}
 
-	fmt.Printf("%sUse /done before closing the session to log a summary%s\n", dim, reset)
+	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n", dim, cmd_color, reset_color, dim, reset)
 
 	return nil
 }
