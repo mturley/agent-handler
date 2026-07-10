@@ -407,7 +407,7 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	// Auto-delivered count for handler
 	autoCount, err := d.AutoDeliveredCountAll(session.SessionID)
 	if err == nil && autoCount > 0 {
-		fmt.Printf("%s  ● %d events seen since last prompt%s %s— send any prompt or %s/catchup%s %sfor a recap%s\n",
+		fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s— send any prompt or %s/catchup%s %sfor a recap%s\n",
 			yellow, autoCount, reset_color, dim, cmd_color, reset_color, dim, reset_color)
 	}
 
