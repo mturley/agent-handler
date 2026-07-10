@@ -32,7 +32,8 @@ handler unread --ack --agent-only --global --json 2>/dev/null
 
 ## After reading events
 
-- If the output is `null` or empty: say "No new messages."
+- If invoked with `--auto` and the output is `null` or empty: produce **no output at all**. Do not say "No new messages" or anything else — just end your turn silently.
+- If invoked without `--auto` and the output is `null` or empty: say "No new messages."
 - Otherwise: present the events in a clear summary grouped by type, and for each actionable event suggest what to do about it (e.g. "There's a PR review comment — want me to look at it and address the feedback?")
 
 ## Formatting references as clickable links
