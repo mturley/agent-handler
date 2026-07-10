@@ -24,32 +24,35 @@ if [ -z "$SESSION_ID" ]; then
     fi
 fi
 
-# Register if not yet registered (PID cache miss)
+# Register if not yet registered (PID cache miss) — runs in background
+# to avoid blocking the hook timeout on slow registration
 if [ ! -f "${SESSIONS_DIR}/${CLAUDE_PID}" ] || [ "$(cat "${SESSIONS_DIR}/${CLAUDE_PID}")" != "$SESSION_ID" ]; then
     JSONL_PATH=$(echo "$HOOK_STDIN" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null)
     if [ -n "$JSONL_PATH" ]; then
-        BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-        REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:/]//' | sed 's/\.git$//' || echo "unknown")
+        (
+            BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+            REPO=$(git remote get-url origin 2>/dev/null | sed 's/.*github.com[:/]//' | sed 's/\.git$//' || echo "unknown")
 
-        TERMINAL_TYPE=""
-        TERMINAL_ID=""
-        if [ -n "${CMUX_SURFACE_ID:-}" ]; then
-            TERMINAL_TYPE="cmux"
-            TERMINAL_ID="$CMUX_SURFACE_ID"
-        fi
+            TERMINAL_TYPE=""
+            TERMINAL_ID=""
+            if [ -n "${CMUX_SURFACE_ID:-}" ]; then
+                TERMINAL_TYPE="cmux"
+                TERMINAL_ID="$CMUX_SURFACE_ID"
+            fi
 
-        TERMINAL_FLAGS=""
-        if [ -n "$TERMINAL_TYPE" ]; then
-            TERMINAL_FLAGS="--terminal-type $TERMINAL_TYPE --terminal-id $TERMINAL_ID"
-        fi
+            TERMINAL_FLAGS=""
+            if [ -n "$TERMINAL_TYPE" ]; then
+                TERMINAL_FLAGS="--terminal-type $TERMINAL_TYPE --terminal-id $TERMINAL_ID"
+            fi
 
-        handler register \
-            --session-id "$SESSION_ID" \
-            --branch "$BRANCH" \
-            --repo "$REPO" \
-            --pid "$CLAUDE_PID" \
-            --jsonl-path "$JSONL_PATH" \
-            $TERMINAL_FLAGS >/dev/null 2>&1 || true
+            handler register \
+                --session-id "$SESSION_ID" \
+                --branch "$BRANCH" \
+                --repo "$REPO" \
+                --pid "$CLAUDE_PID" \
+                --jsonl-path "$JSONL_PATH" \
+                $TERMINAL_FLAGS >/dev/null 2>&1 || true
+        ) &
     fi
 fi
 
