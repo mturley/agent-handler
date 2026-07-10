@@ -27,6 +27,7 @@ func init() {
 var skillNames = []string{
 	"using-handler",
 	"inbox",
+	"inbox-clear",
 	"inbox-mode",
 	"message",
 	"watch",

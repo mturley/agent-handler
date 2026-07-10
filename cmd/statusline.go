@@ -105,6 +105,10 @@ func runStatusline(cmd *cobra.Command, args []string) error {
 	if directCount > 0 {
 		fmt.Printf(" | %s● %d direct%s", yellow, directCount, reset_color)
 	}
+	// Add /inbox-clear hint when there are unreads
+	if unreadCount > 0 {
+		fmt.Printf(" %s— %s/inbox-clear%s%s to dismiss%s", dim, cmd_color, reset, dim, reset)
+	}
 	fmt.Println()
 
 	// Auto-delivered count (only in auto mode, after /inbox line)
