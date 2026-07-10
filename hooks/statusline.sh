@@ -294,13 +294,15 @@ fi
 # --- Assemble final output ---
 FINAL=""
 if [ "$IS_HANDLER" = "true" ]; then
-    # Handler: handler output first, then model line
-    if [ -n "$OUTPUT" ]; then
-        FINAL+="$OUTPUT"
-    fi
+    # Handler: first line, then model line, then rest
+    FIRST_LINE=$(echo "$OUTPUT" | head -1)
+    REST=$(echo "$OUTPUT" | tail -n +2)
+    FINAL+="$FIRST_LINE"
     if [ -n "$MODEL_LINE" ]; then
-        [ -n "$FINAL" ] && FINAL+="\n"
-        FINAL+="$MODEL_LINE"
+        FINAL+="\n$MODEL_LINE"
+    fi
+    if [ -n "$REST" ]; then
+        FINAL+="\n$REST"
     fi
 else
     # Regular: git, model, handler output
