@@ -4,4 +4,4 @@
 # Registration is handled by the statusline hook.
 
 echo "agent-handler is active for this session."
-echo "The /using-handler skill has not been loaded yet."
+echo "The /using-handler skill must be invoked before starting work. It teaches you how to emit milestones as you work, which is important for cross-session tracking."
