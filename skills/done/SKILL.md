@@ -13,8 +13,7 @@ Emit a milestone summarizing what this session accomplished, so the handler know
 
 2. Emit the milestone:
 ```bash
-handler emit --type milestone --title "Session complete: <one-line summary>" --body "<detailed summary>" --broadcast
-```
+handler emit --type milestone --title "Session complete: <one-line summary>" --body "<detailed summary>" ```
 
 3. Unwatch all watched resources:
 ```bash
@@ -38,7 +37,6 @@ If the user sends another task after `/done` was invoked:
 
 2. Emit a milestone indicating the session is resuming:
 ```bash
-handler emit --type milestone --title "Session resuming: <brief description of new task>" --broadcast
-```
+handler emit --type milestone --title "Session resuming: <brief description of new task>" ```
 
 3. Proceed with the new task normally.
