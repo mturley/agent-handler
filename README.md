@@ -58,6 +58,9 @@ handler status      # Show all sessions with liveness and unread counts
 handler emit        # Write an event to the ledger
 handler unread      # Check unread events for a session
 handler subscribe   # Subscribe to external resource events
+handler triage      # What needs attention across all sessions
+handler peek        # Capture terminal content of a live session
+handler claude      # Start a peekable Claude session
 handler tail        # Live event stream
 handler query       # Run ad-hoc read-only SQL
 handler schema      # Dump table definitions
@@ -69,17 +72,24 @@ Run `handler --help` for the full command list, or `handler <command> --help` fo
 ## Claude Code Integration
 
 Hooks wire Claude Code session lifecycle events to handler:
-- **SessionStart** -- auto-registers sessions, shows catch-up summary of missed events
-- **UserPromptSubmit** -- heartbeat, optional event injection based on inbox mode
+- **SessionStart** -- directs the agent to invoke `/using-handler` for ledger awareness
+- **UserPromptSubmit** -- registers sessions on first prompt, heartbeat, event injection based on inbox mode
+- **Statusline** -- session registration, session name sync, unread notifications
 - **PreCompact** -- snapshots context before compaction
 
 Skills teach agents how to interact with handler:
 - `/inbox` -- check and act on unread events
 - `/inbox-mode` -- configure manual, on-submit, or auto delivery
+- `/watch` / `/unwatch` -- subscribe to PRs and Jira issues
+- `/watching` -- show watched resources and watcher status
+- `/message` -- send messages to other sessions
+- `/done` -- log a completion summary before closing a session
+- `/catchup` -- summarize events auto-delivered while the user was away
+- `/handler` -- turn a session into a command center for all sessions
 
 ## External Watchers
 
-Watch for external events (PR reviews, Jira comments, CI status) and deliver them to your sessions.
+Watch for external events (PR reviews, Jira comments, CI status) and deliver them to your sessions. Watchers cache current resource state (PR review status, Jira priority, blocked status) for use in triage.
 
 ### Setup
 
@@ -94,6 +104,8 @@ handler watcher install github
 handler watcher install jira
 ```
 
+Jira custom fields (epic link, blocked status, story points, etc.) can be configured in `~/.agent-handler/config.yaml` under `services.jira.custom_fields`.
+
 ### Management
 
 ```bash
@@ -107,17 +119,30 @@ handler watcher uninstall    # Remove all watchers (or: handler watcher uninstal
 
 ## Handler Session
 
-Use `/handler` in a Claude session to turn it into a command center for managing all active sessions.
+Use `/handler` in a Claude session to turn it into a command center for managing all active sessions. The handler delivers a prioritized briefing combining triage data, terminal peek results, and a timeline of recent events.
 
 ```bash
 handler configure --role handler   # Set session as handler
 handler triage                     # What needs attention across all sessions
+handler peek --session <id>        # Inspect what a session is doing
 handler log --global               # Cross-session event timeline
 handler log --global --since-cursor  # What changed since last check
 handler emit --to handler          # Send a message to the handler session
 ```
 
-The handler session gets a custom statusline showing active/blocked session counts and global watcher status.
+The handler session gets a custom statusline showing active/blocked session counts and global event status.
+
+## Session Inspection (Peek)
+
+Inspect live Claude sessions from other sessions or the handler. Supports cmux (primary) and tmux (fallback) terminal environments.
+
+```bash
+handler claude                     # Start a peekable Claude session
+handler peek --session <id>        # Capture terminal content
+handler status                     # Shows 👁 indicator for peekable sessions
+```
+
+Sessions started via `handler claude` or in cmux are automatically peekable. The handler session uses peek via subagents to detect sessions waiting for input.
 
 ## .worktree-resources
 
