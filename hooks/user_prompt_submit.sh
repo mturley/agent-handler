@@ -66,12 +66,12 @@ if [ "$PROMPT_TEXT" = "/inbox --auto" ]; then
     IS_AUTO_INBOX=true
 fi
 
-# In auto mode, check for auto-delivered events before catching up the human cursor
+# In auto mode, invoke /catchup if there are auto-delivered events
 # Only do this for real user prompts, not cron-fired /inbox --auto
 if [ "$INBOX_MODE" = "auto" ] && [ "$IS_AUTO_INBOX" = false ]; then
     AUTO_COUNT=$(handler auto-delivered --session-id "$SESSION_ID" 2>/dev/null || echo "0")
     if [ -n "$AUTO_COUNT" ] && [ "$AUTO_COUNT" != "0" ]; then
-        echo "The user is back. While they were away, ${AUTO_COUNT} event(s) were auto-delivered to your inbox. Before responding to their prompt, briefly summarize what happened since their last prompt (look back through your conversation for the auto-delivered inbox results)."
+        echo "Invoke the /catchup skill now before responding to the user's prompt."
     fi
 fi
 
