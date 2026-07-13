@@ -53,8 +53,10 @@ If you've been working for a while without emitting, you're overdue. **When in d
 ### Syntax
 
 ```
-handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--broadcast] [--tags "a,b"]
+handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--tags "a,b"]
 ```
+
+Do not use `--broadcast` unless the user specifically asks you to broadcast an event or send a message to all sessions. Broadcasts deliver to every session's inbox, which is noisy.
 
 ### Event types and triggers
 
