@@ -390,7 +390,7 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	// Line 1: Sessions overview
 	awaitingStr := ""
 	if awaitingCount > 0 {
-		awaitingStr = fmt.Sprintf(", %s%d awaiting input%s", yellow, awaitingCount, reset)
+		awaitingStr = fmt.Sprintf(", %s%d awaiting approval%s", yellow, awaitingCount, reset)
 	}
 	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s %s— %s/handler%s %sto summarize all sessions%s\n",
 		purple, reset, "\033[1m", reset, activeCount, blockedCount, awaitingStr, dim, cmd_color, reset, dim, reset)

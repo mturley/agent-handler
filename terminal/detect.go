@@ -12,18 +12,10 @@ func NeedsInput(content string) (bool, string) {
 		trimmed := strings.TrimSpace(line)
 
 		if strings.Contains(trimmed, "Esc to cancel") {
-			return true, "approval prompt"
+			return true, "awaiting approval"
 		}
-	}
-
-	// Check last few non-empty lines for mode indicators (idle at prompt)
-	for i := len(lines) - 1; i >= 0 && i >= len(lines)-5; i-- {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			continue
-		}
-		if strings.Contains(trimmed, "mode on") && (strings.Contains(trimmed, "⏸") || strings.Contains(trimmed, "⏵")) {
-			return true, "idle at prompt"
+		if strings.Contains(trimmed, "shift+tab to approve") {
+			return true, "awaiting approval"
 		}
 	}
 
