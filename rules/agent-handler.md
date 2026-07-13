@@ -21,3 +21,5 @@ At the start of each session, tell the user exactly:
 Then invoke /using-handler for the full reference on emitting events and using handler. These steps — showing the introduction, invoking the skill — must happen before any other work, even if the user's first prompt includes a task.
 
 You must emit events regularly with `handler emit` so the ledger reflects your work. Emit status check-ins, milestones, decisions, blockers, and follow-ups as you go — not just when work is done. A session that doesn't emit is invisible to the user and other sessions. Your first emit should happen as soon as you begin working on a task.
+
+Emit `blocked` whenever you are waiting on something external — a PR review, CI results, a blocking Jira issue, a Slack reply, or a dependency from another session. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report, so other sessions and the handler know who is stuck and why.
