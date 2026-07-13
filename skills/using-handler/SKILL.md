@@ -9,6 +9,8 @@ Tell the user:
 
 > This session is using **agent-handler**. It will periodically emit events to a central ledger as it starts and completes tasks, encounters problems, and makes discoveries or decisions. You can use `/handler` to convert one session into your "handler session" that keeps track of all other sessions.
 >
+> **Recommended:** Use `/rename` to give this session a short name — other sessions and the handler can reference it by name instead of ID.
+>
 > **Available skills:**
 > - `/inbox` — check unread events | `/inbox-clear` — dismiss all unread
 > - `/inbox-mode` — switch between manual, on-submit, or auto delivery
