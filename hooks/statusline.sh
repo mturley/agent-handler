@@ -322,7 +322,11 @@ else
     AWAITING_COUNT=$(handler peek --list-need-input --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin) or []))" 2>/dev/null || echo "0")
     if [ "$AWAITING_COUNT" -gt 0 ] 2>/dev/null; then
         [ -n "$FINAL" ] && FINAL+="\n"
-        FINAL+="${YELLOW}${AWAITING_COUNT} session(s) awaiting approval${RESET}"
+        if [ "$AWAITING_COUNT" -eq 1 ]; then
+            FINAL+="${YELLOW}1 session awaiting approval${RESET}"
+        else
+            FINAL+="${YELLOW}${AWAITING_COUNT} sessions awaiting approval${RESET}"
+        fi
     fi
 fi
 
