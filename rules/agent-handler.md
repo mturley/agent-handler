@@ -18,6 +18,6 @@ At the start of each session, tell the user exactly:
 >
 > **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`
 
-Then invoke /using-handler for the full reference on emitting events and using handler.
+Then invoke /using-handler for the full reference on emitting events and using handler. These steps — showing the introduction, invoking the skill — must happen before any other work, even if the user's first prompt includes a task.
 
-You must emit events regularly with `handler emit` so the ledger reflects your work. Emit status check-ins, milestones, decisions, blockers, and follow-ups as you go — not just when work is done. A session that doesn't emit is invisible to the user and other sessions.
+You must emit events regularly with `handler emit` so the ledger reflects your work. Emit status check-ins, milestones, decisions, blockers, and follow-ups as you go — not just when work is done. A session that doesn't emit is invisible to the user and other sessions. Your first emit should happen as soon as you begin working on a task.
