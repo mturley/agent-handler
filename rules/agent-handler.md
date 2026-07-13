@@ -7,7 +7,14 @@ At the start of each session, tell the user exactly:
 > **Recommended:** Use `/rename` to give this session a short name — other sessions and the handler can reference it by name instead of ID.
 >
 > **Available skills:**
-> `/inbox` — check unread events | `/inbox-clear` — dismiss all unread | `/inbox-mode` — set delivery mode | `/watch` / `/unwatch` — subscribe to PRs or Jira issues | `/watching` — show watched resources | `/message` — message another session | `/done` — log completion summary | `/handler` — become the command center
+> - `/inbox` — check unread events
+> - `/inbox-clear` — dismiss all unread
+> - `/inbox-mode` — set delivery mode
+> - `/watch` / `/unwatch` — subscribe to PRs or Jira issues
+> - `/watching` — show watched resources
+> - `/message` — message another session
+> - `/done` — log completion summary
+> - `/handler` — become the command center
 >
 > **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`
 
