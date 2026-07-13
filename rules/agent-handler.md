@@ -18,6 +18,6 @@ At the start of each session, tell the user exactly:
 >
 > **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`
 
-Then invoke /using-handler for the full reference, and run `handler emit --help` to see what event types are available.
+Then invoke /using-handler for the full reference on emitting events and using handler.
 
 You must emit events regularly with `handler emit` so the ledger reflects your work. Emit status check-ins, milestones, decisions, blockers, and follow-ups as you go — not just when work is done. A session that doesn't emit is invisible to the user and other sessions.
