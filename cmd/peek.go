@@ -17,8 +17,9 @@ var peekCmd = &cobra.Command{
 }
 
 var (
-	peekSessionID string
-	peekLines     int
+	peekSessionID    string
+	peekLines        int
+	peekListNeedInput bool
 )
 
 func init() {
@@ -26,10 +27,18 @@ func init() {
 	rootCmd.AddCommand(peekCmd)
 	peekCmd.Flags().StringVar(&peekSessionID, "session", "", "session ID, name, or branch")
 	peekCmd.Flags().IntVar(&peekLines, "lines", 0, "limit capture to last N lines (0 = full pane)")
-	peekCmd.MarkFlagRequired("session")
+	peekCmd.Flags().BoolVar(&peekListNeedInput, "list-need-input", false, "list all sessions waiting for user input")
 }
 
 func runPeek(cmd *cobra.Command, args []string) error {
+	if peekListNeedInput {
+		return runListNeedInput(cmd)
+	}
+
+	if peekSessionID == "" {
+		return fmt.Errorf("required flag \"session\" not set")
+	}
+
 	d, err := openReadOnlyDB()
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
@@ -76,6 +85,79 @@ func runPeek(cmd *cobra.Command, args []string) error {
 		fmt.Print(content)
 		if len(content) > 0 && content[len(content)-1] != '\n' {
 			fmt.Println()
+		}
+	}
+
+	return nil
+}
+
+func runListNeedInput(cmd *cobra.Command) error {
+	d, err := openReadOnlyDB()
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer d.Close()
+
+	sessions, err := d.ListSessions(false, 1000, 0)
+	if err != nil {
+		return fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	type needInputResult struct {
+		SessionID   string `json:"session_id"`
+		SessionName string `json:"session_name"`
+		Reason      string `json:"reason"`
+	}
+
+	var results []needInputResult
+
+	for _, s := range sessions {
+		if s.TerminalType == "" || s.TerminalID == "" {
+			continue
+		}
+		if s.Role == "handler" {
+			continue
+		}
+		if !discover.IsSessionProcess(s.PID, s.SessionID) {
+			continue
+		}
+
+		backend, err := terminal.NewBackend(s.TerminalType)
+		if err != nil {
+			continue
+		}
+
+		content, err := backend.Capture(s.TerminalID, 10)
+		if err != nil {
+			continue
+		}
+
+		if needsInput, reason := terminal.NeedsInput(content); needsInput {
+			results = append(results, needInputResult{
+				SessionID:   s.SessionID,
+				SessionName: s.SessionName,
+				Reason:      reason,
+			})
+		}
+	}
+
+	if jsonOutput {
+		data, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(data))
+	} else {
+		if len(results) == 0 {
+			fmt.Println("No sessions waiting for input.")
+			return nil
+		}
+		for _, r := range results {
+			name := r.SessionName
+			if name == "" {
+				name = r.SessionID[:8]
+			}
+			fmt.Printf("  %s — %s\n", name, r.Reason)
 		}
 	}
 

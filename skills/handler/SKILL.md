@@ -21,10 +21,11 @@ handler --help
 handler configure --role handler
 ```
 
-2. Gather data (run both in parallel):
+2. Gather data (run all three in parallel):
 ```bash
 handler triage --json
 handler log --global --since-cursor --json
+handler peek --list-need-input --json
 ```
 
 3. Peek at all peekable sessions — for each session in the triage output with `"peekable": true` and `display_state` of `"active"` or `"idle"`, spawn a Haiku subagent that:
@@ -52,6 +53,8 @@ Chronological list of events since last report (from `handler log --global --sin
 ### Session Overview
 
 **All** sessions from `handler status --json` — not just sessions with subscriptions. Group sessions by repo. Within each repo, show: name, branch, display state, last active (relative, e.g. "5m ago"), peek summary. Where a session has subscribed resources (from triage `session_resources`), include their current state (priority, status, review decision, CI status). Sessions without subscriptions still appear.
+
+Mark sessions that need input (from `--list-need-input` results) with a ✋ emoji next to their name so they stand out visually.
 
 ### Formatting references as clickable links
 

@@ -9,6 +9,7 @@ import (
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
+	"github.com/mturley/agent-handler/terminal"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
 )
@@ -364,9 +365,35 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		blockedRows.Scan(&blockedCount)
 	}
 
+	// Count sessions awaiting input
+	awaitingCount := 0
+	for _, s := range sessions {
+		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
+			continue
+		}
+		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
+			continue
+		}
+		backend, err := terminal.NewBackend(s.TerminalType)
+		if err != nil {
+			continue
+		}
+		content, err := backend.Capture(s.TerminalID, 10)
+		if err != nil {
+			continue
+		}
+		if needsInput, _ := terminal.NeedsInput(content); needsInput {
+			awaitingCount++
+		}
+	}
+
 	// Line 1: Sessions overview
-	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
-		purple, reset, "\033[1m", reset, activeCount, blockedCount, dim, cmd_color, reset, dim, reset)
+	awaitingStr := ""
+	if awaitingCount > 0 {
+		awaitingStr = fmt.Sprintf(", %s%d awaiting input%s", yellow, awaitingCount, reset)
+	}
+	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s %s— %s/handler%s %sto summarize all sessions%s\n",
+		purple, reset, "\033[1m", reset, activeCount, blockedCount, awaitingStr, dim, cmd_color, reset, dim, reset)
 
 	// Get direct message count
 	directCount, err := d.DirectCountForSession(session.SessionID)
