@@ -51,7 +51,7 @@ Chronological list of events since last report (from `handler log --global --sin
 
 ### Session Overview
 
-Table of **all** sessions from `handler status --json` — not just sessions with subscriptions. For each session show: name, repo, branch, display state, peek summary. Where a session has subscribed resources (from triage `session_resources`), include their current state (priority, status, review decision, CI status). Sessions without subscriptions still appear in the table.
+**All** sessions from `handler status --json` — not just sessions with subscriptions. Group sessions by repo. Within each repo, show: name, branch, display state, last active (relative, e.g. "5m ago"), peek summary. Where a session has subscribed resources (from triage `session_resources`), include their current state (priority, status, review decision, CI status). Sessions without subscriptions still appear.
 
 ### Formatting references as clickable links
 
