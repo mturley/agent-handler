@@ -34,8 +34,6 @@ var skillNames = []string{
 	"unwatch",
 	"watching",
 	"handler",
-	"handler-subscribe",
-	"handler-snapshot",
 	"catchup",
 	"done",
 }

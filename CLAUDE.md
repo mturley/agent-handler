@@ -41,7 +41,7 @@ When adding or removing skills, update the `skillNames` slice in `cmd/uninstall.
 
 When adding or removing hooks, update `configureHooks()` in `cmd/setup.go` and `removeHooks()` in `cmd/uninstall.go`.
 
-**IMPORTANT: When adding, removing, or changing skills, commands, or capabilities, you MUST update `skills/using-handler/SKILL.md`.** This skill is invoked at the start of every session and serves two purposes: (1) it introduces agent-handler to the user with a quick reference of available skills and useful CLI commands, and (2) it teaches the agent how to emit events and use handler. Both the user-facing introduction and the agent-facing reference must stay current.
+**IMPORTANT: When adding, removing, or changing skills, commands, or capabilities, you MUST update both `rules/agent-handler.md` and `skills/using-handler/SKILL.md`.** The rules file is loaded automatically at every session start — it introduces agent-handler to the user with a quick reference of available skills and useful CLI commands. The skill is invoked once per session and teaches the agent how to emit events and use handler. Both must stay current.
 
 ## Watchers
 
