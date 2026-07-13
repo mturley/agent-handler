@@ -92,11 +92,33 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 
 	hooksPath := filepath.Join(agentHandlerDir, "hooks")
 	skillsPath := filepath.Join(agentHandlerDir, "skills")
+	rulesPath := filepath.Join(agentHandlerDir, "rules")
+	claudeRulesDir := filepath.Join(home, ".claude", "rules")
 	if _, err := os.Stat(hooksPath); err == nil {
 		fmt.Printf("  Remove extracted hooks from %s\n", hooksPath)
 	}
 	if _, err := os.Stat(skillsPath); err == nil {
 		fmt.Printf("  Remove extracted skills from %s\n", skillsPath)
+	}
+	if _, err := os.Stat(rulesPath); err == nil {
+		fmt.Printf("  Remove extracted rules from %s\n", rulesPath)
+	}
+
+	// Check for installed global rules
+	var installedRules []string
+	if entries, err := os.ReadDir(rulesPath); err == nil {
+		for _, entry := range entries {
+			ruleDst := filepath.Join(claudeRulesDir, entry.Name())
+			if _, err := os.Stat(ruleDst); err == nil {
+				installedRules = append(installedRules, entry.Name())
+			}
+		}
+	}
+	if len(installedRules) > 0 {
+		fmt.Printf("  Remove %d global rule(s) from %s:\n", len(installedRules), claudeRulesDir)
+		for _, name := range installedRules {
+			fmt.Printf("    - %s\n", name)
+		}
 	}
 
 	if hasHandlerPermission(settingsPath) {
@@ -125,6 +147,12 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Remove installed global rules
+	for _, name := range installedRules {
+		os.Remove(filepath.Join(claudeRulesDir, name))
+		fmt.Printf("  ✓ Removed global rule %s\n", name)
+	}
+
 	if len(hookNames) > 0 {
 		removeHooks(home)
 	}
@@ -140,7 +168,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Remove extracted hooks and skills from ~/.agent-handler
-	for _, dir := range []string{"hooks", "skills"} {
+	for _, dir := range []string{"hooks", "skills", "rules"} {
 		dirPath := filepath.Join(agentHandlerDir, dir)
 		if _, err := os.Stat(dirPath); err == nil {
 			os.RemoveAll(dirPath)
@@ -193,7 +221,7 @@ func findAgentHandlerHooks(settingsPath string) []string {
 	}
 
 	var found []string
-	for _, event := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
+	for _, event := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact"} {
 		existing, ok := hooks[event].([]interface{})
 		if !ok {
 			continue

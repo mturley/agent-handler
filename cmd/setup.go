@@ -16,11 +16,13 @@ import (
 var (
 	embeddedSkills embed.FS
 	embeddedHooks  embed.FS
+	embeddedRules  embed.FS
 )
 
-func SetEmbedded(skills, hooks embed.FS) {
+func SetEmbedded(skills, hooks, rules embed.FS) {
 	embeddedSkills = skills
 	embeddedHooks = hooks
+	embeddedRules = rules
 }
 
 var setupCmd = &cobra.Command{
@@ -43,7 +45,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	handlerDir := db.HandlerHome()
 	hooksDir := filepath.Join(handlerDir, "hooks")
 	skillsDir := filepath.Join(handlerDir, "skills")
+	rulesDir := filepath.Join(handlerDir, "rules")
 	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
+	claudeRulesDir := filepath.Join(home, ".claude", "rules")
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
 	fmt.Println("agent-handler setup will:")
@@ -56,8 +60,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	for _, name := range skillNames {
 		fmt.Printf("    - /%s\n", name)
 	}
+	fmt.Printf("  Install global rules to %s\n", claudeRulesDir)
 	fmt.Printf("  Configure Claude Code hooks in %s:\n", settingsPath)
-	for _, hook := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
+	for _, hook := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact"} {
 		fmt.Printf("    - %s\n", hook)
 	}
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
@@ -148,7 +153,29 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ %s -> %s\n", skillName, dstDir)
 	}
 
-	// 6. Configure Claude Code hooks and status line
+	// 6. Extract rules and install to ~/.claude/rules/
+	fmt.Println("")
+	os.MkdirAll(rulesDir, 0755)
+	os.MkdirAll(claudeRulesDir, 0755)
+	ruleFiles, _ := fs.Glob(embeddedRules, "rules/*.md")
+	for _, rulePath := range ruleFiles {
+		data, err := fs.ReadFile(embeddedRules, rulePath)
+		if err != nil {
+			return fmt.Errorf("reading embedded rule %s: %w", rulePath, err)
+		}
+		baseName := filepath.Base(rulePath)
+		// Extract to handler dir
+		if err := os.WriteFile(filepath.Join(rulesDir, baseName), data, 0644); err != nil {
+			return fmt.Errorf("writing rule %s: %w", baseName, err)
+		}
+		// Copy to ~/.claude/rules/
+		if err := os.WriteFile(filepath.Join(claudeRulesDir, baseName), data, 0644); err != nil {
+			return fmt.Errorf("installing rule %s: %w", baseName, err)
+		}
+		fmt.Printf("  ✓ Installed rule %s\n", baseName)
+	}
+
+	// 8. Configure Claude Code hooks and status line
 	fmt.Println("")
 	if err := configureHooks(home, hooksDir); err != nil {
 		return fmt.Errorf("configuring hooks: %w", err)
@@ -157,11 +184,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuring status line: %w", err)
 	}
 
-	// 7. Offer to auto-allow handler commands
+	// 9. Offer to auto-allow handler commands
 	fmt.Println("")
 	configurePermissions(home)
 
-	// 8. Set up external service watchers (auth + install)
+	// 10. Set up external service watchers (auth + install)
 	fmt.Println("\nSetting up external service watchers...")
 	watcherInstallCmd := exec.Command("handler", "watcher", "install")
 	watcherInstallCmd.Stdin = os.Stdin
@@ -188,13 +215,11 @@ func configureHooks(home, hooksDir string) error {
 	}
 
 	hookEntries := map[string]string{
-		"SessionStart":     "session_start.sh",
 		"SessionEnd":       "session_end.sh",
 		"UserPromptSubmit": "user_prompt_submit.sh",
 		"PreCompact":       "pre_compact.sh",
 	}
 	timeouts := map[string]int{
-		"SessionStart":     10,
 		"SessionEnd":       10,
 		"UserPromptSubmit": 5,
 		"PreCompact":       10,
