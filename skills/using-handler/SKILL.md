@@ -5,6 +5,28 @@ description: "Invoke once per session before starting work — loads agent-handl
 
 # agent-handler
 
+Tell the user:
+
+> This session is using **agent-handler**. It will periodically emit events to a central ledger as it starts and completes tasks, encounters problems, and makes discoveries or decisions. You can use `/handler` to convert one session into your "handler session" that keeps track of all other sessions.
+>
+> **Available skills:**
+> - `/inbox` — check unread events | `/inbox-clear` — dismiss all unread
+> - `/inbox-mode` — switch between manual, on-submit, or auto delivery
+> - `/watch` / `/unwatch` — subscribe to PRs or Jira issues for change notifications
+> - `/watching` — show watched resources and watcher health
+> - `/message` — send a message to another session
+> - `/done` — log a completion summary before closing the session
+> - `/handler` — turn this session into a command center for all sessions
+>
+> **Useful CLI commands** (run these directly):
+> - `handler status` — all sessions with liveness and unread counts
+> - `handler log --global` — event timeline across all sessions
+> - `handler tail` — live event stream
+> - `handler cleanup` — archive dead sessions
+> - `handler update` — update to the latest version
+
+---
+
 You are running inside a session managed by agent-handler. It provides:
 - **Event ledger** — record milestones, decisions, blockers, and handoffs visible to other sessions
 - **Watchers** — GitHub PRs and Jira issues are polled for changes and delivered to your inbox
@@ -12,8 +34,6 @@ You are running inside a session managed by agent-handler. It provides:
 - **Subscriptions** — watch external resources and get notified of changes
 
 Your statusline shows inbox status, inbox mode, and watched resources.
-
-To turn this session into a handler (command center for all sessions), use `/handler`.
 
 ## Emitting events — MANDATORY
 
