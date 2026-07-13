@@ -34,8 +34,6 @@ If you've been working for a while without emitting, you're overdue. **When in d
 handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--tags "a,b"]
 ```
 
-The only flags are `--type`, `--title`, `--body`, `--to`, `--tags`, `--broadcast`, and `--session-id`. There is no `--message` flag — use `--title` for the event text.
-
 Do not use `--broadcast` unless the user specifically asks you to broadcast an event or send a message to all sessions. Broadcasts deliver to every session's inbox, which is noisy.
 
 ### Event types and triggers

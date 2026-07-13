@@ -20,7 +20,9 @@ var emitCmd = &cobra.Command{
 var (
 	emitType      string
 	emitTitle     string
+	emitMessage   string
 	emitBody      string
+	emitDetail    string
 	emitSessionID string
 	emitSource    string
 	emitBroadcast bool
@@ -33,17 +35,28 @@ func init() {
 	rootCmd.AddCommand(emitCmd)
 	emitCmd.Flags().StringVar(&emitType, "type", "", "event type: milestone, decision, blocked, unblocked, handoff, followup, status, message (required)")
 	emitCmd.Flags().StringVar(&emitTitle, "title", "", "event title (required)")
+	emitCmd.Flags().StringVar(&emitMessage, "message", "", "alias for --title")
 	emitCmd.Flags().StringVar(&emitBody, "body", "", "event body")
+	emitCmd.Flags().StringVar(&emitDetail, "detail", "", "alias for --body")
 	emitCmd.Flags().StringVar(&emitSessionID, "session-id", "", "source session ID (auto-detected if omitted)")
 	emitCmd.Flags().StringVar(&emitSource, "source", "agent", "event source")
 	emitCmd.Flags().BoolVar(&emitBroadcast, "broadcast", false, "broadcast to all sessions")
 	emitCmd.Flags().StringVar(&emitTags, "tags", "", "comma-separated tags")
 	emitCmd.Flags().StringSliceVar(&emitTo, "to", nil, "recipient session IDs or branch names (can specify multiple)")
 	emitCmd.MarkFlagRequired("type")
-	emitCmd.MarkFlagRequired("title")
 }
 
 func runEmit(cmd *cobra.Command, args []string) error {
+	if emitMessage != "" && emitTitle == "" {
+		emitTitle = emitMessage
+	}
+	if emitDetail != "" && emitBody == "" {
+		emitBody = emitDetail
+	}
+	if emitTitle == "" {
+		return fmt.Errorf("required flag \"title\" not set (--message is also accepted)")
+	}
+
 	d, err := openDB()
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
