@@ -323,9 +323,9 @@ else
     if [ "$AWAITING_COUNT" -gt 0 ] 2>/dev/null; then
         [ -n "$FINAL" ] && FINAL+="\n"
         if [ "$AWAITING_COUNT" -eq 1 ]; then
-            FINAL+="${YELLOW}1 session awaiting approval${RESET}"
+            FINAL+="${YELLOW}1 other session awaiting approval${RESET}"
         else
-            FINAL+="${YELLOW}${AWAITING_COUNT} sessions awaiting approval${RESET}"
+            FINAL+="${YELLOW}${AWAITING_COUNT} other sessions awaiting approval${RESET}"
         fi
     fi
 fi
