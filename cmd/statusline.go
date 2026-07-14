@@ -1,17 +1,39 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
+	gitpkg "github.com/mturley/agent-handler/git"
 	"github.com/mturley/agent-handler/terminal"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
+)
+
+// ANSI color constants
+const (
+	colorCyan       = "\033[36m"
+	colorYellow     = "\033[33m"
+	colorGreen      = "\033[32m"
+	colorRed        = "\033[31m"
+	colorPurple     = "\033[35m"
+	colorBlue       = "\033[34m"
+	colorBoldWhite  = "\033[1;37m"
+	colorBoldGreen  = "\033[1;32m"
+	colorDim        = "\033[2m"
+	colorDimGreen   = "\033[2;32m"
+	colorClaudeOrange = "\033[38;2;218;119;86m"
+	colorUnderline  = "\033[4m"
+	colorReset      = "\033[0m"
 )
 
 var statuslineCmd = &cobra.Command{
@@ -20,314 +42,210 @@ var statuslineCmd = &cobra.Command{
 	RunE:  runStatusline,
 }
 
-var slSessionID string
+var (
+	slSessionID string
+	slFromHook  bool
+)
 
 func init() {
 	statuslineCmd.GroupID = "agent"
 	rootCmd.AddCommand(statuslineCmd)
 	statuslineCmd.Flags().StringVar(&slSessionID, "session", "", "session ID")
-	statuslineCmd.MarkFlagRequired("session")
+	statuslineCmd.Flags().BoolVar(&slFromHook, "from-hook", false, "read session data from stdin JSON (statusline hook mode)")
+}
+
+// hookInput represents the JSON passed on stdin by Claude Code's statusline hook.
+type hookInput struct {
+	SessionID      string `json:"session_id"`
+	SessionName    string `json:"session_name"`
+	TranscriptPath string `json:"transcript_path"`
+	CWD            string `json:"cwd"`
+	Model          struct {
+		DisplayName string `json:"display_name"`
+	} `json:"model"`
+	ContextWindow struct {
+		UsedPercentage int `json:"used_percentage"`
+	} `json:"context_window"`
+	Cost struct {
+		TotalCostUSD float64 `json:"total_cost_usd"`
+	} `json:"cost"`
 }
 
 func runStatusline(cmd *cobra.Command, args []string) error {
+	if slFromHook {
+		return runStatuslineFromHook(cmd)
+	}
+	if slSessionID == "" {
+		return fmt.Errorf("either --session or --from-hook is required")
+	}
+	return runStatuslineDirect(cmd)
+}
+
+// runStatuslineFromHook reads stdin JSON and produces the complete statusline.
+func runStatuslineFromHook(cmd *cobra.Command) error {
+	// Read stdin
+	data, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fmt.Errorf("failed to read stdin: %w", err)
+	}
+
+	var input hookInput
+	if err := json.Unmarshal(data, &input); err != nil {
+		return fmt.Errorf("failed to parse stdin JSON: %w", err)
+	}
+
+	if input.SessionID == "" {
+		return fmt.Errorf("no session_id in stdin")
+	}
+
 	d, err := openReadOnlyDB()
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer d.Close()
 
-	// Get session
-	session, err := d.GetSession(slSessionID)
+	session, err := d.GetSession(input.SessionID)
 	if err != nil || session == nil || session.Status == "archived" {
 		fmt.Println("Session not registered with handler. Say hello to register.")
 		return nil
 	}
 
-	// Check if this is a handler session
-	if session.Role == "handler" {
-		return runHandlerStatusline(cmd, d, session)
+	isHandler := session.Role == "handler"
+
+	// Launch parallel goroutines for expensive operations
+	var gitStatus *gitpkg.Status
+	var awaitingNames []string
+	var wg sync.WaitGroup
+
+	// Git status (only for non-handler sessions)
+	if !isHandler {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			gitStatus = gitpkg.GetStatus(input.CWD)
+		}()
 	}
 
-	// Emit config prefix for the shell hook
-	cfg, err := config.Read(config.DefaultPath())
-	if err != nil {
+	// Peek scan for awaiting approval
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		awaitingNames = scanAwaitingApproval(d, session.SessionID)
+	}()
+
+	// While goroutines run, fetch handler data (fast SQLite queries)
+	cfg, _ := config.Read(config.DefaultPath())
+	if cfg == nil {
 		cfg = &config.Config{}
 	}
-	ctxFlag, gitFlag := 0, 0
-	if cfg.StatuslineShowContext() {
-		ctxFlag = 1
-	}
-	if cfg.StatuslineShowGit() {
-		gitFlag = 1
-	}
-	fmt.Printf("__cfg:context=%d,git=%d\n", ctxFlag, gitFlag)
 
-	// Query unread count
-	unreadCount, breakdown, err := d.UnreadCountForSession(slSessionID)
+	// Wait for parallel work
+	wg.Wait()
+
+	// Assemble output
+	if isHandler {
+		return renderHandlerStatusline(d, session, cfg, &input, awaitingNames)
+	}
+	return renderWorkerStatusline(d, session, cfg, &input, gitStatus, awaitingNames)
+}
+
+// runStatuslineDirect is the legacy --session mode for direct CLI use.
+func runStatuslineDirect(cmd *cobra.Command) error {
+	d, err := openReadOnlyDB()
 	if err != nil {
-		return fmt.Errorf("failed to query unread count: %w", err)
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+	defer d.Close()
+
+	session, err := d.GetSession(slSessionID)
+	if err != nil || session == nil || session.Status == "archived" {
+		fmt.Println("not registered")
+		return nil
 	}
 
-	// Query direct message count
-	directCount, err := d.DirectCountForSession(slSessionID)
+	// Direct mode just outputs the handler-specific lines (no git, no model)
+	cfg, _ := config.Read(config.DefaultPath())
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+
+	if session.Role == "handler" {
+		awaitingNames := scanAwaitingApproval(d, session.SessionID)
+		return renderHandlerStatusline(d, session, cfg, nil, awaitingNames)
+	}
+	return renderWorkerStatusline(d, session, cfg, nil, nil, nil)
+}
+
+// scanAwaitingApproval checks all peekable sessions for approval prompts.
+func scanAwaitingApproval(d *db.DB, selfSessionID string) []string {
+	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
-		return fmt.Errorf("failed to query direct count: %w", err)
+		return nil
 	}
 
-	cmd_color := "\033[36m" // cyan
-	reset_color := "\033[0m"
-	yellow := "\033[33m" // yellow
-
-	dim := "\033[2m" // dim
-	reset := "\033[0m"
-
-	// Output line 1: inbox status
-	if unreadCount == 0 {
-		fmt.Printf("%s/inbox%s: No new messages %s— %s%s/message%s%s to talk to other sessions%s",
-			cmd_color, reset_color, dim, dim, cmd_color, reset, dim, reset)
-	} else {
-		// Build breakdown string
-		var breakdownParts []string
-		for eventType, count := range breakdown {
-			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, watcher.EventType(eventType).DisplayName()))
+	var names []string
+	for _, s := range sessions {
+		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
+			continue
 		}
-		breakdownStr := ""
-		if len(breakdownParts) > 0 {
-			joined := breakdownParts[0]
-			for i := 1; i < len(breakdownParts); i++ {
-				joined += fmt.Sprintf(", %s", breakdownParts[i])
+		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
+			continue
+		}
+		backend, err := terminal.NewBackend(s.TerminalType)
+		if err != nil {
+			continue
+		}
+		content, err := backend.Capture(s.TerminalID, 10)
+		if err != nil {
+			continue
+		}
+		if needsInput, _ := terminal.NeedsInput(content); needsInput {
+			name := s.SessionName
+			if name == "" {
+				name = s.SessionID[:8]
 			}
-			breakdownStr = fmt.Sprintf(" (%s)", joined)
-		}
-		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", cmd_color, reset_color, yellow, unreadCount, reset_color, breakdownStr)
-	}
-
-	// Add direct message indicator if > 0
-	if directCount > 0 {
-		fmt.Printf(" | %s● %d direct%s", yellow, directCount, reset_color)
-	}
-	// Add /inbox-clear hint when there are unreads
-	if unreadCount > 0 {
-		fmt.Printf(" %s— %s/inbox-clear%s%s to dismiss%s", dim, cmd_color, reset, dim, reset)
-	}
-	fmt.Println()
-
-	// Auto-delivered count (only in auto mode, after /inbox line)
-	if session.InboxMode == "auto" {
-		autoCount, err := d.AutoDeliveredCount(slSessionID)
-		if err == nil && autoCount > 0 {
-			fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s— send any prompt or %s/catchup%s %sfor a recap%s\n",
-				yellow, autoCount, reset_color, dim, cmd_color, reset_color, dim, reset_color)
+			names = append(names, name)
 		}
 	}
+	return names
+}
 
-	// Output line 2: inbox mode
-	// TODO: Detect if polling is stopped for auto mode
-	// For now, just show the mode
-	active := "\033[1;32m"  // bold green
+// renderWorkerStatusline outputs the complete statusline for a regular session.
+func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, gs *gitpkg.Status, awaitingNames []string) error {
+	// Line 1: Git status
+	if gs != nil && gs.InGit {
+		fmt.Println(formatGitLine(gs))
+	}
 
-	modes := map[string]string{"manual": "manual", "on-submit": "on-submit", "auto": "auto"}
-	rendered := ""
-	for i, mode := range []string{"manual", "on-submit", "auto"} {
-		if i > 0 {
-			rendered += fmt.Sprintf("%s | %s", dim, reset)
-		}
-		if session.InboxMode == mode {
-			rendered += fmt.Sprintf("%s%s%s", active, modes[mode], reset)
+	// Line 2: Model/context/cost
+	if input != nil && input.Model.DisplayName != "" {
+		fmt.Println(formatModelLine(input))
+	}
+
+	// Handler lines (inbox, inbox-mode, watching)
+	renderInboxLine(d, session, false)
+	renderAutoDeliveredLine(d, session)
+	renderInboxModeLine(session)
+	renderWatchingLine(d, session, cfg, false)
+	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
+		colorDim, colorCyan, colorReset, colorDim, colorReset)
+
+	// Awaiting approval
+	if len(awaitingNames) > 0 {
+		nameList := formatNameList(awaitingNames, 3)
+		if len(awaitingNames) == 1 {
+			fmt.Printf("%s1 other session awaiting approval (%s)%s\n", colorYellow, nameList, colorReset)
 		} else {
-			rendered += fmt.Sprintf("%s%s%s", dim, modes[mode], reset)
+			fmt.Printf("%s%d other sessions awaiting approval (%s)%s\n", colorYellow, len(awaitingNames), nameList, colorReset)
 		}
 	}
-	fmt.Printf("%s/inbox-mode%s: %s\n", cmd_color, reset_color, rendered)
-
-	// Output line 3: active subscriptions and watcher status
-	subs, err := d.ListSubscriptions(slSessionID, false)
-	if err != nil {
-		return fmt.Errorf("failed to query subscriptions: %w", err)
-	}
-
-	// Count subscriptions by type
-	prCount := 0
-	jiraCount := 0
-	for _, sub := range subs {
-		if sub.ResourceType == "pr" {
-			prCount++
-		} else if sub.ResourceType == "jira" {
-			jiraCount++
-		}
-	}
-
-	// Check which resource types have unread events
-	prUnread := false
-	jiraUnread := false
-	for eventType := range breakdown {
-		switch watcher.EventType(eventType) {
-		case watcher.EventTypePRComment, watcher.EventTypePRReviewComment, watcher.EventTypePRReviewRequested, watcher.EventTypePRApproved,
-			watcher.EventTypePRClosed, watcher.EventTypePRMerged, watcher.EventTypePRReopened, watcher.EventTypePRNewCommits,
-			watcher.EventTypeCICheckPassed, watcher.EventTypeCICheckFailed:
-			prUnread = true
-		case watcher.EventTypeJiraComment, watcher.EventTypeJiraStatusChange, watcher.EventTypeJiraAssigned,
-			watcher.EventTypeJiraDescChanged, watcher.EventTypeJiraLabelsChanged:
-			jiraUnread = true
-		case watcher.EventTypeWatcherError:
-			// Check if this error is for PR or Jira subscriptions
-			if prCount > 0 {
-				prUnread = true
-			}
-			if jiraCount > 0 {
-				jiraUnread = true
-			}
-		}
-	}
-
-	// Build subscription summary (normal weight, not dim)
-	subParts := []string{}
-	if prCount > 0 {
-		label := "1 PR"
-		if prCount > 1 {
-			label = fmt.Sprintf("%d PRs", prCount)
-		}
-		if prUnread {
-			subParts = append(subParts, fmt.Sprintf("%s● %s%s", yellow, label, reset))
-		} else {
-			subParts = append(subParts, label)
-		}
-	}
-	if jiraCount > 0 {
-		label := "1 Jira"
-		if jiraCount > 1 {
-			label = fmt.Sprintf("%d Jira", jiraCount)
-		}
-		if jiraUnread {
-			subParts = append(subParts, fmt.Sprintf("%s● %s%s", yellow, label, reset))
-		} else {
-			subParts = append(subParts, label)
-		}
-	}
-
-	subSummary := ""
-	if len(subParts) == 0 {
-		subSummary = fmt.Sprintf("%sno active subscriptions%s", dim, reset)
-	} else {
-		subSummary = subParts[0]
-		for i := 1; i < len(subParts); i++ {
-			subSummary += ", " + subParts[i]
-		}
-	}
-
-	// Check watcher status
-	watcherStatus := ""
-	green := "\033[32m" // green
-	red := "\033[31m"   // red
-	services := []string{}
-	for _, svc := range []string{"github", "jira"} {
-		if cfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
-			lastRun := watcher.LastRunTime(svc)
-			ago := ""
-			if lastRun != nil {
-				ago = fmt.Sprintf(" (%s ago)", formatDuration(time.Since(*lastRun)))
-			}
-			if d.HasWatcherError(svc) {
-				services = append(services, fmt.Sprintf("%s✗%s%s %s%s", red, reset, dim, svc, ago))
-			} else {
-				services = append(services, fmt.Sprintf("%s✓%s%s %s%s", green, reset, dim, svc, ago))
-			}
-		}
-	}
-
-	if len(services) > 0 {
-		watcherStatus = " | "
-		for i, s := range services {
-			if i > 0 {
-				watcherStatus += " "
-			}
-			watcherStatus += s
-		}
-	}
-
-	// Build resource links (unread resources first)
-	unreadResources, _ := d.UnreadResourcesForSession(slSessionID)
-	resourceLinks := ""
-	if len(subs) > 0 {
-		sort.Slice(subs, func(i, j int) bool {
-			iKey := subs[i].ResourceType + ":" + subs[i].ResourceID
-			jKey := subs[j].ResourceType + ":" + subs[j].ResourceID
-			iUnread, jUnread := unreadResources[iKey], unreadResources[jKey]
-			if iUnread != jUnread {
-				return iUnread
-			}
-			return false
-		})
-		var links []string
-		for _, sub := range subs {
-			label := shortResourceLabel(sub.ResourceType, sub.ResourceID)
-			resKey := sub.ResourceType + ":" + sub.ResourceID
-			hasUnread := unreadResources[resKey]
-			url := ""
-			if sub.ResourceURL != nil {
-				url = *sub.ResourceURL
-			}
-			if url == "" {
-				url = cfg.DefaultResourceURL(sub.ResourceType, sub.ResourceID)
-			}
-			linkColor := "\033[34m" // blue
-			if hasUnread {
-				linkColor = yellow
-			}
-			if url != "" {
-				underline := "\033[4m"
-				links = append(links, fmt.Sprintf("%s%s\033]8;;%s\033\\%s\033]8;;\033\\%s", linkColor, underline, url, label, reset))
-			} else {
-				links = append(links, fmt.Sprintf("%s%s%s", linkColor, label, reset))
-			}
-		}
-		joined := links[0]
-		for i := 1; i < len(links); i++ {
-			joined += fmt.Sprintf("%s, %s", dim, reset) + links[i]
-		}
-		resourceLinks = joined
-	}
-
-	// Segment between sub summary and watcher status: resource links or /watch hint
-	middleSegment := ""
-	if resourceLinks != "" && len(subs) <= 2 {
-		middleSegment = fmt.Sprintf(" %s| %s%s", dim, reset, resourceLinks)
-	} else if len(subs) == 0 {
-		middleSegment = fmt.Sprintf(" %s| %s/watch%s%s to follow PRs or Jira issues%s", dim, cmd_color, reset, dim, reset)
-	}
-
-	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", cmd_color, reset_color, subSummary, middleSegment, dim, watcherStatus, reset)
-	if resourceLinks != "" && len(subs) > 2 {
-		fmt.Printf("%s  ↳ %s%s\n", dim, reset, resourceLinks)
-	}
-
-	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n", dim, cmd_color, reset_color, dim, reset)
 
 	return nil
 }
 
-func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) error {
-	// Emit config prefix for the shell hook
-	hcfg, err := config.Read(config.DefaultPath())
-	if err != nil {
-		hcfg = &config.Config{}
-	}
-	ctxFlag := 0
-	if hcfg.StatuslineShowContext() {
-		ctxFlag = 1
-	}
-	fmt.Printf("__cfg:context=%d,git=0\n", ctxFlag)
-
-	cmd_color := "\033[36m" // cyan
-	reset_color := "\033[0m"
-	yellow := "\033[33m" // yellow
-	green := "\033[32m" // green
-	red := "\033[31m"   // red
-	dim := "\033[2m"    // dim
-	reset := "\033[0m"
-	purple := "\033[35m" // purple
-
-	// Count active sessions (excluding self)
+// renderHandlerStatusline outputs the complete statusline for a handler session.
+func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, awaitingNames []string) error {
+	// Count active sessions
 	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
@@ -365,62 +283,139 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		blockedRows.Scan(&blockedCount)
 	}
 
-	// Count sessions awaiting input
-	var awaitingNames []string
-	for _, s := range sessions {
-		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
-			continue
-		}
-		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
-			continue
-		}
-		backend, err := terminal.NewBackend(s.TerminalType)
-		if err != nil {
-			continue
-		}
-		content, err := backend.Capture(s.TerminalID, 10)
-		if err != nil {
-			continue
-		}
-		if needsInput, _ := terminal.NeedsInput(content); needsInput {
-			name := s.SessionName
-			if name == "" {
-				name = s.SessionID[:8]
-			}
-			awaitingNames = append(awaitingNames, name)
-		}
-	}
-
 	// Line 1: Sessions overview
 	awaitingStr := ""
 	if len(awaitingNames) > 0 {
 		nameList := formatNameList(awaitingNames, 3)
-		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s", yellow, len(awaitingNames), nameList, reset)
+		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s", colorYellow, len(awaitingNames), nameList, colorReset)
 	}
 	if len(awaitingNames) > 0 {
 		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s\n",
-			purple, reset, "\033[1m", reset, activeCount, blockedCount, awaitingStr)
+			colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, awaitingStr)
 	} else {
 		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
-			purple, reset, "\033[1m", reset, activeCount, blockedCount, dim, cmd_color, reset, dim, reset)
+			colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, colorDim, colorCyan, colorReset, colorDim, colorReset)
 	}
 
-	// Get direct message count
-	directCount, err := d.DirectCountForSession(session.SessionID)
+	// Model line (if from hook)
+	if input != nil && input.Model.DisplayName != "" {
+		fmt.Println(formatModelLine(input))
+	}
+
+	// Inbox (global for handler)
+	renderInboxLine(d, session, true)
+	renderAutoDeliveredLine(d, session)
+	renderInboxModeLine(session)
+	renderWatchingLine(d, session, cfg, true)
+
+	return nil
+}
+
+// --- Shared rendering helpers ---
+
+func formatGitLine(gs *gitpkg.Status) string {
+	var parts []string
+
+	// Branch name with rebase indicator
+	if gs.Rebasing {
+		parts = append(parts, fmt.Sprintf("%srebasing%s %s%s%s", colorYellow, colorReset, colorBoldWhite, gs.Branch, colorReset))
+	} else if gs.Branch == gs.DefaultBranch {
+		parts = append(parts, fmt.Sprintf("on %s%s%s", colorBoldWhite, gs.Branch, colorReset))
+	} else {
+		parts = append(parts, fmt.Sprintf("%s%s%s", colorBoldWhite, gs.Branch, colorReset))
+	}
+
+	// Ahead with committed stats
+	if gs.Ahead > 0 {
+		ahead := fmt.Sprintf("%s↑%d%s", colorGreen, gs.Ahead, colorReset)
+		if gs.CommittedAdds > 0 || gs.CommittedDels > 0 {
+			ahead += fmt.Sprintf(" (%s+%d%s %s−%d%s)", colorGreen, gs.CommittedAdds, colorReset, colorRed, gs.CommittedDels, colorReset)
+		}
+		parts = append(parts, ahead)
+	}
+
+	// Dirty/clean
+	dirty := gs.Modified + gs.Untracked
+	if dirty > 0 {
+		var dirtyParts []string
+		if gs.Modified > 0 {
+			dirtyParts = append(dirtyParts, fmt.Sprintf("%s%d modified%s", colorYellow, gs.Modified, colorReset))
+		}
+		if gs.Untracked > 0 {
+			dirtyParts = append(dirtyParts, fmt.Sprintf("%s%d untracked%s", colorYellow, gs.Untracked, colorReset))
+		}
+		dirtyStr := strings.Join(dirtyParts, ", ")
+		if gs.UncommittedAdds > 0 || gs.UncommittedDels > 0 {
+			dirtyStr += fmt.Sprintf(" (%s+%d%s %s−%d%s)", colorGreen, gs.UncommittedAdds, colorReset, colorRed, gs.UncommittedDels, colorReset)
+		}
+		parts = append(parts, dirtyStr)
+	} else {
+		parts = append(parts, fmt.Sprintf("%sclean%s", colorDimGreen, colorReset))
+	}
+
+	// Behind
+	if gs.Behind > 0 {
+		parts = append(parts, fmt.Sprintf("%s↓%d behind %s%s", colorDim, gs.Behind, gs.DefaultBranch, colorReset))
+	}
+
+	// Join with " | " between branch+ahead and dirty sections
+	result := parts[0]
+	if gs.Ahead > 0 && len(parts) > 1 {
+		result += " " + parts[1]
+		if len(parts) > 2 {
+			result += " | " + strings.Join(parts[2:], " ")
+		}
+	} else if len(parts) > 1 {
+		result += " | " + strings.Join(parts[1:], " ")
+	}
+
+	return result
+}
+
+func formatModelLine(input *hookInput) string {
+	pct := input.ContextWindow.UsedPercentage
+	filled := pct * 20 / 100
+	empty := 20 - filled
+
+	bar := strings.Repeat("▓", filled) + strings.Repeat("░", empty)
+
+	barColor := colorGreen
+	if pct >= 80 {
+		barColor = colorRed
+	} else if pct >= 50 {
+		barColor = colorYellow
+	}
+
+	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s| $%.2f%s",
+		colorClaudeOrange, input.Model.DisplayName, colorReset,
+		barColor, bar, colorReset,
+		pct,
+		colorDim, input.Cost.TotalCostUSD, colorReset)
+}
+
+func renderInboxLine(d *db.DB, session *db.Session, global bool) {
+	var unreadCount int
+	var breakdown map[string]int
+	var err error
+
+	if global {
+		unreadCount, breakdown, err = d.GlobalUnreadCountForSession(session.SessionID)
+	} else {
+		unreadCount, breakdown, err = d.UnreadCountForSession(session.SessionID)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to query direct count: %w", err)
+		return
 	}
 
-	// Get global unread count (handler sees all events, not just targeted ones)
-	unreadCount, breakdown, err := d.GlobalUnreadCountForSession(session.SessionID)
-	if err != nil {
-		return fmt.Errorf("failed to query unread count: %w", err)
-	}
+	directCount, _ := d.DirectCountForSession(session.SessionID)
 
-	// Line 2: Inbox status (global — all events across all sessions)
 	if unreadCount == 0 {
-		fmt.Printf("%s/inbox%s: No new events %s— %s%s/message%s%s to talk to other sessions%s",
-			cmd_color, reset_color, dim, dim, cmd_color, reset, dim, reset)
+		noMsgLabel := "No new messages"
+		if global {
+			noMsgLabel = "No new events"
+		}
+		fmt.Printf("%s/inbox%s: %s %s— %s%s/message%s%s to talk to other sessions%s",
+			colorCyan, colorReset, noMsgLabel, colorDim, colorDim, colorCyan, colorReset, colorDim, colorReset)
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {
@@ -428,67 +423,114 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		}
 		breakdownStr := ""
 		if len(breakdownParts) > 0 {
-			joined := breakdownParts[0]
-			for i := 1; i < len(breakdownParts); i++ {
-				joined += fmt.Sprintf(", %s", breakdownParts[i])
-			}
-			breakdownStr = fmt.Sprintf(" (%s)", joined)
+			breakdownStr = fmt.Sprintf(" (%s)", strings.Join(breakdownParts, ", "))
 		}
-		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", cmd_color, reset_color, yellow, unreadCount, reset_color, breakdownStr)
+		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", colorCyan, colorReset, colorYellow, unreadCount, colorReset, breakdownStr)
 	}
+
 	if directCount > 0 {
-		fmt.Printf(" | %s● %d direct%s", yellow, directCount, reset_color)
+		fmt.Printf(" | %s● %d direct%s", colorYellow, directCount, colorReset)
+	}
+	if unreadCount > 0 {
+		fmt.Printf(" %s— %s/inbox-clear%s%s to dismiss%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
 	}
 	fmt.Println()
+}
 
-	// Auto-delivered count for handler
-	autoCount, err := d.AutoDeliveredCountAll(session.SessionID)
-	if err == nil && autoCount > 0 {
-		fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s— send any prompt or %s/catchup%s %sfor a recap%s\n",
-			yellow, autoCount, reset_color, dim, cmd_color, reset_color, dim, reset_color)
+func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
+	if session.InboxMode != "auto" {
+		return
 	}
+	var autoCount int
+	var err error
+	if session.Role == "handler" {
+		autoCount, err = d.AutoDeliveredCountAll(session.SessionID)
+	} else {
+		autoCount, err = d.AutoDeliveredCount(session.SessionID)
+	}
+	if err != nil || autoCount == 0 {
+		return
+	}
+	fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s— send any prompt or %s/catchup%s %sfor a recap%s\n",
+		colorYellow, autoCount, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
+}
 
-	// Line 3: Inbox mode
-	active := "\033[1;32m" // bold green
-	modes := map[string]string{"manual": "manual", "on-submit": "on-submit", "auto": "auto"}
+func renderInboxModeLine(session *db.Session) {
 	rendered := ""
 	for i, mode := range []string{"manual", "on-submit", "auto"} {
 		if i > 0 {
-			rendered += fmt.Sprintf("%s | %s", dim, reset)
+			rendered += fmt.Sprintf("%s | %s", colorDim, colorReset)
 		}
 		if session.InboxMode == mode {
-			rendered += fmt.Sprintf("%s%s%s", active, modes[mode], reset)
+			rendered += fmt.Sprintf("%s%s%s", colorBoldGreen, mode, colorReset)
 		} else {
-			rendered += fmt.Sprintf("%s%s%s", dim, modes[mode], reset)
+			rendered += fmt.Sprintf("%s%s%s", colorDim, mode, colorReset)
 		}
 	}
-	fmt.Printf("%s/inbox-mode%s: %s\n", cmd_color, reset_color, rendered)
+	fmt.Printf("%s/inbox-mode%s: %s\n", colorCyan, colorReset, rendered)
+}
 
-	// Line 3: Watching with GLOBAL resource count
-	// Count all subscriptions across all sessions
-	allSubs, err := d.Query(`
-		SELECT resource_type, COUNT(*) as count
-		FROM subscriptions
-		WHERE deleted_at IS NULL
-		GROUP BY resource_type
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to query global subscriptions: %w", err)
-	}
-	defer allSubs.Close()
+func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, global bool) {
+	var prCount, jiraCount int
+	var unreadResources map[string]bool
+	var breakdown map[string]int
 
-	prCount := 0
-	jiraCount := 0
-	for allSubs.Next() {
-		var resourceType string
-		var count int
-		if err := allSubs.Scan(&resourceType, &count); err != nil {
-			return fmt.Errorf("failed to scan subscription count: %w", err)
+	if global {
+		// Count all subscriptions across all sessions
+		allSubs, err := d.Query(`
+			SELECT resource_type, COUNT(*) as count
+			FROM subscriptions
+			WHERE deleted_at IS NULL
+			GROUP BY resource_type
+		`)
+		if err == nil {
+			defer allSubs.Close()
+			for allSubs.Next() {
+				var rt string
+				var count int
+				allSubs.Scan(&rt, &count)
+				if rt == "pr" {
+					prCount += count
+				} else if rt == "jira" {
+					jiraCount += count
+				}
+			}
 		}
-		if resourceType == "pr" {
-			prCount += count
-		} else if resourceType == "jira" {
-			jiraCount += count
+	} else {
+		subs, err := d.ListSubscriptions(session.SessionID, false)
+		if err == nil {
+			for _, sub := range subs {
+				if sub.ResourceType == "pr" {
+					prCount++
+				} else if sub.ResourceType == "jira" {
+					jiraCount++
+				}
+			}
+		}
+		_, breakdown, _ = d.UnreadCountForSession(session.SessionID)
+		unreadResources, _ = d.UnreadResourcesForSession(session.SessionID)
+	}
+
+	// Determine which resource types have unread events
+	prUnread, jiraUnread := false, false
+	if !global {
+		for eventType := range breakdown {
+			switch watcher.EventType(eventType) {
+			case watcher.EventTypePRComment, watcher.EventTypePRReviewComment, watcher.EventTypePRReviewRequested, watcher.EventTypePRApproved,
+				watcher.EventTypePRClosed, watcher.EventTypePRMerged, watcher.EventTypePRReopened, watcher.EventTypePRNewCommits,
+				watcher.EventTypeCICheckPassed, watcher.EventTypeCICheckFailed:
+				prUnread = true
+			case watcher.EventTypeJiraComment, watcher.EventTypeJiraStatusChange, watcher.EventTypeJiraAssigned,
+				watcher.EventTypeJiraDescChanged, watcher.EventTypeJiraLabelsChanged:
+				jiraUnread = true
+			case watcher.EventTypeWatcherError:
+				if prCount > 0 {
+					prUnread = true
+				}
+				if jiraCount > 0 {
+					jiraUnread = true
+				}
+			}
 		}
 	}
 
@@ -499,61 +541,106 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		if prCount > 1 {
 			label = fmt.Sprintf("%d PRs", prCount)
 		}
-		subParts = append(subParts, label)
+		if prUnread {
+			subParts = append(subParts, fmt.Sprintf("%s● %s%s", colorYellow, label, colorReset))
+		} else {
+			subParts = append(subParts, label)
+		}
 	}
 	if jiraCount > 0 {
 		label := "1 Jira"
 		if jiraCount > 1 {
 			label = fmt.Sprintf("%d Jira", jiraCount)
 		}
-		subParts = append(subParts, label)
+		if jiraUnread {
+			subParts = append(subParts, fmt.Sprintf("%s● %s%s", colorYellow, label, colorReset))
+		} else {
+			subParts = append(subParts, label)
+		}
 	}
 
 	subSummary := ""
 	if len(subParts) == 0 {
-		subSummary = fmt.Sprintf("%sno active subscriptions%s", dim, reset)
+		subSummary = fmt.Sprintf("%sno active subscriptions%s", colorDim, colorReset)
 	} else {
-		subSummary = subParts[0]
-		for i := 1; i < len(subParts); i++ {
-			subSummary += ", " + subParts[i]
-		}
+		subSummary = strings.Join(subParts, ", ")
 	}
 
-	// Check watcher status
+	// Watcher status
 	watcherStatus := ""
-	services := []string{}
+	var services []string
 	for _, svc := range []string{"github", "jira"} {
-		if hcfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
+		if cfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
 			lastRun := watcher.LastRunTime(svc)
 			ago := ""
 			if lastRun != nil {
 				ago = fmt.Sprintf(" (%s ago)", formatDuration(time.Since(*lastRun)))
 			}
 			if d.HasWatcherError(svc) {
-				services = append(services, fmt.Sprintf("%s✗%s%s %s%s", red, reset, dim, svc, ago))
+				services = append(services, fmt.Sprintf("%s✗%s%s %s%s", colorRed, colorReset, colorDim, svc, ago))
 			} else {
-				services = append(services, fmt.Sprintf("%s✓%s%s %s%s", green, reset, dim, svc, ago))
+				services = append(services, fmt.Sprintf("%s✓%s%s %s%s", colorGreen, colorReset, colorDim, svc, ago))
 			}
 		}
 	}
-
 	if len(services) > 0 {
-		watcherStatus = " | "
-		for i, s := range services {
-			if i > 0 {
-				watcherStatus += " "
+		watcherStatus = " | " + strings.Join(services, " ")
+	}
+
+	// Resource links (worker only)
+	middleSegment := ""
+	if !global {
+		subs, _ := d.ListSubscriptions(session.SessionID, false)
+		if len(subs) > 0 {
+			sort.Slice(subs, func(i, j int) bool {
+				iKey := subs[i].ResourceType + ":" + subs[i].ResourceID
+				jKey := subs[j].ResourceType + ":" + subs[j].ResourceID
+				iUnread, jUnread := unreadResources[iKey], unreadResources[jKey]
+				if iUnread != jUnread {
+					return iUnread
+				}
+				return false
+			})
+			var links []string
+			for _, sub := range subs {
+				label := shortResourceLabel(sub.ResourceType, sub.ResourceID)
+				resKey := sub.ResourceType + ":" + sub.ResourceID
+				hasUnread := unreadResources[resKey]
+				url := ""
+				if sub.ResourceURL != nil {
+					url = *sub.ResourceURL
+				}
+				if url == "" {
+					url = cfg.DefaultResourceURL(sub.ResourceType, sub.ResourceID)
+				}
+				linkColor := colorBlue
+				if hasUnread {
+					linkColor = colorYellow
+				}
+				if url != "" {
+					links = append(links, fmt.Sprintf("%s%s\033]8;;%s\033\\%s\033]8;;\033\\%s", linkColor, colorUnderline, url, label, colorReset))
+				} else {
+					links = append(links, fmt.Sprintf("%s%s%s", linkColor, label, colorReset))
+				}
 			}
-			watcherStatus += s
+			resourceLinks := strings.Join(links, fmt.Sprintf("%s, %s", colorDim, colorReset))
+			if len(subs) <= 2 {
+				middleSegment = fmt.Sprintf(" %s| %s%s", colorDim, colorReset, resourceLinks)
+			} else {
+				// Will be on a separate line
+				fmt.Printf("%s/watching%s: %s%s%s%s%s\n", colorCyan, colorReset, subSummary, middleSegment, colorDim, watcherStatus, colorReset)
+				fmt.Printf("%s  ↳ %s%s\n", colorDim, colorReset, resourceLinks)
+				return
+			}
+		} else {
+			middleSegment = fmt.Sprintf(" %s| %s/watch%s%s to follow PRs or Jira issues%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
 		}
 	}
 
-	fmt.Printf("%s/watching%s: %s%s%s%s\n", cmd_color, reset_color, subSummary, dim, watcherStatus, reset)
-
-	return nil
+	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", colorCyan, colorReset, subSummary, middleSegment, colorDim, watcherStatus, colorReset)
 }
 
 // shortResourceLabel returns a compact label for a resource.
-// PRs: "owner/repo#123" → "#123", Jira: "RHOAIENG-456" → "RHOAIENG-456"
 func shortResourceLabel(resourceType, resourceID string) string {
 	if resourceType == "pr" {
 		if idx := strings.LastIndex(resourceID, "#"); idx >= 0 {
