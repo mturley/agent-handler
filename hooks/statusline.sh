@@ -319,13 +319,27 @@ else
     fi
 
     # Check for sessions awaiting approval (non-handler only)
-    AWAITING_COUNT=$(handler peek --list-need-input --json 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin) or []))" 2>/dev/null || echo "0")
+    AWAITING_INFO=$(handler peek --list-need-input --json 2>/dev/null | python3 -c "
+import sys, json
+data = json.load(sys.stdin) or []
+if not data:
+    print('0|')
+else:
+    names = [d.get('session_name') or d['session_id'][:8] for d in data]
+    if len(names) <= 3:
+        listing = ', '.join(names)
+    else:
+        listing = ', '.join(names[:3]) + f', +{len(names)-3} more'
+    print(f'{len(data)}|{listing}')
+" 2>/dev/null || echo "0|")
+    AWAITING_COUNT="${AWAITING_INFO%%|*}"
+    AWAITING_NAMES="${AWAITING_INFO#*|}"
     if [ "$AWAITING_COUNT" -gt 0 ] 2>/dev/null; then
         [ -n "$FINAL" ] && FINAL+="\n"
         if [ "$AWAITING_COUNT" -eq 1 ]; then
-            FINAL+="${YELLOW}1 other session awaiting approval${RESET}"
+            FINAL+="${YELLOW}1 other session awaiting approval (${AWAITING_NAMES})${RESET}"
         else
-            FINAL+="${YELLOW}${AWAITING_COUNT} other sessions awaiting approval${RESET}"
+            FINAL+="${YELLOW}${AWAITING_COUNT} other sessions awaiting approval (${AWAITING_NAMES})${RESET}"
         fi
     fi
 fi

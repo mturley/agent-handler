@@ -366,7 +366,7 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 	}
 
 	// Count sessions awaiting input
-	awaitingCount := 0
+	var awaitingNames []string
 	for _, s := range sessions {
 		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
 			continue
@@ -383,14 +383,19 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 			continue
 		}
 		if needsInput, _ := terminal.NeedsInput(content); needsInput {
-			awaitingCount++
+			name := s.SessionName
+			if name == "" {
+				name = s.SessionID[:8]
+			}
+			awaitingNames = append(awaitingNames, name)
 		}
 	}
 
 	// Line 1: Sessions overview
 	awaitingStr := ""
-	if awaitingCount > 0 {
-		awaitingStr = fmt.Sprintf(", %s%d awaiting approval%s", yellow, awaitingCount, reset)
+	if len(awaitingNames) > 0 {
+		nameList := formatNameList(awaitingNames, 3)
+		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s", yellow, len(awaitingNames), nameList, reset)
 	}
 	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s %s— %s/handler%s %sto summarize all sessions%s\n",
 		purple, reset, "\033[1m", reset, activeCount, blockedCount, awaitingStr, dim, cmd_color, reset, dim, reset)
@@ -551,4 +556,11 @@ func shortResourceLabel(resourceType, resourceID string) string {
 		}
 	}
 	return resourceID
+}
+
+func formatNameList(names []string, max int) string {
+	if len(names) <= max {
+		return strings.Join(names, ", ")
+	}
+	return strings.Join(names[:max], ", ") + fmt.Sprintf(", +%d more", len(names)-max)
 }
