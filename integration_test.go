@@ -257,7 +257,7 @@ func TestIntegrationLifecycle(t *testing.T) {
 		"--jsonl-path", "/dev/null")
 
 	// Cleanup (sessions have fake PIDs so they'll be detected as dead)
-	out, err = runHandler(t, bin, home, "cleanup")
+	out, err = runHandler(t, bin, home, "cleanup", "--yes")
 	if err != nil {
 		t.Fatalf("cleanup failed: %s\nerr: %v", out, err)
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
@@ -15,12 +16,16 @@ var cleanupCmd = &cobra.Command{
 	RunE:  runCleanup,
 }
 
-var cleanupStale string
+var (
+	cleanupStale string
+	cleanupYes   bool
+)
 
 func init() {
 	cleanupCmd.GroupID = "admin"
 	rootCmd.AddCommand(cleanupCmd)
 	cleanupCmd.Flags().StringVar(&cleanupStale, "stale", "", "also archive sessions idle beyond this threshold (e.g., '14d')")
+	cleanupCmd.Flags().BoolVarP(&cleanupYes, "yes", "y", false, "skip confirmation prompt")
 }
 
 func runCleanup(cmd *cobra.Command, args []string) error {
@@ -30,15 +35,11 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 
-	// List all active sessions
 	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	var toArchive []string
-
-	// Parse stale duration if provided
 	var staleDuration time.Duration
 	if cleanupStale != "" {
 		staleDuration, err = time.ParseDuration(cleanupStale)
@@ -47,27 +48,28 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	type candidate struct {
+		session db.Session
+		reason  string
+	}
+	var candidates []candidate
+
 	for _, s := range sessions {
-		// Check process liveness
 		processAlive := discover.IsSessionProcess(s.PID, s.SessionID)
 		if !processAlive {
-			toArchive = append(toArchive, s.SessionID)
+			candidates = append(candidates, candidate{session: s, reason: "dead"})
 			continue
 		}
 
-		// Check staleness if --stale provided
 		if cleanupStale != "" {
 			lastActive, err := time.Parse(time.RFC3339, s.LastActive)
-			if err == nil {
-				age := time.Since(lastActive)
-				if age > staleDuration {
-					toArchive = append(toArchive, s.SessionID)
-				}
+			if err == nil && time.Since(lastActive) > staleDuration {
+				candidates = append(candidates, candidate{session: s, reason: "stale"})
 			}
 		}
 	}
 
-	if len(toArchive) == 0 {
+	if len(candidates) == 0 {
 		if jsonOutput {
 			fmt.Println(`{"archived": 0}`)
 		} else {
@@ -76,7 +78,28 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Archive sessions
+	// Show candidates and confirm (unless --yes)
+	if !cleanupYes {
+		fmt.Printf("Sessions to archive (%d):\n", len(candidates))
+		for _, c := range candidates {
+			name := c.session.SessionName
+			if name == "" {
+				name = c.session.SessionID[:8]
+			}
+			fmt.Printf("  %s (%s) — %s\n", name, c.reason, c.session.SessionID)
+		}
+		fmt.Println()
+		if !confirm("Archive these sessions?") {
+			fmt.Println("Aborted.")
+			return nil
+		}
+	}
+
+	var toArchive []string
+	for _, c := range candidates {
+		toArchive = append(toArchive, c.session.SessionID)
+	}
+
 	archived, err := d.ArchiveSessions(toArchive)
 	if err != nil {
 		return fmt.Errorf("failed to archive sessions: %w", err)
@@ -94,8 +117,12 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		fmt.Println(string(data))
 	} else {
 		fmt.Printf("✓ Archived %d session(s)\n", archived)
-		for _, sid := range toArchive {
-			fmt.Printf("  - %s\n", sid)
+		for _, c := range candidates {
+			name := c.session.SessionName
+			if name == "" {
+				name = c.session.SessionID[:8]
+			}
+			fmt.Printf("  - %s (%s)\n", name, c.reason)
 		}
 	}
 

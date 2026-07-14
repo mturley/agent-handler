@@ -92,7 +92,7 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 
 	// Sync session metadata (name, terminal)
 	termType, termID, workspaceID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionTitle, termType, termID, workspaceID)
+	syncSessionMetadata(d, input.SessionID, input.SessionTitle, os.Getppid(), termType, termID, workspaceID)
 
 	// Auto mode catchup: if there are auto-delivered events, tell agent to invoke /catchup
 	if session.InboxMode == "auto" && !isAutoInbox && input.Prompt != "/catchup" {

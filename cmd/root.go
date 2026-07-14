@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/mturley/agent-handler/cmd/resource"
 	"github.com/mturley/agent-handler/cmd/watcher"
@@ -139,8 +140,8 @@ func findSessionsAwaitingApproval(d *db.DB) []db.Session {
 	return awaiting
 }
 
-// syncSessionMetadata updates session name and terminal info only if changed.
-func syncSessionMetadata(d *db.DB, sessionID, name, termType, termID, workspaceID string) {
+// syncSessionMetadata updates session name, PID, and terminal info only if changed.
+func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID string) {
 	session, err := d.GetSession(sessionID)
 	if err != nil || session == nil {
 		return
@@ -149,6 +150,11 @@ func syncSessionMetadata(d *db.DB, sessionID, name, termType, termID, workspaceI
 	updates := map[string]interface{}{}
 	if name != "" && session.SessionName != name {
 		updates["session_name"] = name
+	}
+	if pid > 0 && session.PID != pid {
+		updates["pid"] = pid
+		sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
+		discover.WritePIDCache(sessionsDir, pid, sessionID)
 	}
 	if termType != "" && session.TerminalType != termType {
 		updates["terminal_type"] = termType
