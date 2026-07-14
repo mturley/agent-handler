@@ -78,8 +78,8 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Show candidates and confirm (unless --yes)
-	if !cleanupYes {
+	// Show candidates and confirm (unless --yes or --json)
+	if !cleanupYes && !jsonOutput {
 		fmt.Printf("Sessions to archive (%d):\n", len(candidates))
 		for _, c := range candidates {
 			name := c.session.SessionName
