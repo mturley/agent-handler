@@ -31,9 +31,12 @@ var setupCmd = &cobra.Command{
 	RunE:  runInstall,
 }
 
+var setupYes bool
+
 func init() {
 	setupCmd.GroupID = "admin"
 	rootCmd.AddCommand(setupCmd)
+	setupCmd.Flags().BoolVarP(&setupYes, "yes", "y", false, "skip confirmation prompts (non-interactive mode)")
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
@@ -71,7 +74,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Println("  Offer to install watchers for configured services")
 	fmt.Println("")
 
-	if !confirm("Proceed?") {
+	if !setupYes && !confirm("Proceed?") {
 		fmt.Println("Aborted.")
 		return nil
 	}
@@ -189,12 +192,16 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	configurePermissions(home)
 
 	// 10. Set up external service watchers (auth + install)
-	fmt.Println("\nSetting up external service watchers...")
-	watcherInstallCmd := exec.Command("handler", "watcher", "install")
-	watcherInstallCmd.Stdin = os.Stdin
-	watcherInstallCmd.Stdout = os.Stdout
-	watcherInstallCmd.Stderr = os.Stderr
-	watcherInstallCmd.Run()
+	if setupYes {
+		fmt.Println("\n  Skipping watcher setup (non-interactive mode). Run 'handler watcher install' to configure.")
+	} else {
+		fmt.Println("\nSetting up external service watchers...")
+		watcherInstallCmd := exec.Command("handler", "watcher", "install")
+		watcherInstallCmd.Stdin = os.Stdin
+		watcherInstallCmd.Stdout = os.Stdout
+		watcherInstallCmd.Stderr = os.Stderr
+		watcherInstallCmd.Run()
+	}
 
 	fmt.Println("\n✓ Installation complete!")
 	fmt.Printf("\n  All files installed to %s\n", handlerDir)
@@ -323,7 +330,7 @@ func configurePermissions(home string) {
 	fmt.Printf("  Auto-allow all handler CLI commands in Claude Code sessions?\n")
 	fmt.Printf("  This adds \"%s\" to your Claude Code permissions so agents\n", permission)
 	fmt.Printf("  can run handler commands without prompting for approval.\n\n")
-	if !confirm("  Add permission?") {
+	if !setupYes && !confirm("  Add permission?") {
 		fmt.Println("  Skipped. You can add it manually later in ~/.claude/settings.json")
 		return
 	}

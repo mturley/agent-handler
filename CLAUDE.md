@@ -4,9 +4,11 @@
 
 ```bash
 make build      # builds to bin/handler
-make install    # copies binary to $GOBIN, runs handler setup
+make install    # atomically installs binary, runs non-interactive setup
 make clean      # removes bin/
 ```
+
+`make install` uses atomic rename so it's safe to run while handler is actively running. Use `NONINTERACTIVE=1 make install` to skip confirmation prompts and watcher setup. Always use `NONINTERACTIVE=1` when installing from a Claude session.
 
 Or without the repo:
 ```bash
