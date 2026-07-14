@@ -92,7 +92,7 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 
 	// Sync session metadata (name, terminal)
 	termType, termID, workspaceID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionTitle, os.Getppid(), termType, termID, workspaceID)
+	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID)
 
 	// Auto mode catchup: if there are auto-delivered events, tell agent to invoke /catchup
 	if session.InboxMode == "auto" && !isAutoInbox && input.Prompt != "/catchup" {
@@ -146,7 +146,7 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 		Repo:            repo,
 		Branch:          branch,
 		SessionName:     input.SessionTitle,
-		PID:             os.Getppid(),
+		PID:             claudePID(),
 		Status:          "active",
 		InboxMode:       "manual",
 		LastActive:      now,
@@ -160,7 +160,7 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 	// Write PID cache
 	sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
 	os.MkdirAll(sessionsDir, 0755)
-	discover.WritePIDCache(sessionsDir, os.Getppid(), input.SessionID)
+	discover.WritePIDCache(sessionsDir, claudePID(), input.SessionID)
 
 	// Initialize cursor
 	d.AdvanceCursor(input.SessionID, now)

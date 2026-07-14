@@ -103,7 +103,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		now := time.Now().UTC().Format(time.RFC3339)
 		wd.BumpLastActive(input.SessionID, now)
 		termType, termID, workspaceID := terminal.Detect()
-		syncSessionMetadata(wd, input.SessionID, input.SessionName, os.Getppid(), termType, termID, workspaceID)
+		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID)
 		wd.Close()
 	}
 

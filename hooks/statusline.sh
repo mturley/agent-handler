@@ -6,4 +6,4 @@ if ! command -v handler &>/dev/null; then
     exit 0
 fi
 
-cat | handler statusline --from-hook 2>/dev/null
+CLAUDE_PID=$PPID cat | handler statusline --from-hook 2>/dev/null

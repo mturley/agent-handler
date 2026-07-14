@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/mturley/agent-handler/cmd/resource"
 	"github.com/mturley/agent-handler/cmd/watcher"
@@ -108,6 +109,18 @@ func resolveSessionByTarget(d *db.DB, target string) (*db.Session, error) {
 	}
 
 	return nil, fmt.Errorf("session %q not found", target)
+}
+
+// claudePID returns the Claude process PID. Hooks set CLAUDE_PID=$PPID before
+// invoking the Go binary, because the Go binary is a grandchild of Claude
+// (Claude → bash → Go) and os.Getppid() would return the bash PID.
+func claudePID() int {
+	if pidStr := os.Getenv("CLAUDE_PID"); pidStr != "" {
+		if pid, err := strconv.Atoi(pidStr); err == nil && pid > 0 {
+			return pid
+		}
+	}
+	return os.Getppid()
 }
 
 // findSessionsAwaitingApproval scans all peekable sessions for approval prompts.
