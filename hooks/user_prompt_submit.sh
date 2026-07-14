@@ -7,4 +7,5 @@ if ! command -v handler &>/dev/null; then
     exit 0
 fi
 
-CLAUDE_PID=$PPID cat | handler user-prompt-submit --from-hook
+export CLAUDE_PID=$PPID
+cat | handler user-prompt-submit --from-hook
