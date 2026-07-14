@@ -98,7 +98,16 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		return fmt.Errorf("no session_id in stdin")
 	}
 
-	d, err := openDB()
+	// Brief writable connection for heartbeat, then read-only for rendering
+	if wd, err := openDB(); err == nil {
+		now := time.Now().UTC().Format(time.RFC3339)
+		wd.BumpLastActive(input.SessionID, now)
+		termType, termID, workspaceID := terminal.Detect()
+		syncSessionMetadata(wd, input.SessionID, input.SessionName, termType, termID, workspaceID)
+		wd.Close()
+	}
+
+	d, err := openReadOnlyDB()
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -109,12 +118,6 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		fmt.Println("Session not registered with handler. Say hello to register.")
 		return nil
 	}
-
-	// Heartbeat: bump last_active and sync metadata
-	now := time.Now().UTC().Format(time.RFC3339)
-	d.BumpLastActive(input.SessionID, now)
-	termType, termID, workspaceID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionName, termType, termID, workspaceID)
 
 	isHandler := session.Role == "handler"
 

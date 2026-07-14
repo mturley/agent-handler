@@ -36,6 +36,12 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to set WAL mode: %w", err)
 	}
 
+	// Wait up to 3s for locks instead of failing immediately
+	if _, err := conn.Exec("PRAGMA busy_timeout=3000"); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to set busy timeout: %w", err)
+	}
+
 	// Apply schema
 	if _, err := conn.Exec(schemaDDL); err != nil {
 		conn.Close()
