@@ -107,3 +107,38 @@ func resolveSessionByTarget(d *db.DB, target string) (*db.Session, error) {
 
 	return nil, fmt.Errorf("session %q not found", target)
 }
+
+// syncSessionMetadata updates session name and terminal info only if changed.
+func syncSessionMetadata(d *db.DB, sessionID, name, termType, termID string) {
+	session, err := d.GetSession(sessionID)
+	if err != nil || session == nil {
+		return
+	}
+
+	updates := map[string]interface{}{}
+	if name != "" && session.SessionName != name {
+		updates["session_name"] = name
+	}
+	if termType != "" && session.TerminalType != termType {
+		updates["terminal_type"] = termType
+	}
+	if termID != "" && session.TerminalID != termID {
+		updates["terminal_id"] = termID
+	}
+
+	if len(updates) == 0 {
+		return
+	}
+
+	setClauses := ""
+	args := []interface{}{}
+	for col, val := range updates {
+		if setClauses != "" {
+			setClauses += ", "
+		}
+		setClauses += col + " = ?"
+		args = append(args, val)
+	}
+	args = append(args, sessionID)
+	d.Conn().Exec("UPDATE sessions SET "+setClauses+" WHERE session_id = ?", args...)
+}

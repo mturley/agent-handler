@@ -34,16 +34,9 @@ func init() {
 }
 
 func runNotify(cmd *cobra.Command, args []string) error {
-	if notifyCount == 0 {
-		// Clean up temp file if count dropped to 0
-		countFile := notifiedCountPath(notifySessionID)
-		os.Remove(countFile)
-		return nil
-	}
-
 	d, err := openReadOnlyDB()
 	if err != nil {
-		return nil // silently fail — don't break the statusline
+		return nil
 	}
 	defer d.Close()
 
@@ -52,41 +45,48 @@ func runNotify(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	if session.TerminalType == "" || session.TerminalID == "" {
-		return nil
+	dispatchNotification(session, notifyCount, notifyMessage)
+	return nil
+}
+
+// dispatchNotification sends a terminal notification if the unread count increased.
+func dispatchNotification(session *db.Session, unreadCount int, message string) {
+	if unreadCount == 0 {
+		countFile := notifiedCountPath(session.SessionID)
+		os.Remove(countFile)
+		return
 	}
 
-	// Check cached count
-	countFile := notifiedCountPath(notifySessionID)
+	if session.TerminalType == "" || session.TerminalID == "" {
+		return
+	}
+
+	countFile := notifiedCountPath(session.SessionID)
 	cachedCount := 0
 	if data, err := os.ReadFile(countFile); err == nil {
 		cachedCount, _ = strconv.Atoi(string(data))
 	}
 
-	if notifyCount <= cachedCount {
-		return nil
+	if unreadCount <= cachedCount {
+		return
 	}
 
-	// Send notification
 	backend, err := terminal.NewBackend(session.TerminalType)
 	if err != nil {
-		return nil // silently fail — don't break the statusline
+		return
 	}
 
 	title := "handler"
-	body := notifyMessage
+	body := message
 	if body == "" {
-		body = fmt.Sprintf("%d unread event(s)", notifyCount)
+		body = fmt.Sprintf("%d unread event(s)", unreadCount)
 	}
 
 	backend.Notify(session.TerminalID, title, body)
 	backend.Flash(session.TerminalID)
 
-	// Update cached count
 	os.MkdirAll(filepath.Dir(countFile), 0755)
-	os.WriteFile(countFile, []byte(strconv.Itoa(notifyCount)), 0644)
-
-	return nil
+	os.WriteFile(countFile, []byte(strconv.Itoa(unreadCount)), 0644)
 }
 
 func notifiedCountPath(sessionID string) string {

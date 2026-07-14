@@ -98,7 +98,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		return fmt.Errorf("no session_id in stdin")
 	}
 
-	d, err := openReadOnlyDB()
+	d, err := openDB()
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -109,6 +109,12 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		fmt.Println("Session not registered with handler. Say hello to register.")
 		return nil
 	}
+
+	// Heartbeat: bump last_active and sync metadata
+	now := time.Now().UTC().Format(time.RFC3339)
+	d.BumpLastActive(input.SessionID, now)
+	termType, termID := terminal.Detect()
+	syncSessionMetadata(d, input.SessionID, input.SessionName, termType, termID)
 
 	isHandler := session.Role == "handler"
 
@@ -223,12 +229,15 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	}
 
 	// Handler lines (inbox, inbox-mode, watching)
-	renderInboxLine(d, session, false)
+	unreadCount, unreadMsg := renderInboxLine(d, session, false)
 	renderAutoDeliveredLine(d, session)
 	renderInboxModeLine(session)
 	renderWatchingLine(d, session, cfg, false)
 	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
 		colorDim, colorCyan, colorReset, colorDim, colorReset)
+
+	// Dispatch terminal notification
+	dispatchNotification(session, unreadCount, unreadMsg)
 
 	// Awaiting approval
 	if len(awaitingNames) > 0 {
@@ -303,10 +312,13 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	}
 
 	// Inbox (global for handler)
-	renderInboxLine(d, session, true)
+	unreadCount, unreadMsg := renderInboxLine(d, session, true)
 	renderAutoDeliveredLine(d, session)
 	renderInboxModeLine(session)
 	renderWatchingLine(d, session, cfg, true)
+
+	// Dispatch terminal notification
+	dispatchNotification(session, unreadCount, unreadMsg)
 
 	return nil
 }
@@ -393,7 +405,7 @@ func formatModelLine(input *hookInput) string {
 		colorDim, input.Cost.TotalCostUSD, colorReset)
 }
 
-func renderInboxLine(d *db.DB, session *db.Session, global bool) {
+func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	var unreadCount int
 	var breakdown map[string]int
 	var err error
@@ -404,11 +416,12 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) {
 		unreadCount, breakdown, err = d.UnreadCountForSession(session.SessionID)
 	}
 	if err != nil {
-		return
+		return 0, ""
 	}
 
 	directCount, _ := d.DirectCountForSession(session.SessionID)
 
+	var notifyMsg string
 	if unreadCount == 0 {
 		noMsgLabel := "No new messages"
 		if global {
@@ -426,6 +439,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) {
 			breakdownStr = fmt.Sprintf(" (%s)", strings.Join(breakdownParts, ", "))
 		}
 		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", colorCyan, colorReset, colorYellow, unreadCount, colorReset, breakdownStr)
+		notifyMsg = fmt.Sprintf("%d unread%s", unreadCount, breakdownStr)
 	}
 
 	if directCount > 0 {
@@ -435,6 +449,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) {
 		fmt.Printf(" %s— %s/inbox-clear%s%s to dismiss%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
 	}
 	fmt.Println()
+	return unreadCount, notifyMsg
 }
 
 func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
