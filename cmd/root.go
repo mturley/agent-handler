@@ -8,6 +8,7 @@ import (
 	"github.com/mturley/agent-handler/cmd/watcher"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
+	"github.com/mturley/agent-handler/terminal"
 	"github.com/spf13/cobra"
 )
 
@@ -108,8 +109,38 @@ func resolveSessionByTarget(d *db.DB, target string) (*db.Session, error) {
 	return nil, fmt.Errorf("session %q not found", target)
 }
 
+// findSessionsAwaitingApproval scans all peekable sessions for approval prompts.
+func findSessionsAwaitingApproval(d *db.DB) []db.Session {
+	sessions, err := d.ListSessions(false, 1000, 0)
+	if err != nil {
+		return nil
+	}
+
+	var awaiting []db.Session
+	for _, s := range sessions {
+		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
+			continue
+		}
+		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
+			continue
+		}
+		backend, err := terminal.NewBackend(s.TerminalType)
+		if err != nil {
+			continue
+		}
+		content, err := backend.Capture(s.TerminalID, 10)
+		if err != nil {
+			continue
+		}
+		if needsInput, _ := terminal.NeedsInput(content); needsInput {
+			awaiting = append(awaiting, s)
+		}
+	}
+	return awaiting
+}
+
 // syncSessionMetadata updates session name and terminal info only if changed.
-func syncSessionMetadata(d *db.DB, sessionID, name, termType, termID string) {
+func syncSessionMetadata(d *db.DB, sessionID, name, termType, termID, workspaceID string) {
 	session, err := d.GetSession(sessionID)
 	if err != nil || session == nil {
 		return
@@ -124,6 +155,9 @@ func syncSessionMetadata(d *db.DB, sessionID, name, termType, termID string) {
 	}
 	if termID != "" && session.TerminalID != termID {
 		updates["terminal_id"] = termID
+	}
+	if workspaceID != "" && session.CmuxWorkspaceID != workspaceID {
+		updates["cmux_workspace_id"] = workspaceID
 	}
 
 	if len(updates) == 0 {

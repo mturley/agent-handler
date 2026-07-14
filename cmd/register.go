@@ -29,9 +29,10 @@ var (
 	regRepo         string
 	regPID          int
 	regJSONLPath    string
-	regTerminalType string
-	regTerminalID   string
-	regSessionName  string
+	regTerminalType    string
+	regTerminalID      string
+	regCmuxWorkspaceID string
+	regSessionName     string
 )
 
 func init() {
@@ -44,6 +45,7 @@ func init() {
 	registerCmd.Flags().StringVar(&regJSONLPath, "jsonl-path", "", "path to Claude JSONL file")
 	registerCmd.Flags().StringVar(&regTerminalType, "terminal-type", "", "terminal backend type (cmux, tmux)")
 	registerCmd.Flags().StringVar(&regTerminalID, "terminal-id", "", "terminal surface/pane ID")
+	registerCmd.Flags().StringVar(&regCmuxWorkspaceID, "cmux-workspace-id", "", "cmux workspace ID")
 	registerCmd.Flags().StringVar(&regSessionName, "session-name", "", "session display name (from hook stdin)")
 	registerCmd.MarkFlagRequired("session-id")
 	registerCmd.MarkFlagRequired("branch")
@@ -81,8 +83,9 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		LastActive:   now,
 		RegisteredAt: now,
 		JSONLPath:    regJSONLPath,
-		TerminalType: regTerminalType,
-		TerminalID:   regTerminalID,
+		TerminalType:    regTerminalType,
+		TerminalID:      regTerminalID,
+		CmuxWorkspaceID: regCmuxWorkspaceID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to upsert session: %w", err)

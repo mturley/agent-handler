@@ -7,4 +7,4 @@ if ! command -v handler &>/dev/null; then
     exit 0
 fi
 
-cat | handler user-prompt-submit --from-hook 2>/dev/null
+cat | handler user-prompt-submit --from-hook

@@ -33,7 +33,7 @@ func runClaude(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("claude not found on PATH: %w", err)
 	}
 
-	backendType, _ := terminal.Detect()
+	backendType, _, _ := terminal.Detect()
 
 	switch backendType {
 	case "cmux":

@@ -113,8 +113,8 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	// Heartbeat: bump last_active and sync metadata
 	now := time.Now().UTC().Format(time.RFC3339)
 	d.BumpLastActive(input.SessionID, now)
-	termType, termID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionName, termType, termID)
+	termType, termID, workspaceID := terminal.Detect()
+	syncSessionMetadata(d, input.SessionID, input.SessionName, termType, termID, workspaceID)
 
 	isHandler := session.Role == "handler"
 
@@ -183,35 +183,19 @@ func runStatuslineDirect(cmd *cobra.Command) error {
 }
 
 // scanAwaitingApproval checks all peekable sessions for approval prompts.
+// Returns display names of sessions needing input (excluding selfSessionID).
 func scanAwaitingApproval(d *db.DB, selfSessionID string) []string {
-	sessions, err := d.ListSessions(false, 1000, 0)
-	if err != nil {
-		return nil
-	}
-
+	awaiting := findSessionsAwaitingApproval(d)
 	var names []string
-	for _, s := range sessions {
-		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
+	for _, s := range awaiting {
+		if s.SessionID == selfSessionID {
 			continue
 		}
-		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
-			continue
+		name := s.SessionName
+		if name == "" {
+			name = s.SessionID[:8]
 		}
-		backend, err := terminal.NewBackend(s.TerminalType)
-		if err != nil {
-			continue
-		}
-		content, err := backend.Capture(s.TerminalID, 10)
-		if err != nil {
-			continue
-		}
-		if needsInput, _ := terminal.NeedsInput(content); needsInput {
-			name := s.SessionName
-			if name == "" {
-				name = s.SessionID[:8]
-			}
-			names = append(names, name)
-		}
+		names = append(names, name)
 	}
 	return names
 }
@@ -240,14 +224,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	dispatchNotification(session, unreadCount, unreadMsg)
 
 	// Awaiting approval
-	if len(awaitingNames) > 0 {
-		nameList := formatNameList(awaitingNames, 3)
-		if len(awaitingNames) == 1 {
-			fmt.Printf("%s1 other session awaiting approval (%s)%s\n", colorYellow, nameList, colorReset)
-		} else {
-			fmt.Printf("%s%d other sessions awaiting approval (%s)%s\n", colorYellow, len(awaitingNames), nameList, colorReset)
-		}
-	}
+	renderAwaitingLine(session, awaitingNames)
 
 	return nil
 }
@@ -296,7 +273,11 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	awaitingStr := ""
 	if len(awaitingNames) > 0 {
 		nameList := formatNameList(awaitingNames, 3)
-		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s", colorYellow, len(awaitingNames), nameList, colorReset)
+		awaitingHint := ""
+		if session.TerminalType == "cmux" {
+			awaitingHint = fmt.Sprintf(" %s— %s/awaiting%s%s to switch%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+		}
+		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s%s", colorYellow, len(awaitingNames), nameList, colorReset, awaitingHint)
 	}
 	if len(awaitingNames) > 0 {
 		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s\n",
@@ -321,6 +302,22 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	dispatchNotification(session, unreadCount, unreadMsg)
 
 	return nil
+}
+
+func renderAwaitingLine(session *db.Session, awaitingNames []string) {
+	if len(awaitingNames) == 0 {
+		return
+	}
+	nameList := formatNameList(awaitingNames, 3)
+	awaitingHint := ""
+	if session.TerminalType == "cmux" {
+		awaitingHint = fmt.Sprintf(" %s— %s/awaiting%s%s to switch%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+	}
+	if len(awaitingNames) == 1 {
+		fmt.Printf("%s1 other session awaiting approval (%s)%s%s\n", colorYellow, nameList, colorReset, awaitingHint)
+	} else {
+		fmt.Printf("%s%d other sessions awaiting approval (%s)%s%s\n", colorYellow, len(awaitingNames), nameList, colorReset, awaitingHint)
+	}
 }
 
 // --- Shared rendering helpers ---

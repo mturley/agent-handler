@@ -15,11 +15,11 @@ type Backend interface {
 	Bell(terminalID string) error
 }
 
-// Detect checks the current environment and returns the terminal backend type
-// and terminal ID. Checks cmux first, then tmux.
-func Detect() (backendType string, terminalID string) {
+// Detect checks the current environment and returns the terminal backend type,
+// terminal ID, and workspace ID. Checks cmux first, then tmux.
+func Detect() (backendType, terminalID, workspaceID string) {
 	if surfaceID := os.Getenv("CMUX_SURFACE_ID"); surfaceID != "" {
-		return "cmux", surfaceID
+		return "cmux", surfaceID, os.Getenv("CMUX_WORKSPACE_ID")
 	}
 
 	if os.Getenv("TMUX") != "" {
@@ -27,12 +27,12 @@ func Detect() (backendType string, terminalID string) {
 		if err == nil {
 			paneID := strings.TrimSpace(string(out))
 			if paneID != "" {
-				return "tmux", paneID
+				return "tmux", paneID, ""
 			}
 		}
 	}
 
-	return "", ""
+	return "", "", ""
 }
 
 // NewBackend returns a Backend implementation for the given type.

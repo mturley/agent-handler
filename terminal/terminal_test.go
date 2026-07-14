@@ -7,15 +7,20 @@ import (
 
 func TestDetectCmux(t *testing.T) {
 	os.Setenv("CMUX_SURFACE_ID", "test-surface-uuid")
+	os.Setenv("CMUX_WORKSPACE_ID", "test-workspace-uuid")
 	defer os.Unsetenv("CMUX_SURFACE_ID")
+	defer os.Unsetenv("CMUX_WORKSPACE_ID")
 	os.Unsetenv("TMUX")
 
-	backendType, terminalID := Detect()
+	backendType, terminalID, workspaceID := Detect()
 	if backendType != "cmux" {
 		t.Errorf("expected backendType 'cmux', got %q", backendType)
 	}
 	if terminalID != "test-surface-uuid" {
 		t.Errorf("expected terminalID 'test-surface-uuid', got %q", terminalID)
+	}
+	if workspaceID != "test-workspace-uuid" {
+		t.Errorf("expected workspaceID 'test-workspace-uuid', got %q", workspaceID)
 	}
 }
 
@@ -24,7 +29,7 @@ func TestDetectTmux(t *testing.T) {
 	os.Setenv("TMUX", "/tmp/tmux-501/default,12345,0")
 	defer os.Unsetenv("TMUX")
 
-	backendType, _ := Detect()
+	backendType, _, _ := Detect()
 	// Only check if tmux is actually available on the system
 	// If tmux command fails, Detect() will return empty string
 	if backendType != "" && backendType != "tmux" {
@@ -37,12 +42,15 @@ func TestDetectNone(t *testing.T) {
 	os.Unsetenv("CMUX_SURFACE_ID")
 	os.Unsetenv("TMUX")
 
-	backendType, terminalID := Detect()
+	backendType, terminalID, workspaceID := Detect()
 	if backendType != "" {
 		t.Errorf("expected empty backendType, got %q", backendType)
 	}
 	if terminalID != "" {
 		t.Errorf("expected empty terminalID, got %q", terminalID)
+	}
+	if workspaceID != "" {
+		t.Errorf("expected empty workspaceID, got %q", workspaceID)
 	}
 }
 
@@ -52,7 +60,7 @@ func TestDetectCmuxPriority(t *testing.T) {
 	defer os.Unsetenv("CMUX_SURFACE_ID")
 	defer os.Unsetenv("TMUX")
 
-	backendType, _ := Detect()
+	backendType, _, _ := Detect()
 	if backendType != "cmux" {
 		t.Errorf("expected cmux to take priority, got %q", backendType)
 	}

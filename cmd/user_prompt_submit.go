@@ -91,8 +91,8 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Sync session metadata (name, terminal)
-	termType, termID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionTitle, termType, termID)
+	termType, termID, workspaceID := terminal.Detect()
+	syncSessionMetadata(d, input.SessionID, input.SessionTitle, termType, termID, workspaceID)
 
 	// Auto mode catchup: if there are auto-delivered events, tell agent to invoke /catchup
 	if session.InboxMode == "auto" && !isAutoInbox && input.Prompt != "/catchup" {
@@ -137,23 +137,24 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 		}
 	}
 
-	termType, termID := terminal.Detect()
+	termType, termID, workspaceID := terminal.Detect()
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	d.UpsertSession(db.Session{
-		SessionID:    input.SessionID,
-		Harness:      "claude-code",
-		Repo:         repo,
-		Branch:       branch,
-		SessionName:  input.SessionTitle,
-		PID:          os.Getppid(),
-		Status:       "active",
-		InboxMode:    "manual",
-		LastActive:   now,
-		RegisteredAt: now,
-		JSONLPath:    input.TranscriptPath,
-		TerminalType: termType,
-		TerminalID:   termID,
+		SessionID:       input.SessionID,
+		Harness:         "claude-code",
+		Repo:            repo,
+		Branch:          branch,
+		SessionName:     input.SessionTitle,
+		PID:             os.Getppid(),
+		Status:          "active",
+		InboxMode:       "manual",
+		LastActive:      now,
+		RegisteredAt:    now,
+		JSONLPath:       input.TranscriptPath,
+		TerminalType:    termType,
+		TerminalID:      termID,
+		CmuxWorkspaceID: workspaceID,
 	})
 
 	// Write PID cache

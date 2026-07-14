@@ -98,47 +98,20 @@ func runListNeedInput(cmd *cobra.Command) error {
 	}
 	defer d.Close()
 
-	sessions, err := d.ListSessions(false, 1000, 0)
-	if err != nil {
-		return fmt.Errorf("failed to list sessions: %w", err)
-	}
-
 	type needInputResult struct {
 		SessionID   string `json:"session_id"`
 		SessionName string `json:"session_name"`
 		Reason      string `json:"reason"`
 	}
 
+	awaiting := findSessionsAwaitingApproval(d)
 	var results []needInputResult
-
-	for _, s := range sessions {
-		if s.TerminalType == "" || s.TerminalID == "" {
-			continue
-		}
-		if s.Role == "handler" {
-			continue
-		}
-		if !discover.IsSessionProcess(s.PID, s.SessionID) {
-			continue
-		}
-
-		backend, err := terminal.NewBackend(s.TerminalType)
-		if err != nil {
-			continue
-		}
-
-		content, err := backend.Capture(s.TerminalID, 10)
-		if err != nil {
-			continue
-		}
-
-		if needsInput, reason := terminal.NeedsInput(content); needsInput {
-			results = append(results, needInputResult{
-				SessionID:   s.SessionID,
-				SessionName: s.SessionName,
-				Reason:      reason,
-			})
-		}
+	for _, s := range awaiting {
+		results = append(results, needInputResult{
+			SessionID:   s.SessionID,
+			SessionName: s.SessionName,
+			Reason:      "awaiting approval",
+		})
 	}
 
 	if jsonOutput {
