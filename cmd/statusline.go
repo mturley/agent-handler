@@ -397,8 +397,13 @@ func runHandlerStatusline(cmd *cobra.Command, d *db.DB, session *db.Session) err
 		nameList := formatNameList(awaitingNames, 3)
 		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s", yellow, len(awaitingNames), nameList, reset)
 	}
-	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s %s— %s/handler%s %sto summarize all sessions%s\n",
-		purple, reset, "\033[1m", reset, activeCount, blockedCount, awaitingStr, dim, cmd_color, reset, dim, reset)
+	if len(awaitingNames) > 0 {
+		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s\n",
+			purple, reset, "\033[1m", reset, activeCount, blockedCount, awaitingStr)
+	} else {
+		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
+			purple, reset, "\033[1m", reset, activeCount, blockedCount, dim, cmd_color, reset, dim, reset)
+	}
 
 	// Get direct message count
 	directCount, err := d.DirectCountForSession(session.SessionID)
