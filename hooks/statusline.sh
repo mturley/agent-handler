@@ -207,7 +207,7 @@ fi
 
 # Detect handler session
 IS_HANDLER=false
-if echo "$OUTPUT" | head -1 | grep -q '/handler'; then
+if echo "$OUTPUT" | head -1 | grep -q '\[Handler\]'; then
     IS_HANDLER=true
 fi
 
