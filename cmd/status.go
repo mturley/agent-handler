@@ -141,6 +141,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		green := "\033[32m"
 		yellow := "\033[33m"
 		red := "\033[31m"
+		dimPurple := "\033[2;35m"
 
 		// Group sessions: repo → workspace → sessions
 		type sessionEntry struct {
@@ -189,7 +190,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 			for _, wg := range rg.workspaces {
 				if wg.name != "" {
-					fmt.Printf("  %s[%s]%s\n", dim, wg.name, reset)
+					fmt.Printf("  %sworkspace: %s%s\n", dimPurple, wg.name, reset)
 				}
 
 				for _, e := range wg.entries {
