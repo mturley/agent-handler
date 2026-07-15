@@ -702,12 +702,11 @@ func renderDebugInfo(d *db.DB, session *db.Session) {
 		}
 	}
 
-	fmt.Println()
+	fmt.Printf("%s—%s\n", dim, reset)
 	fmt.Printf("%s[debug] id=%s name=%q state=%s pid=%d%s\n",
 		dim, session.SessionID[:12], session.SessionName, state, session.PID, reset)
 	fmt.Printf("%s[debug] terminal=%s:%s peekable=%s workspace=%s%s\n",
 		dim, session.TerminalType, session.TerminalID, peekable, session.CmuxWorkspaceID, reset)
 	fmt.Printf("%s[debug] role=%s cursor=%s%s\n",
 		dim, session.Role, cursor, reset)
-	fmt.Println()
 }
