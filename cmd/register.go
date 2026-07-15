@@ -99,6 +99,7 @@ func runRegister(cmd *cobra.Command, args []string) error {
 	if err := discover.WritePIDCache(sessionsDir, regPID, regSessionID); err != nil {
 		return fmt.Errorf("failed to write PID cache: %w", err)
 	}
+	go discover.CleanStalePIDCaches(sessionsDir)
 
 	// Initialize cursor
 	if isReregistration {
