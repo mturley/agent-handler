@@ -15,7 +15,7 @@ echo "=== Unread Count ==="
 handler unread --count 2>&1
 echo ""
 echo "=== Cursor ==="
-handler query "SELECT session_id, cursor FROM session_cursors WHERE session_id = (SELECT session_id FROM sessions WHERE pid = $PPID AND status = 'active' LIMIT 1)" 2>&1
+handler query "SELECT session_id, last_seen_ts, human_seen_ts FROM session_cursors WHERE session_id = (SELECT session_id FROM sessions WHERE pid = $PPID AND status = 'active' LIMIT 1)" 2>&1
 echo ""
 echo "=== PID Info ==="
 echo "PPID=$PPID"
