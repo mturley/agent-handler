@@ -37,6 +37,7 @@ var skillNames = []string{
 	"catchup",
 	"done",
 	"awaiting",
+	"handler-debug",
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {
