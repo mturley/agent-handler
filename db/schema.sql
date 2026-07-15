@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     role TEXT,
     terminal_type TEXT,
     terminal_id TEXT,
+    cmux_workspace_id TEXT,
+    cmux_workspace_name TEXT,
+    cmux_workspace_color TEXT,
     last_active TEXT NOT NULL,
     registered_at TEXT NOT NULL,
     jsonl_path TEXT NOT NULL

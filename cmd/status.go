@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -190,7 +191,11 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 			for _, wg := range rg.workspaces {
 				if wg.name != "" {
-					fmt.Printf("  %sworkspace: %s%s\n", dimPurple, wg.name, reset)
+					wsColor := dimPurple
+					if wg.entries[0].session.CmuxWorkspaceColor != "" {
+						wsColor = hexToDimANSI(wg.entries[0].session.CmuxWorkspaceColor)
+					}
+					fmt.Printf("  %sworkspace: %s%s\n", wsColor, wg.name, reset)
 				}
 
 				for _, e := range wg.entries {
@@ -328,6 +333,18 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func hexToDimANSI(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return "\033[2;35m"
+	}
+	var r, g, b uint64
+	r, _ = strconv.ParseUint(hex[0:2], 16, 8)
+	g, _ = strconv.ParseUint(hex[2:4], 16, 8)
+	b, _ = strconv.ParseUint(hex[4:6], 16, 8)
+	return fmt.Sprintf("\033[2;38;2;%d;%d;%dm", r, g, b)
 }
 
 func formatDuration(d time.Duration) string {

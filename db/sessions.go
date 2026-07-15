@@ -20,9 +20,10 @@ type Session struct {
 	Role             string
 	TerminalType     string
 	TerminalID       string
-	CmuxWorkspaceID   string
-	CmuxWorkspaceName string
-	LastActive        string
+	CmuxWorkspaceID    string
+	CmuxWorkspaceName  string
+	CmuxWorkspaceColor string
+	LastActive         string
 	RegisteredAt     string
 	JSONLPath        string
 }
@@ -35,8 +36,8 @@ func (db *DB) UpsertSession(s Session) error {
 		INSERT INTO sessions (
 			session_id, harness, repo, branch, session_name, pid, status,
 			inbox_mode, auto_poll_interval, role, terminal_type, terminal_id,
-			cmux_workspace_id, cmux_workspace_name, last_active, registered_at, jsonl_path
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			cmux_workspace_id, cmux_workspace_name, cmux_workspace_color, last_active, registered_at, jsonl_path
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			harness = excluded.harness,
 			repo = excluded.repo,
@@ -51,6 +52,7 @@ func (db *DB) UpsertSession(s Session) error {
 			terminal_id = excluded.terminal_id,
 			cmux_workspace_id = excluded.cmux_workspace_id,
 			cmux_workspace_name = excluded.cmux_workspace_name,
+			cmux_workspace_color = excluded.cmux_workspace_color,
 			last_active = excluded.last_active,
 			registered_at = excluded.registered_at,
 			jsonl_path = excluded.jsonl_path
@@ -59,7 +61,7 @@ func (db *DB) UpsertSession(s Session) error {
 	_, err := db.conn.Exec(query,
 		s.SessionID, s.Harness, s.Repo, s.Branch, s.SessionName, s.PID, s.Status,
 		s.InboxMode, s.AutoPollInterval, s.Role, s.TerminalType, s.TerminalID,
-		s.CmuxWorkspaceID, s.CmuxWorkspaceName, s.LastActive, s.RegisteredAt, s.JSONLPath,
+		s.CmuxWorkspaceID, s.CmuxWorkspaceName, s.CmuxWorkspaceColor, s.LastActive, s.RegisteredAt, s.JSONLPath,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert session: %w", err)
@@ -84,6 +86,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 			COALESCE(terminal_id, '') as terminal_id,
 			COALESCE(cmux_workspace_id, '') as cmux_workspace_id,
 			COALESCE(cmux_workspace_name, '') as cmux_workspace_name,
+			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
 			last_active, registered_at, jsonl_path
 		FROM sessions
 		WHERE session_id = ?
@@ -94,7 +97,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 		&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
 		&s.SessionName, &s.PID, &s.Status,
 		&s.InboxMode, &s.AutoPollInterval, &s.Role,
-		&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName,
+		&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
 		&s.LastActive, &s.RegisteredAt, &s.JSONLPath,
 	)
 
@@ -134,6 +137,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			COALESCE(terminal_id, '') as terminal_id,
 			COALESCE(cmux_workspace_id, '') as cmux_workspace_id,
 			COALESCE(cmux_workspace_name, '') as cmux_workspace_name,
+			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
 			last_active, registered_at, jsonl_path
 		FROM sessions
 		%s
@@ -154,7 +158,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
-			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName,
+			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
 			&s.LastActive, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {

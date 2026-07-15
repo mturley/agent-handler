@@ -50,13 +50,12 @@ func (b *CmuxBackend) Bell(terminalID string) error {
 	return nil // cmux has better notification primitives
 }
 
-// CmuxWorkspaceName resolves the workspace name for a surface UUID.
-// Returns empty string if resolution fails.
-func CmuxWorkspaceName(surfaceID string) string {
-	// Get workspace ref from identify
+// CmuxWorkspaceInfo resolves the workspace name and color for a surface UUID.
+// Returns empty strings if resolution fails.
+func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 	idOut, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	var idData struct {
 		Caller *struct {
@@ -64,31 +63,36 @@ func CmuxWorkspaceName(surfaceID string) string {
 		} `json:"caller"`
 	}
 	if err := json.Unmarshal(idOut, &idData); err != nil || idData.Caller == nil || idData.Caller.WorkspaceRef == "" {
-		return ""
+		return "", ""
 	}
 
-	// Get workspace name from list
 	listOut, err := exec.Command("cmux", "workspace", "list", "--json").Output()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	var listData struct {
 		Workspaces []struct {
-			Ref         string `json:"ref"`
-			Title       string `json:"title"`
-			CustomTitle string `json:"custom_title"`
+			Ref         string  `json:"ref"`
+			Title       string  `json:"title"`
+			CustomTitle string  `json:"custom_title"`
+			CustomColor *string `json:"custom_color"`
 		} `json:"workspaces"`
 	}
 	if err := json.Unmarshal(listOut, &listData); err != nil {
-		return ""
+		return "", ""
 	}
 	for _, w := range listData.Workspaces {
 		if w.Ref == idData.Caller.WorkspaceRef {
-			if w.CustomTitle != "" {
-				return w.CustomTitle
+			n := w.CustomTitle
+			if n == "" {
+				n = w.Title
 			}
-			return w.Title
+			c := ""
+			if w.CustomColor != nil {
+				c = *w.CustomColor
+			}
+			return n, c
 		}
 	}
-	return ""
+	return "", ""
 }
