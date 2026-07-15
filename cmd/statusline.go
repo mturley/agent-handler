@@ -709,4 +709,5 @@ func renderDebugInfo(d *db.DB, session *db.Session) {
 		dim, session.TerminalType, session.TerminalID, peekable, session.CmuxWorkspaceID, reset)
 	fmt.Printf("%s[debug] role=%s cursor=%s%s\n",
 		dim, session.Role, cursor, reset)
+	fmt.Printf("%s—%s\n", dim, reset)
 }
