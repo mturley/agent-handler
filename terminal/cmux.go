@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -47,4 +48,47 @@ func (b *CmuxBackend) Flash(terminalID string) error {
 
 func (b *CmuxBackend) Bell(terminalID string) error {
 	return nil // cmux has better notification primitives
+}
+
+// CmuxWorkspaceName resolves the workspace name for a surface UUID.
+// Returns empty string if resolution fails.
+func CmuxWorkspaceName(surfaceID string) string {
+	// Get workspace ref from identify
+	idOut, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
+	if err != nil {
+		return ""
+	}
+	var idData struct {
+		Caller *struct {
+			WorkspaceRef string `json:"workspace_ref"`
+		} `json:"caller"`
+	}
+	if err := json.Unmarshal(idOut, &idData); err != nil || idData.Caller == nil || idData.Caller.WorkspaceRef == "" {
+		return ""
+	}
+
+	// Get workspace name from list
+	listOut, err := exec.Command("cmux", "workspace", "list", "--json").Output()
+	if err != nil {
+		return ""
+	}
+	var listData struct {
+		Workspaces []struct {
+			Ref         string `json:"ref"`
+			Title       string `json:"title"`
+			CustomTitle string `json:"custom_title"`
+		} `json:"workspaces"`
+	}
+	if err := json.Unmarshal(listOut, &listData); err != nil {
+		return ""
+	}
+	for _, w := range listData.Workspaces {
+		if w.Ref == idData.Caller.WorkspaceRef {
+			if w.CustomTitle != "" {
+				return w.CustomTitle
+			}
+			return w.Title
+		}
+	}
+	return ""
 }

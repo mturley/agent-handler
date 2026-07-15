@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/mturley/agent-handler/config"
+	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
 	"github.com/spf13/cobra"
@@ -110,16 +111,17 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	if jsonOutput {
-		// Add repo to JSON output
 		type jsonStatus struct {
 			sessionStatus
-			Repo string `json:"repo"`
+			Repo          string `json:"repo"`
+			CmuxWorkspace string `json:"cmux_workspace,omitempty"`
 		}
 		var jsonStatuses []jsonStatus
 		for i, st := range statuses {
 			jsonStatuses = append(jsonStatuses, jsonStatus{
 				sessionStatus: st,
 				Repo:          sessions[i].Repo,
+				CmuxWorkspace: sessions[i].CmuxWorkspaceName,
 			})
 		}
 		data, err := json.MarshalIndent(jsonStatuses, "", "  ")
@@ -140,53 +142,106 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		yellow := "\033[33m"
 		red := "\033[31m"
 
+		// Group sessions: repo → workspace → sessions
+		type sessionEntry struct {
+			status  sessionStatus
+			session db.Session
+		}
+
+		// Collect repos in order of first appearance, workspaces within each repo
+		type workspaceGroup struct {
+			name    string
+			entries []sessionEntry
+		}
+		type repoGroup struct {
+			name       string
+			workspaces []*workspaceGroup
+			wsIndex    map[string]int
+		}
+		var repoOrder []*repoGroup
+		repoIndex := make(map[string]int)
+
 		for i, st := range statuses {
-			if i > 0 {
+			s := sessions[i]
+			ri, exists := repoIndex[s.Repo]
+			if !exists {
+				ri = len(repoOrder)
+				repoIndex[s.Repo] = ri
+				repoOrder = append(repoOrder, &repoGroup{name: s.Repo, wsIndex: make(map[string]int)})
+			}
+			rg := repoOrder[ri]
+
+			wsName := s.CmuxWorkspaceName
+			wi, wsExists := rg.wsIndex[wsName]
+			if !wsExists {
+				wi = len(rg.workspaces)
+				rg.wsIndex[wsName] = wi
+				rg.workspaces = append(rg.workspaces, &workspaceGroup{name: wsName})
+			}
+			rg.workspaces[wi].entries = append(rg.workspaces[wi].entries, sessionEntry{status: st, session: s})
+		}
+
+		for ri, rg := range repoOrder {
+			if ri > 0 {
 				fmt.Println()
 			}
+			fmt.Printf("%s%s%s\n", bold, rg.name, reset)
 
-			// State color
-			stateColor := dim
-			switch st.DisplayState {
-			case "active":
-				stateColor = green
-			case "idle":
-				stateColor = yellow
-			case "dead":
-				stateColor = red
-			}
-
-			// Name or branch as primary identifier
-			name := st.SessionName
-			if name == "" {
-				name = st.Branch
-			}
-
-			peekableStr := ""
-			if st.Peekable {
-				peekableStr = fmt.Sprintf(" %s👁%s", dim, reset)
-			}
-
-			fmt.Printf("  %s%s%s %s%s%s%s\n", bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
-			fmt.Printf("  %s%s%s @ %s%s%s\n", dim, sessions[i].Repo, reset, dim, st.Branch, reset)
-
-			// Unread
-			if st.UnreadCount > 0 {
-				parts := ""
-				for eventType, count := range st.Breakdown {
-					if parts != "" {
-						parts += ", "
-					}
-					parts += fmt.Sprintf("%d %s", count, eventType)
+			for _, wg := range rg.workspaces {
+				if wg.name != "" {
+					fmt.Printf("  %s[%s]%s\n", dim, wg.name, reset)
 				}
-				fmt.Printf("  %d unread (%s)\n", st.UnreadCount, parts)
-			}
 
-			// Last active
-			lastActive, err := time.Parse(time.RFC3339, st.LastActive)
-			if err == nil {
-				ago := time.Since(lastActive).Truncate(time.Second)
-				fmt.Printf("  %sLast active: %s ago  |  ID: %s%s\n", dim, formatDuration(ago), st.SessionID, reset)
+				for _, e := range wg.entries {
+					st := e.status
+					stateColor := dim
+					switch st.DisplayState {
+					case "active":
+						stateColor = green
+					case "idle":
+						stateColor = yellow
+					case "dead":
+						stateColor = red
+					}
+
+					name := st.SessionName
+					if name == "" {
+						name = st.SessionID[:8]
+					}
+
+					peekableStr := ""
+					if st.Peekable {
+						peekableStr = fmt.Sprintf(" %s👁%s", dim, reset)
+					}
+
+					indent := "  "
+					if wg.name != "" {
+						indent = "    "
+					}
+
+					fmt.Printf("%s%s%s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
+
+					if st.Branch != name {
+						fmt.Printf("%s%s@ %s%s\n", indent, dim, st.Branch, reset)
+					}
+
+					if st.UnreadCount > 0 {
+						parts := ""
+						for eventType, count := range st.Breakdown {
+							if parts != "" {
+								parts += ", "
+							}
+							parts += fmt.Sprintf("%d %s", count, eventType)
+						}
+						fmt.Printf("%s%d unread (%s)\n", indent, st.UnreadCount, parts)
+					}
+
+					lastActive, parseErr := time.Parse(time.RFC3339, st.LastActive)
+					if parseErr == nil {
+						ago := time.Since(lastActive).Truncate(time.Second)
+						fmt.Printf("%s%sLast active: %s ago  |  ID: %s%s\n", indent, dim, formatDuration(ago), st.SessionID, reset)
+					}
+				}
 			}
 		}
 

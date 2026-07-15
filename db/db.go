@@ -76,6 +76,10 @@ func runMigrations(conn *sql.DB) error {
 	if err := addColumnIfMissing(conn, "sessions", "cmux_workspace_id", "TEXT"); err != nil {
 		return err
 	}
+	// Add cmux_workspace_name column to sessions if it doesn't exist
+	if err := addColumnIfMissing(conn, "sessions", "cmux_workspace_name", "TEXT"); err != nil {
+		return err
+	}
 	return nil
 }
 
