@@ -10,6 +10,8 @@ make clean      # removes bin/
 
 `make install` uses atomic rename so it's safe to run while handler is actively running. Use `NONINTERACTIVE=1 make install` to skip confirmation prompts and watcher setup. Always use `NONINTERACTIVE=1` when installing from a Claude session.
 
+**NEVER copy the binary directly with `cp`.** Always use `make install` — it handles atomic rename and setup. Direct `cp` corrupts the binary if it's replaced while running (handler is invoked by hooks every few seconds).
+
 Or without the repo:
 ```bash
 go install github.com/mturley/agent-handler@latest

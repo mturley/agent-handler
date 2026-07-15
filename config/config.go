@@ -12,6 +12,7 @@ import (
 type Config struct {
 	Services   Services         `yaml:"services"`
 	Statusline *StatuslineConfig `yaml:"statusline,omitempty"`
+	Debug      bool              `yaml:"debug,omitempty"`
 }
 
 // Services contains configuration for external services

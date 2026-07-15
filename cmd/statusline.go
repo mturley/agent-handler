@@ -152,10 +152,22 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	wg.Wait()
 
 	// Assemble output
+	var err2 error
 	if isHandler {
-		return renderHandlerStatusline(d, session, cfg, &input, awaitingNames)
+		err2 = renderHandlerStatusline(d, session, cfg, &input, awaitingNames)
+	} else {
+		err2 = renderWorkerStatusline(d, session, cfg, &input, gitStatus, awaitingNames)
 	}
-	return renderWorkerStatusline(d, session, cfg, &input, gitStatus, awaitingNames)
+	if err2 != nil {
+		return err2
+	}
+
+	// Debug output when debug mode is enabled in config
+	if cfg.Debug {
+		renderDebugInfo(d, session)
+	}
+
+	return nil
 }
 
 // runStatuslineDirect is the legacy --session mode for direct CLI use.
@@ -670,4 +682,30 @@ func formatNameList(names []string, max int) string {
 		return strings.Join(names, ", ")
 	}
 	return strings.Join(names[:max], ", ") + fmt.Sprintf(", +%d more", len(names)-max)
+}
+
+func renderDebugInfo(d *db.DB, session *db.Session) {
+	dim := colorDim
+	reset := colorReset
+
+	cursor, _ := d.GetCursor(session.SessionID)
+
+	peekable := "no"
+	if session.TerminalType != "" && session.TerminalID != "" {
+		peekable = "yes"
+	}
+
+	state := session.Status
+	if session.Status == "active" {
+		if !discover.IsSessionProcess(session.PID, session.SessionID) {
+			state = "dead"
+		}
+	}
+
+	fmt.Printf("\n%s[debug] id=%s name=%q state=%s pid=%d%s\n",
+		dim, session.SessionID[:12], session.SessionName, state, session.PID, reset)
+	fmt.Printf("%s[debug] terminal=%s:%s peekable=%s workspace=%s%s\n",
+		dim, session.TerminalType, session.TerminalID, peekable, session.CmuxWorkspaceID, reset)
+	fmt.Printf("%s[debug] role=%s cursor=%s%s\n",
+		dim, session.Role, cursor, reset)
 }
