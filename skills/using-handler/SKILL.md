@@ -89,6 +89,19 @@ These are the commands you'll use most often. Run `--help` on each for exact fla
 - `handler schema` — dump table definitions
 - `handler claude` — start Claude in a peekable terminal (use instead of bare `claude`)
 - `handler peek --session <id>` — capture terminal content of another session
+- `handler cmux-switch <session-name>` — switch cmux to another session's workspace and surface (requires cmux)
+- `handler cmux-switch -a` — switch to the first session awaiting approval
+
+### Session switching (cmux)
+
+When running in cmux, you can switch the user's view to another session:
+
+```
+handler cmux-switch <session-name-or-id>
+handler cmux-switch --first-awaiting
+```
+
+Skills `/switch <name>` and `/awaiting` are shortcuts. When the user says "switch to that session" or "go to session X", use `handler cmux-switch`. If cmux is not available, tell the user switching requires cmux.
 
 ### Auto inbox mode and the dual cursor
 

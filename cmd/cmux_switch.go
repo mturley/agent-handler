@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
@@ -30,6 +31,11 @@ func init() {
 func runCmuxSwitch(cmd *cobra.Command, args []string) error {
 	if _, err := exec.LookPath("cmux"); err != nil {
 		return fmt.Errorf("cmux is not installed or not on PATH")
+	}
+
+	// Accept session as positional arg
+	if cmuxSwitchSession == "" && len(args) > 0 {
+		cmuxSwitchSession = strings.Join(args, " ")
 	}
 
 	if cmuxSwitchSession == "" && !cmuxSwitchFirstAwaiting {

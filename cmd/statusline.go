@@ -285,22 +285,8 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	}
 
 	// Line 1: Sessions overview
-	awaitingStr := ""
-	if len(awaitingNames) > 0 {
-		nameList := formatNameList(awaitingNames, 3)
-		awaitingHint := ""
-		if session.TerminalType == "cmux" {
-			awaitingHint = fmt.Sprintf(" %s— %s/awaiting%s%s to switch%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
-		}
-		awaitingStr = fmt.Sprintf(", %s%d awaiting approval (%s)%s%s", colorYellow, len(awaitingNames), nameList, colorReset, awaitingHint)
-	}
-	if len(awaitingNames) > 0 {
-		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked%s\n",
-			colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, awaitingStr)
-	} else {
-		fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
-			colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, colorDim, colorCyan, colorReset, colorDim, colorReset)
-	}
+	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
+		colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, colorDim, colorCyan, colorReset, colorDim, colorReset)
 
 	// Model line (if from hook)
 	if input != nil && input.Model.DisplayName != "" {
@@ -316,6 +302,9 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	// Dispatch terminal notification
 	dispatchNotification(session, unreadCount, unreadMsg)
 
+	// Awaiting approval
+	renderAwaitingLine(session, awaitingNames)
+
 	return nil
 }
 
@@ -323,16 +312,19 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string) {
 	if len(awaitingNames) == 0 {
 		return
 	}
-	nameList := formatNameList(awaitingNames, 3)
-	awaitingHint := ""
+	count := len(awaitingNames)
+	label := "session"
+	if count > 1 {
+		label = "sessions"
+	}
 	if session.TerminalType == "cmux" {
-		awaitingHint = fmt.Sprintf(" %s— %s/awaiting%s%s to switch%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
-	}
-	if len(awaitingNames) == 1 {
-		fmt.Printf("%s1 other session awaiting approval (%s)%s%s\n", colorYellow, nameList, colorReset, awaitingHint)
+		fmt.Printf("%s%d other %s awaiting approval%s %s— %s/awaiting%s%s to auto-switch or %s/switch%s%s to switch by name%s\n",
+			colorYellow, count, label, colorReset, colorDim, colorCyan, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
 	} else {
-		fmt.Printf("%s%d other sessions awaiting approval (%s)%s%s\n", colorYellow, len(awaitingNames), nameList, colorReset, awaitingHint)
+		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
 	}
+	nameList := formatNameList(awaitingNames, 5)
+	fmt.Printf("  %s(%s)%s\n", colorDim, nameList, colorReset)
 }
 
 // --- Shared rendering helpers ---
