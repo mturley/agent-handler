@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -9,37 +10,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cmuxSwitchCmd = &cobra.Command{
-	Use:   "cmux-switch",
-	Short: "Switch to a session's cmux workspace and surface",
-	Long:  "Navigate to a session's cmux workspace and focus its surface tab.",
-	RunE:  runCmuxSwitch,
+var switchCmd = &cobra.Command{
+	Use:                "switch [session-name]",
+	Short:              "Switch to another session's cmux workspace and surface",
+	Long:               "Navigate to another session's cmux workspace and focus its surface tab. Must be run from within cmux.",
+	DisableFlagParsing: false,
+	RunE:               runSwitch,
 }
 
 var (
-	cmuxSwitchSession       string
-	cmuxSwitchFirstAwaiting bool
+	switchSession       string
+	switchFirstAwaiting bool
 )
 
 func init() {
-	cmuxSwitchCmd.GroupID = "human"
-	rootCmd.AddCommand(cmuxSwitchCmd)
-	cmuxSwitchCmd.Flags().StringVar(&cmuxSwitchSession, "session", "", "session name, ID, or branch to switch to")
-	cmuxSwitchCmd.Flags().BoolVarP(&cmuxSwitchFirstAwaiting, "first-awaiting", "a", false, "switch to the first session awaiting approval")
+	switchCmd.GroupID = "human"
+	rootCmd.AddCommand(switchCmd)
+	switchCmd.Flags().StringVar(&switchSession, "session", "", "session name, ID, or branch to switch to")
+	switchCmd.Flags().BoolVarP(&switchFirstAwaiting, "first-awaiting", "a", false, "switch to the first session awaiting approval")
 }
 
-func runCmuxSwitch(cmd *cobra.Command, args []string) error {
-	if _, err := exec.LookPath("cmux"); err != nil {
-		return fmt.Errorf("cmux is not installed or not on PATH")
+func runSwitch(cmd *cobra.Command, args []string) error {
+	if os.Getenv("CMUX_SURFACE_ID") == "" {
+		return fmt.Errorf("not running inside cmux")
 	}
 
 	// Accept session as positional arg
-	if cmuxSwitchSession == "" && len(args) > 0 {
-		cmuxSwitchSession = strings.Join(args, " ")
+	if switchSession == "" && len(args) > 0 {
+		switchSession = strings.Join(args, " ")
 	}
 
-	if cmuxSwitchSession == "" && !cmuxSwitchFirstAwaiting {
-		return fmt.Errorf("either --session or --first-awaiting/-a is required")
+	if switchSession == "" && !switchFirstAwaiting {
+		return fmt.Errorf("either a session name or --first-awaiting/-a is required")
 	}
 
 	d, err := openReadOnlyDB()
@@ -50,13 +52,13 @@ func runCmuxSwitch(cmd *cobra.Command, args []string) error {
 
 	var session *db.Session
 
-	if cmuxSwitchFirstAwaiting {
+	if switchFirstAwaiting {
 		session, err = findFirstAwaiting(d)
 		if err != nil {
 			return err
 		}
 	} else {
-		session, err = resolveSessionByTarget(d, cmuxSwitchSession)
+		session, err = resolveSessionByTarget(d, switchSession)
 		if err != nil {
 			return err
 		}

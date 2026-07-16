@@ -18,7 +18,7 @@ At the start of each session, tell the user exactly:
 > - `/awaiting` — switch to a session awaiting approval (cmux)
 > - `/switch` — switch to another session by name (cmux)
 >
-> **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`, `handler cmux-switch <name>`, `handler cmux-switch -a`
+> **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`, `handler switch <name>`, `handler switch -a`
 
 Then invoke /using-handler for the full reference on emitting events and using handler. These steps — showing the introduction, invoking the skill — must happen before any other work, even if the user's first prompt includes a task.
 

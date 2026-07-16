@@ -12,7 +12,7 @@ Switch the cmux workspace and surface to another session by name.
 If invoked with arguments (e.g. `/switch agent-handler-impl`), run:
 
 ```bash
-handler cmux-switch <session-name>
+handler switch <session-name>
 ```
 
 If invoked with no arguments, run `handler status` to show available sessions, then ask the user which session to switch to.

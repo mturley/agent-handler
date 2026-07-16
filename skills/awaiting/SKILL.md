@@ -12,7 +12,7 @@ Switch to the first session that is waiting for user approval. Requires cmux.
 Run the following command:
 
 ```bash
-handler cmux-switch --first-awaiting
+handler switch --first-awaiting
 ```
 
 If the command fails with "cmux is not installed", tell the user: "Session switching requires cmux."
