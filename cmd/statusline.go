@@ -324,7 +324,7 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string) {
 		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
 	}
 	nameList := formatNameList(awaitingNames, 5)
-	fmt.Printf("  %s(%s)%s\n", colorDim, nameList, colorReset)
+	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorYellow, nameList, colorReset)
 }
 
 // --- Shared rendering helpers ---
