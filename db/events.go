@@ -269,6 +269,7 @@ func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, erro
 		JOIN event_resources eres ON e.id = eres.event_id
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
+		  AND e.type != 'watch_started'
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
