@@ -20,8 +20,33 @@ At the start of each session, tell the user exactly:
 >
 > **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`, `handler switch <name>`, `handler switch -a`
 
-Then invoke /using-handler for the full reference on emitting events and using handler. These steps — showing the introduction, invoking the skill — must happen before any other work, even if the user's first prompt includes a task.
+Then run `handler --help` and `handler emit --help` to learn the available commands and flags. These steps — showing the introduction, reading the CLI help — must happen before any other work, even if the user's first prompt includes a task.
 
-You must emit events regularly with `handler emit` so the ledger reflects your work. Emit status check-ins, milestones, decisions, blockers, and follow-ups as you go — not just when work is done. A session that doesn't emit is invisible to the user and other sessions. Your first emit should happen as soon as you begin working on a task.
+## Emitting events
 
-Emit `blocked` whenever you are waiting on something external — a PR review, CI results, a blocking Jira issue, a Slack reply, or a dependency from another session. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report, so other sessions and the handler know who is stuck and why.
+You must emit events regularly with `handler emit` so the ledger reflects your work. A session that doesn't emit is invisible to the user and other sessions. Your first emit should happen as soon as you begin working on a task.
+
+```
+handler emit --type <type> --title "..." [--body "..."] [--to <target>] [--tags "a,b"]
+```
+
+Do not use `--broadcast` unless the user specifically asks to broadcast or message all sessions.
+
+| Trigger | Type | Example title |
+|---------|------|---------------|
+| Starting work on a task | `status` | "Beginning auth middleware refactor" |
+| Finish a commit or meaningful code change | `milestone` | "Implemented retry logic for API client" |
+| Push to remote | `milestone` | "Pushed feature branch auth-refactor" |
+| Find the root cause of a bug | `milestone` | "Root cause: token validated against wrong key" |
+| Choose between approaches | `decision` | "Chose RS256 over HS256 for token signing" |
+| Waiting on something external (PR review, CI, blocking issue, Slack reply) | `blocked` | "Waiting for review on PR #42" |
+| Blocker resolved, resuming work | `unblocked` | "PR #42 approved, continuing" |
+| Identify work for another session or later | `handoff` / `followup` | "Tech debt: error messages need i18n" |
+| Want to tell another session something | `message` | (use `--to <target>`) |
+| Periodic check-in on current work | `status` | "Still debugging token refresh — narrowed to middleware" |
+
+Emit `blocked` whenever you are waiting on something external. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report.
+
+## Watching resources
+
+When you create or start working on a PR or Jira issue, immediately run `/watch` to subscribe to it. This enables watchers to deliver updates (reviews, comments, status changes) to your inbox.
