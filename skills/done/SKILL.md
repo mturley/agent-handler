@@ -1,6 +1,6 @@
 ---
 name: done
-description: "Log a completion summary to the ledger before closing the session. Use when the session's work is finished and you're about to close it."
+description: "agent-handler: Log a completion summary to the ledger before closing the session. Use when the session's work is finished and you're about to close it."
 ---
 
 # /done — Session Complete

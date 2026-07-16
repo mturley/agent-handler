@@ -1,6 +1,6 @@
 ---
 name: using-handler
-description: "Invoke once per session before starting work — loads agent-handler context for emitting events, messaging, and CLI usage. If you haven't invoked this skill yet in this session, do so now."
+description: "agent-handler: Invoke once per session before starting work — loads agent-handler context for emitting events, messaging, and CLI usage. If you haven't invoked this skill yet in this session, do so now."
 ---
 
 # agent-handler

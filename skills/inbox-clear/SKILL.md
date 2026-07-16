@@ -1,6 +1,6 @@
 ---
 name: inbox-clear
-description: "Dismiss all unread events without reading them. Use when the user wants to clear their inbox without spending context on the messages."
+description: "agent-handler: Dismiss all unread events without reading them. Use when the user wants to clear their inbox without spending context on the messages."
 ---
 
 # /inbox-clear — Dismiss Unread Events

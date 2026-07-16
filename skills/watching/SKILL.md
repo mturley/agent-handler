@@ -1,6 +1,6 @@
 ---
 name: watching
-description: Show watched resources, watcher status, and recent watcher errors for this session
+description: "agent-handler: Show watched resources, watcher status, and recent watcher errors for this session"
 ---
 
 # /watching — Show Watched Resources

@@ -1,6 +1,6 @@
 ---
 name: unwatch
-description: "Stop watching a PR or Jira issue. Use when the user says 'unwatch PR #123', 'unwatch RHOAIENG-456', or wants to stop monitoring a resource."
+description: "agent-handler: Stop watching a PR or Jira issue. Use when the user says 'unwatch PR #123', 'unwatch RHOAIENG-456', or wants to stop monitoring a resource."
 ---
 
 # /unwatch — Stop Watching a Resource

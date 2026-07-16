@@ -1,3 +1,8 @@
+---
+name: switch
+description: "agent-handler: Switch to another session by name (cmux)"
+---
+
 # /switch — Switch to Another Session
 
 Switch the cmux workspace and surface to another session by name.

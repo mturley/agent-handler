@@ -1,6 +1,6 @@
 ---
 name: message
-description: Send a message to another session via handler emit. Use when the user says "message session-xyz" or "tell session-xyz about X".
+description: "agent-handler: Send a message to another session via handler emit. Use when the user says 'message session-xyz' or 'tell session-xyz about X'."
 ---
 
 # /message — Send a Message to Another Session

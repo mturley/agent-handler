@@ -1,3 +1,8 @@
+---
+name: awaiting
+description: "agent-handler: Switch to the first session awaiting approval (cmux)"
+---
+
 # /awaiting — Switch to a Session Awaiting Approval
 
 Switch to the first session that is waiting for user approval. Requires cmux.

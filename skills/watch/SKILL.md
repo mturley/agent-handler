@@ -1,6 +1,6 @@
 ---
 name: watch
-description: "Watch a PR or Jira issue for changes. Use when the user says 'watch PR #123', 'watch RHOAIENG-456', or provides a GitHub/Jira URL to monitor."
+description: "agent-handler: Watch a PR or Jira issue for changes. Use when the user says 'watch PR #123', 'watch RHOAIENG-456', or provides a GitHub/Jira URL to monitor."
 ---
 
 # /watch — Watch a Resource for Changes

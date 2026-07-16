@@ -1,6 +1,6 @@
 ---
 name: inbox-mode
-description: Set how this session receives unread events — manual, on-submit, or auto
+description: "agent-handler: Set how this session receives unread events — manual, on-submit, or auto"
 ---
 
 # /inbox-mode — Configure Inbox Mode

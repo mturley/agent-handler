@@ -1,6 +1,6 @@
 ---
 name: inbox
-description: Check and act on unread events from the agent-handler ledger
+description: "agent-handler: Check and act on unread events from the agent-handler ledger"
 ---
 
 # /inbox — Check Unread Events
