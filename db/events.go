@@ -5,6 +5,10 @@ import (
 	"fmt"
 )
 
+// inboxExcludedTypes are event types excluded from non-handler inbox queries.
+// These are bookkeeping events that shouldn't appear as unread in session inboxes.
+const inboxExcludedTypesSQL = "AND e.type NOT IN ('watch_started')"
+
 // Event represents an event in the system.
 type Event struct {
 	ID         string
@@ -165,7 +169,7 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 		LEFT JOIN event_resources eres ON e.id = eres.event_id
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
-		  AND e.type != 'watch_started'
+		  ` + inboxExcludedTypesSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
@@ -211,7 +215,7 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 		LEFT JOIN event_resources eres ON e.id = eres.event_id
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
-		  AND e.type != 'watch_started'
+		  ` + inboxExcludedTypesSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
@@ -269,7 +273,7 @@ func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, erro
 		JOIN event_resources eres ON e.id = eres.event_id
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
-		  AND e.type != 'watch_started'
+		  ` + inboxExcludedTypesSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
