@@ -370,7 +370,7 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	}
 
 	// Line 1: Sessions overview
-	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s— %s/handler%s %sto summarize all sessions%s\n",
+	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s· %s/handler%s %sto summarize all sessions%s\n",
 		colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, colorDim, colorCyan, colorReset, colorDim, colorReset)
 
 	// Model line (if from hook)
@@ -388,7 +388,7 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	monthTotal, _, _, _ := d.QueryTotalCost(monthStart, monthEnd)
 
 	if todayTotal > 0 || monthTotal > 0 {
-		fmt.Printf("%sCost%s: $%.2f today | $%.2f this month\n",
+		fmt.Printf("%sCost%s: $%.2f today · $%.2f this month\n",
 			colorBoldWhite, colorReset, todayTotal, monthTotal)
 	}
 
@@ -426,7 +426,7 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string, shortcuts *
 		label = "sessions"
 	}
 	if shortcuts != nil && shortcuts.SwitchToAwaiting != "" {
-		fmt.Printf("%s%d other %s awaiting approval%s %s— %s%s%s to auto-switch%s\n",
+		fmt.Printf("%s%d other %s awaiting approval%s %s· %s%s%s to auto-switch%s\n",
 			colorYellow, count, label, colorReset, colorDim, colorCyan, shortcuts.SwitchToAwaiting, colorReset+colorDim, colorReset)
 	} else {
 		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
@@ -502,15 +502,14 @@ func formatGitLine(gs *gitpkg.Status) string {
 		parts = append(parts, fmt.Sprintf("%s↓%d behind %s%s", colorDim, gs.Behind, gs.DefaultBranch, colorReset))
 	}
 
-	// Join with " | " between branch+ahead and dirty sections
 	result := parts[0]
 	if gs.Ahead > 0 && len(parts) > 1 {
 		result += " " + parts[1]
 		if len(parts) > 2 {
-			result += " | " + strings.Join(parts[2:], " ")
+			result += " · " + strings.Join(parts[2:], " ")
 		}
 	} else if len(parts) > 1 {
-		result += " | " + strings.Join(parts[1:], " ")
+		result += " · " + strings.Join(parts[1:], " ")
 	}
 
 	return result
@@ -535,7 +534,7 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		costStr += fmt.Sprintf(" ($%.2f today)", todayCost)
 	}
 
-	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s| %s%s",
+	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s· %s%s",
 		colorClaudeOrange, input.Model.DisplayName, colorReset,
 		barColor, bar, colorReset,
 		pct,
@@ -564,7 +563,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 		if global {
 			noMsgLabel = "No new events"
 		}
-		fmt.Printf("%s/inbox%s: %s %s— %s%s/message%s%s to talk to other sessions%s",
+		fmt.Printf("%s/inbox%s: %s %s· %s%s/message%s%s to talk to other sessions%s",
 			colorCyan, colorReset, noMsgLabel, colorDim, colorDim, colorCyan, colorReset, colorDim, colorReset)
 	} else {
 		var breakdownParts []string
@@ -580,10 +579,10 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	}
 
 	if directCount > 0 {
-		fmt.Printf(" | %s● %d direct%s", colorYellow, directCount, colorReset)
+		fmt.Printf(" %s·%s %s● %d direct%s", colorDim, colorReset, colorYellow, directCount, colorReset)
 	}
 	if unreadCount > 0 {
-		fmt.Printf(" %s— %s/inbox-clear%s%s to dismiss%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+		fmt.Printf(" %s· %s/inbox-clear%s%s to dismiss%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
 	}
 	fmt.Println()
 	return unreadCount, notifyMsg
@@ -603,7 +602,7 @@ func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
 	if err != nil || autoCount == 0 {
 		return
 	}
-	fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s— send any prompt or %s/catchup%s %sfor a recap%s\n",
+	fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s· send any prompt or %s/catchup%s %sfor a recap%s\n",
 		colorYellow, autoCount, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
 }
 
@@ -736,7 +735,7 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 		}
 	}
 	if len(services) > 0 {
-		watcherStatus = " | " + strings.Join(services, " ")
+		watcherStatus = " · " + strings.Join(services, " ")
 	}
 
 	// Resource links (worker only)
