@@ -42,9 +42,11 @@ Do not use `--broadcast` unless the user specifically asks to broadcast or messa
 | Identify work for another session or later | `handoff` / `followup` | "Tech debt: error messages need i18n" |
 | Want to tell another session something | `message` | (use `--to <target>`) |
 | Periodic check-in on current work | `status` | "Still debugging token refresh — narrowed to middleware" |
+| **Create or open a PR** | `milestone` | "Opened PR #42 for auth refactor" |
+| **Create a Jira issue** | `milestone` | "Created RHOAIENG-12345 for token bug" |
 
 Emit `blocked` whenever you are waiting on something external. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report.
 
 ## Watching resources
 
-When you create or start working on a PR or Jira issue, immediately run `/watch` to subscribe to it. This enables watchers to deliver updates (reviews, comments, status changes) to your inbox.
+**Immediately after creating or opening a PR or Jira issue, run `/watch` to subscribe to it.** Do not wait for the user to ask — this is automatic. This enables watchers to deliver updates (reviews, comments, status changes) to your inbox.
