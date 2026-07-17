@@ -276,7 +276,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 		if ri > 0 {
 			fmt.Println()
 		}
-		fmt.Printf("Repo: %s%s%s\n", bold, rg.name, reset)
+		fmt.Printf("Repo: %s\n", rg.name)
 
 		for _, wg := range rg.workspaces {
 			if wg.name != "" {
