@@ -101,8 +101,10 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cmux focus-panel failed: %s", string(out))
 	}
 
-	// Close the caller surface after switching
-	if switchCloseCaller && selfSurface != "" && selfSurface != session.TerminalID {
+	// Same-workspace: close the caller surface after switching so the shell
+	// exit doesn't steal focus. Cross-workspace this isn't needed.
+	if switchCloseCaller && selfSurface != "" && selfSurface != session.TerminalID &&
+		selfWorkspace == session.CmuxWorkspaceID {
 		exec.Command("cmux", "close-surface", "--surface", selfSurface).Run()
 	}
 
