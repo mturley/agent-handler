@@ -15,7 +15,7 @@ var handlerCmuxActions = map[string]map[string]interface{}{
 		"type":     "command",
 		"title":    "agent-handler: Switch to Awaiting Session",
 		"subtitle": "Jump to the first session awaiting approval",
-		"command":  "handler switch -a; sleep 0.2; exit",
+		"command":  "handler switch -a; sleep 3; exit",
 		"shortcut": "cmd+shift+a",
 		"palette":  true,
 	},
@@ -57,26 +57,7 @@ func configureCmuxActions() {
 		return
 	}
 
-	// Check if actions already exist
-	out, _ := exec.Command(cmuxSettings, "get", "actions").Output()
-	if len(out) > 0 {
-		var existing map[string]interface{}
-		if json.Unmarshal(out, &existing) == nil {
-			allPresent := true
-			for _, id := range handlerCmuxActionIDs {
-				if _, ok := existing[id]; !ok {
-					allPresent = false
-					break
-				}
-			}
-			if allPresent {
-				fmt.Println("  ✓ cmux actions already configured (handler-switch-to-awaiting, handler-switch-to-session)")
-				return
-			}
-		}
-	}
-
-	// Set each action
+	// Set each action (always overwrite to pick up updates)
 	for _, id := range handlerCmuxActionIDs {
 		actionJSON, _ := json.Marshal(handlerCmuxActions[id])
 		key := "actions." + id
@@ -87,7 +68,7 @@ func configureCmuxActions() {
 	}
 
 	exec.Command("cmux", "reload-config").Run()
-	fmt.Println("  ✓ Added cmux actions: handler-switch-to-awaiting (cmd+shift+a), handler-switch-to-session (cmd+shift+s)")
+	fmt.Println("  ✓ Configured cmux actions: handler-switch-to-awaiting (cmd+shift+a), handler-switch-to-session (cmd+shift+s)")
 }
 
 func hasCmuxActions() bool {
