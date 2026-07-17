@@ -61,14 +61,76 @@ type hookInput struct {
 	TranscriptPath string `json:"transcript_path"`
 	CWD            string `json:"cwd"`
 	Model          struct {
+		ID          string `json:"id"`
 		DisplayName string `json:"display_name"`
 	} `json:"model"`
 	ContextWindow struct {
-		UsedPercentage int `json:"used_percentage"`
+		UsedPercentage    int `json:"used_percentage"`
+		TotalInputTokens  int `json:"total_input_tokens"`
+		TotalOutputTokens int `json:"total_output_tokens"`
 	} `json:"context_window"`
 	Cost struct {
 		TotalCostUSD float64 `json:"total_cost_usd"`
 	} `json:"cost"`
+}
+
+func recordCostSnapshot(wd *db.DB, input *hookInput) {
+	now := time.Now().UTC().Format(time.RFC3339)
+	today := time.Now().UTC().Format("2006-01-02")
+	sessionID := input.SessionID
+	reportedCost := input.Cost.TotalCostUSD
+	reportedInput := input.ContextWindow.TotalInputTokens
+	reportedOutput := input.ContextWindow.TotalOutputTokens
+
+	snap, err := wd.GetCostSnapshot(sessionID)
+	if err != nil {
+		return
+	}
+
+	if snap == nil {
+		wd.UpsertCostSnapshot(db.CostSnapshot{
+			SessionID:         sessionID,
+			ReportedCostUSD:   reportedCost,
+			TotalInputTokens:  reportedInput,
+			TotalOutputTokens: reportedOutput,
+			Model:             input.Model.ID,
+			UpdatedAt:         now,
+		})
+		if reportedCost > 0 {
+			wd.UpsertDailyCost(sessionID, today, reportedCost, reportedInput, reportedOutput)
+		}
+		return
+	}
+
+	if reportedCost == snap.ReportedCostUSD {
+		return
+	}
+
+	var costDelta float64
+	var inputDelta, outputDelta int
+
+	if reportedCost < snap.ReportedCostUSD {
+		wd.InsertCostAdjustment(sessionID, snap.ReportedCostUSD, "restart_reset", now)
+		costDelta = reportedCost
+		inputDelta = reportedInput
+		outputDelta = reportedOutput
+	} else {
+		costDelta = reportedCost - snap.ReportedCostUSD
+		inputDelta = reportedInput - snap.TotalInputTokens
+		outputDelta = reportedOutput - snap.TotalOutputTokens
+	}
+
+	wd.UpsertCostSnapshot(db.CostSnapshot{
+		SessionID:         sessionID,
+		ReportedCostUSD:   reportedCost,
+		TotalInputTokens:  reportedInput,
+		TotalOutputTokens: reportedOutput,
+		Model:             input.Model.ID,
+		UpdatedAt:         now,
+	})
+	if costDelta > 0 {
+		wd.UpsertDailyCost(sessionID, today, costDelta, inputDelta, outputDelta)
+	}
 }
 
 func runStatusline(cmd *cobra.Command, args []string) error {
@@ -98,12 +160,13 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		return fmt.Errorf("no session_id in stdin")
 	}
 
-	// Brief writable connection for heartbeat, then read-only for rendering
+	// Brief writable connection for heartbeat + cost tracking, then read-only for rendering
 	if wd, err := openDB(); err == nil {
 		now := time.Now().UTC().Format(time.RFC3339)
 		wd.BumpLastActive(input.SessionID, now)
 		termType, termID, workspaceID := terminal.Detect()
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID)
+		recordCostSnapshot(wd, &input)
 		wd.Close()
 	}
 
