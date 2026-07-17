@@ -90,6 +90,27 @@ func configureCmuxActions() {
 	fmt.Println("  ✓ Added cmux actions: handler-switch-to-awaiting (cmd+shift+a), handler-switch-to-session (cmd+shift+s)")
 }
 
+func hasCmuxActions() bool {
+	cmuxSettings := findCmuxSettings()
+	if cmuxSettings == "" {
+		return false
+	}
+	out, _ := exec.Command(cmuxSettings, "get", "actions").Output()
+	if len(out) == 0 {
+		return false
+	}
+	var existing map[string]interface{}
+	if json.Unmarshal(out, &existing) != nil {
+		return false
+	}
+	for _, id := range handlerCmuxActionIDs {
+		if _, ok := existing[id]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func removeCmuxActions() {
 	cmuxSettings := findCmuxSettings()
 	if cmuxSettings == "" {

@@ -72,6 +72,11 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Check cmux actions
+	if hasCmuxActions() {
+		fmt.Printf("  Remove cmux actions from %s\n", cmuxConfigFilePath())
+	}
+
 	// Check watcher schedules
 	for _, name := range []string{"github", "jira"} {
 		if watcherPkg.IsInstalled(name) {
