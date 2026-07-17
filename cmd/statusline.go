@@ -446,7 +446,7 @@ func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
 		parts = append(parts, fmt.Sprintf("%s%s%s to switch sessions", colorCyan, shortcuts.SwitchToSession, colorReset+colorDim))
 	}
 	if shortcuts.FocusBack != "" && shortcuts.FocusForward != "" {
-		parts = append(parts, fmt.Sprintf("%s%s%s / %s%s%s for focus back/forward",
+		parts = append(parts, fmt.Sprintf("%s%s%s and %s%s%s for focus back and forward",
 			colorCyan, shortcuts.FocusBack, colorReset+colorDim,
 			colorCyan, shortcuts.FocusForward, colorReset+colorDim))
 	}
