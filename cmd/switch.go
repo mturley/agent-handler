@@ -23,6 +23,7 @@ var switchCmd = &cobra.Command{
 var (
 	switchSession       string
 	switchFirstAwaiting bool
+	switchCloseCaller   bool
 )
 
 func init() {
@@ -30,6 +31,7 @@ func init() {
 	rootCmd.AddCommand(switchCmd)
 	switchCmd.Flags().StringVar(&switchSession, "session", "", "session name, ID, or branch to switch to")
 	switchCmd.Flags().BoolVarP(&switchFirstAwaiting, "first-awaiting", "a", false, "switch to the first session awaiting approval")
+	switchCmd.Flags().BoolVar(&switchCloseCaller, "close-caller", false, "close the calling cmux surface after switching (for keyboard shortcut actions)")
 }
 
 func runSwitch(cmd *cobra.Command, args []string) error {
@@ -74,6 +76,19 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("session %q is missing cmux surface or workspace ID", session.SessionName)
 	}
 
+	selfSurface := os.Getenv("CMUX_SURFACE_ID")
+	selfWorkspace := os.Getenv("CMUX_WORKSPACE_ID")
+
+	// If --close-caller and we're in the same workspace as the target,
+	// move our tab to just after the target so closing it falls back to the target.
+	if switchCloseCaller && selfSurface != "" && selfSurface != session.TerminalID &&
+		selfWorkspace == session.CmuxWorkspaceID {
+		exec.Command("cmux", "reorder-surface",
+			"--surface", selfSurface,
+			"--after", session.TerminalID,
+		).Run()
+	}
+
 	if out, err := exec.Command("cmux", "workspace", "select",
 		"--workspace", session.CmuxWorkspaceID,
 	).CombinedOutput(); err != nil {
@@ -84,6 +99,11 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		"--workspace", session.CmuxWorkspaceID,
 	).CombinedOutput(); err != nil {
 		return fmt.Errorf("cmux focus-panel failed: %s", string(out))
+	}
+
+	// Close the caller surface after switching
+	if switchCloseCaller && selfSurface != "" && selfSurface != session.TerminalID {
+		exec.Command("cmux", "close-surface", "--surface", selfSurface).Run()
 	}
 
 	name := session.SessionName
