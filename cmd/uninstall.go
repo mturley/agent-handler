@@ -139,6 +139,9 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ Removed skill symlink %s\n", name)
 	}
 
+	// Remove cmux actions
+	removeCmuxActions()
+
 	// Uninstall watcher schedules
 	for _, name := range []string{"github", "jira"} {
 		if watcherPkg.IsInstalled(name) {

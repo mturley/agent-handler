@@ -69,6 +69,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("    - %s\n", hook)
 	}
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
+	cmuxAvailable := false
+	if _, err := exec.LookPath("cmux"); err == nil {
+		if _, err := os.Stat(cmuxConfigFilePath()); err == nil {
+			cmuxAvailable = true
+			fmt.Printf("  Add cmux actions (session switching shortcuts) to %s\n", cmuxConfigFilePath())
+		}
+	}
 	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")
 	fmt.Println("  Offer to configure external service API tokens (GitHub, Jira)")
 	fmt.Println("  Offer to install watchers for configured services")
@@ -187,11 +194,18 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuring status line: %w", err)
 	}
 
-	// 9. Offer to auto-allow handler commands
+	// 9. Configure cmux actions (if cmux is available)
+	if cmuxAvailable {
+		configureCmuxActions()
+	} else {
+		fmt.Printf("\n  %scmux not detected. Optional cmux features (session switching shortcuts)\n  are available — run 'handler setup' again after installing cmux.%s\n", "\033[2m", "\033[0m")
+	}
+
+	// 10. Offer to auto-allow handler commands
 	fmt.Println("")
 	configurePermissions(home)
 
-	// 10. Set up external service watchers (auth + install)
+	// 11. Set up external service watchers (auth + install)
 	if setupYes {
 		fmt.Println("\n  Skipping watcher setup (non-interactive mode). Run 'handler watcher install' to configure.")
 	} else {
