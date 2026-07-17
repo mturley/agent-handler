@@ -47,6 +47,15 @@ When adding or removing hooks, update `configureHooks()` in `cmd/setup.go` and `
 
 **IMPORTANT: When adding, removing, or changing skills, commands, or capabilities, you MUST update `rules/agent-handler.md`.** This rules file is loaded automatically at every session start — it introduces agent-handler to the user, lists available skills and CLI commands, and contains the emit event reference. It must stay current.
 
+## cmux Integration
+
+cmux keyboard shortcut actions are defined in `cmd/cmux_config.go` (`handlerCmuxActions` map). `handler setup` installs them to `~/.config/cmux/cmux.json` and `handler uninstall` removes them.
+
+When adding or removing cmux keyboard shortcut actions:
+- Update `handlerCmuxActions` and `handlerCmuxActionIDs` in `cmd/cmux_config.go`
+- Update the statusline rendering in `cmd/statusline.go` — `renderAwaitingLine()` shows the awaiting shortcut in context, and `renderCmuxShortcutsLine()` shows a summary at the bottom. Both read shortcuts dynamically from `GetCmuxShortcuts()`, but the display text is hardcoded and must be updated to describe new actions.
+- Update the setup summary in `cmd/setup.go` (the cmux actions section of the "will do" list)
+
 ## Watchers
 
 External event watchers poll GitHub and Jira APIs for changes to subscribed resources. They run as one-shot commands scheduled via launchd (macOS) or cron (Linux).
