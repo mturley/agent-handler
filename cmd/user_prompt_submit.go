@@ -87,6 +87,16 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	d.BumpLastActive(input.SessionID, now)
 	d.BumpLastPrompt(input.SessionID, now)
 
+	// Auto mode catchup: check BEFORE advancing cursors.
+	// On a real user prompt, if there are auto-delivered events the user hasn't
+	// seen, tell the agent to invoke /catchup so it can summarize them.
+	if session.InboxMode == "auto" && !isAutoInbox && !isCatchup {
+		autoCount, err := d.AutoDeliveredCount(input.SessionID)
+		if err == nil && autoCount > 0 {
+			fmt.Println("Invoke the /catchup skill now before responding to the user's prompt.")
+		}
+	}
+
 	// Catch up human cursor for real user prompts in auto mode.
 	// Skip for /catchup — it needs the cursor gap to know what to summarize.
 	if !isAutoInbox && !isCatchup && session.InboxMode == "auto" {
@@ -96,14 +106,6 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	// Sync session metadata (name, terminal)
 	termType, termID, workspaceID := terminal.Detect()
 	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID)
-
-	// Auto mode catchup: if there are auto-delivered events, tell agent to invoke /catchup
-	if session.InboxMode == "auto" && !isAutoInbox && input.Prompt != "/catchup" {
-		autoCount, err := d.AutoDeliveredCount(input.SessionID)
-		if err == nil && autoCount > 0 {
-			fmt.Println("Invoke the /catchup skill now before responding to the user's prompt.")
-		}
-	}
 
 	// On-submit mode: notify about unread events
 	if session.InboxMode == "on-submit" {
