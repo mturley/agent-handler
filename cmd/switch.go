@@ -85,7 +85,7 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		selfWorkspace == session.CmuxWorkspaceID {
 		exec.Command("cmux", "reorder-surface",
 			"--surface", selfSurface,
-			"--after", session.TerminalID,
+			"--before", session.TerminalID,
 		).Run()
 	}
 
