@@ -284,7 +284,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 				if wg.entries[0].session.CmuxWorkspaceColor != "" {
 					wsColor = hexToANSI(wg.entries[0].session.CmuxWorkspaceColor)
 				}
-				fmt.Printf("    %s●%s Workspace: %s\n", wsColor, reset, wg.name)
+				fmt.Printf("    %s● Workspace:%s %s\n", wsColor, reset, wg.name)
 			}
 
 			for _, e := range wg.entries {
