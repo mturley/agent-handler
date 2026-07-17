@@ -6,7 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/chzyer/readline"
 	"github.com/mturley/agent-handler/db"
+	"github.com/mturley/agent-handler/discover"
 	"github.com/spf13/cobra"
 )
 
@@ -40,10 +42,6 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		switchSession = strings.Join(args, " ")
 	}
 
-	if switchSession == "" && !switchFirstAwaiting {
-		return fmt.Errorf("either a session name or --first-awaiting/-a is required")
-	}
-
 	d, err := openReadOnlyDB()
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
@@ -57,8 +55,13 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if switchSession != "" {
 		session, err = resolveSessionByTarget(d, switchSession)
+		if err != nil {
+			return err
+		}
+	} else {
+		session, err = interactiveSwitch(d)
 		if err != nil {
 			return err
 		}
@@ -85,6 +88,111 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Switched to %s\n", name)
 	return nil
+}
+
+func interactiveSwitch(d *db.DB) (*db.Session, error) {
+	selfSurface := os.Getenv("CMUX_SURFACE_ID")
+
+	sessions, err := d.ListSessions(false, 100, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	// Filter to switchable cmux sessions (exclude self, dead, non-cmux)
+	var candidates []db.Session
+	var names []string
+	for _, s := range sessions {
+		if s.TerminalType != "cmux" || s.TerminalID == "" || s.CmuxWorkspaceID == "" {
+			continue
+		}
+		if s.TerminalID == selfSurface {
+			continue
+		}
+		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
+			continue
+		}
+		candidates = append(candidates, s)
+		name := s.SessionName
+		if name == "" {
+			name = s.SessionID[:8]
+		}
+		names = append(names, name)
+	}
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no other cmux sessions to switch to")
+	}
+
+	// Display grouped list
+	type groupKey struct{ repo, workspace string }
+	groups := make(map[groupKey][]int)
+	var groupOrder []groupKey
+	for i, s := range candidates {
+		key := groupKey{repo: s.Repo, workspace: s.CmuxWorkspaceName}
+		if _, exists := groups[key]; !exists {
+			groupOrder = append(groupOrder, key)
+		}
+		groups[key] = append(groups[key], i)
+	}
+
+	dim := "\033[2m"
+	bold := "\033[1m"
+	reset := "\033[0m"
+	dimPurple := "\033[2;35m"
+
+	for _, key := range groupOrder {
+		fmt.Printf("%s%s%s\n", bold, key.repo, reset)
+		if key.workspace != "" {
+			wsColor := dimPurple
+			indices := groups[key]
+			if len(indices) > 0 {
+				if c := candidates[indices[0]].CmuxWorkspaceColor; c != "" {
+					wsColor = hexToDimANSI(c)
+				}
+			}
+			fmt.Printf("  %sworkspace: %s%s\n", wsColor, key.workspace, reset)
+		}
+		for _, idx := range groups[key] {
+			indent := "  "
+			if key.workspace != "" {
+				indent = "    "
+			}
+			fmt.Printf("%s%s%s%s\n", indent, dim, names[idx], reset)
+		}
+	}
+	fmt.Println()
+
+	// Readline with tab completion
+	completer := readline.NewPrefixCompleter()
+	for _, name := range names {
+		completer.Children = append(completer.Children, readline.PcItem(name))
+	}
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:       "Switch to: ",
+		AutoComplete: completer,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize prompt: %w", err)
+	}
+	defer rl.Close()
+
+	input, err := rl.Readline()
+	if err != nil {
+		return nil, fmt.Errorf("cancelled")
+	}
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return nil, fmt.Errorf("no selection")
+	}
+
+	for i, s := range candidates {
+		if names[i] == input || s.SessionName == input || s.SessionID == input {
+			return &s, nil
+		}
+	}
+
+	return nil, fmt.Errorf("session %q not found", input)
 }
 
 func findFirstAwaiting(d *db.DB) (*db.Session, error) {
