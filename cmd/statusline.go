@@ -336,8 +336,8 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string, shortcuts *
 		label = "sessions"
 	}
 	if shortcuts != nil && shortcuts.SwitchToAwaiting != "" {
-		fmt.Printf("%s%d other %s awaiting approval%s %s— %s to auto-switch%s\n",
-			colorYellow, count, label, colorReset, colorDim, shortcuts.SwitchToAwaiting, colorReset)
+		fmt.Printf("%s%d other %s awaiting approval%s %s— %s%s%s to auto-switch%s\n",
+			colorYellow, count, label, colorReset, colorDim, colorCyan, shortcuts.SwitchToAwaiting, colorReset+colorDim, colorReset)
 	} else {
 		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
 	}
@@ -351,15 +351,9 @@ func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
 			colorDim, colorCyan, colorReset, colorDim, colorReset)
 		return
 	}
-	var parts []string
-	if shortcuts.SwitchToAwaiting != "" {
-		parts = append(parts, fmt.Sprintf("%s switch to awaiting", shortcuts.SwitchToAwaiting))
-	}
 	if shortcuts.SwitchToSession != "" {
-		parts = append(parts, fmt.Sprintf("%s switch by name", shortcuts.SwitchToSession))
-	}
-	if len(parts) > 0 {
-		fmt.Printf("%s%s%s\n", colorDim, strings.Join(parts, " · "), colorReset)
+		fmt.Printf("%s%s%s%s to list and switch between sessions%s\n",
+			colorDim, colorCyan, shortcuts.SwitchToSession, colorReset+colorDim, colorReset)
 	}
 }
 
