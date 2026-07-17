@@ -60,55 +60,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	statuses := []sessionStatus{}
-
-	for _, s := range sessions {
-		// Determine display state
-		displayState := "archived"
-		if s.Status != "archived" {
-			processAlive := discover.IsSessionProcess(s.PID, s.SessionID)
-			if !processAlive {
-				displayState = "dead"
-			} else {
-				// active = prompt within last 24h, idle = process alive but no recent prompt
-				displayState = "idle"
-				if s.LastPrompt != "" {
-					if lastPrompt, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
-						if time.Since(lastPrompt) < 24*time.Hour {
-							displayState = "active"
-						}
-					}
-				}
-			}
-		}
-
-		// Query unread count (skip for archived/dead sessions)
-		var unreadCount int
-		var breakdown map[string]int
-		if displayState == "active" || displayState == "idle" {
-			unreadCount, breakdown, err = d.UnreadCountForSession(s.SessionID)
-			if err != nil {
-				unreadCount = 0
-				breakdown = nil
-			}
-		}
-
-		statuses = append(statuses, sessionStatus{
-			SessionID:    s.SessionID,
-			SessionName:  s.SessionName,
-			Branch:       s.Branch,
-			PID:          s.PID,
-			Status:       s.Status,
-			DisplayState: displayState,
-			InboxMode:    s.InboxMode,
-			Peekable:     s.TerminalType != "",
-			TerminalType: s.TerminalType,
-			UnreadCount:  unreadCount,
-			LastActive:   s.LastActive,
-			LastPrompt:   s.LastPrompt,
-			Breakdown:    breakdown,
-		})
-	}
+	statuses := buildSessionStatuses(sessions, d)
 
 	if jsonOutput {
 		type jsonStatus struct {
@@ -226,6 +178,51 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func buildSessionStatuses(sessions []db.Session, d *db.DB) []sessionStatus {
+	var statuses []sessionStatus
+	for _, s := range sessions {
+		displayState := "archived"
+		if s.Status != "archived" {
+			processAlive := discover.IsSessionProcess(s.PID, s.SessionID)
+			if !processAlive {
+				displayState = "dead"
+			} else {
+				displayState = "idle"
+				if s.LastPrompt != "" {
+					if lastPrompt, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
+						if time.Since(lastPrompt) < 24*time.Hour {
+							displayState = "active"
+						}
+					}
+				}
+			}
+		}
+
+		var unreadCount int
+		var breakdown map[string]int
+		if d != nil && (displayState == "active" || displayState == "idle") {
+			unreadCount, breakdown, _ = d.UnreadCountForSession(s.SessionID)
+		}
+
+		statuses = append(statuses, sessionStatus{
+			SessionID:    s.SessionID,
+			SessionName:  s.SessionName,
+			Branch:       s.Branch,
+			PID:          s.PID,
+			Status:       s.Status,
+			DisplayState: displayState,
+			InboxMode:    s.InboxMode,
+			Peekable:     s.TerminalType != "",
+			TerminalType: s.TerminalType,
+			UnreadCount:  unreadCount,
+			LastActive:   s.LastActive,
+			LastPrompt:   s.LastPrompt,
+			Breakdown:    breakdown,
+		})
+	}
+	return statuses
 }
 
 func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
