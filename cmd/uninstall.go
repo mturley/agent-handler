@@ -73,10 +73,15 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check cmux actions
-	if hasCmuxActions() {
-		fmt.Printf("  Remove cmux actions from %s:\n", cmuxConfigFilePath())
-		for _, id := range handlerCmuxActionIDs {
-			fmt.Printf("    - %s\n", id)
+	cmuxActionsPresent := hasCmuxActions()
+	if cmuxActionsPresent {
+		if os.Getenv("CMUX_SURFACE_ID") == "" {
+			fmt.Printf("  \033[33m⚠ cmux actions found but not running inside cmux — cannot remove them\033[0m\n")
+		} else {
+			fmt.Printf("  Remove cmux actions from %s:\n", cmuxConfigFilePath())
+			for _, id := range handlerCmuxActionIDs {
+				fmt.Printf("    - %s\n", id)
+			}
 		}
 	}
 
@@ -147,8 +152,10 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ Removed skill symlink %s\n", name)
 	}
 
-	// Remove cmux actions
-	removeCmuxActions()
+	// Remove cmux actions (only if inside cmux)
+	if cmuxActionsPresent && os.Getenv("CMUX_SURFACE_ID") != "" {
+		removeCmuxActions()
+	}
 
 	// Uninstall watcher schedules
 	for _, name := range []string{"github", "jira"} {

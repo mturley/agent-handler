@@ -53,6 +53,28 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	claudeRulesDir := filepath.Join(home, ".claude", "rules")
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
+	// Detect cmux availability early
+	cmuxAvailable := false
+	cmuxInsideCmux := os.Getenv("CMUX_SURFACE_ID") != ""
+	if _, err := exec.LookPath("cmux"); err == nil {
+		if _, err := os.Stat(cmuxConfigFilePath()); err == nil {
+			cmuxAvailable = true
+		}
+	}
+
+	if cmuxAvailable && !cmuxInsideCmux && !setupYes {
+		fmt.Println("\033[33m⚠ Not running inside cmux.\033[0m")
+		fmt.Println("cmux was detected but this setup is not running from inside cmux.")
+		fmt.Println("cmux session-switching shortcuts can only be configured from inside cmux.")
+		fmt.Println("")
+		if !confirm("Continue without cmux actions? (Run 'handler setup' from inside cmux later to add them)") {
+			fmt.Println("Aborted. Re-run handler setup from inside cmux.")
+			return nil
+		}
+		cmuxAvailable = false
+		fmt.Println("")
+	}
+
 	fmt.Println("agent-handler setup will:")
 	fmt.Println("")
 	fmt.Printf("  Create directory structure at %s\n", handlerDir)
@@ -74,15 +96,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("    - %s\n", hook)
 	}
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
-	cmuxAvailable := false
-	if _, err := exec.LookPath("cmux"); err == nil {
-		if _, err := os.Stat(cmuxConfigFilePath()); err == nil {
-			cmuxAvailable = true
-			fmt.Printf("  Add cmux actions to %s:\n", cmuxConfigFilePath())
-			for _, id := range handlerCmuxActionIDs {
-				action := handlerCmuxActions[id]
-				fmt.Printf("    - %s (%s)\n", id, action["shortcut"])
-			}
+	if cmuxAvailable {
+		fmt.Printf("  Add cmux actions to %s:\n", cmuxConfigFilePath())
+		for _, id := range handlerCmuxActionIDs {
+			action := handlerCmuxActions[id]
+			fmt.Printf("    - %s (%s)\n", id, action["shortcut"])
 		}
 	}
 	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")
