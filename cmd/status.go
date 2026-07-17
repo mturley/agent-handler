@@ -278,11 +278,9 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 		}
 		fmt.Printf("Repo: %s\n", rg.name)
 
-		for wi, wg := range rg.workspaces {
+		for _, wg := range rg.workspaces {
 			if wg.name != "" {
-				if wi > 0 {
-					fmt.Println()
-				}
+				fmt.Println()
 				wsColor := "\033[35m"
 				if wg.entries[0].session.CmuxWorkspaceColor != "" {
 					wsColor = hexToANSI(wg.entries[0].session.CmuxWorkspaceColor)
@@ -290,10 +288,8 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 				fmt.Printf("    %s● Workspace:%s %s\n", wsColor, reset, wg.name)
 			}
 
-			for ei, e := range wg.entries {
-				if ei > 0 {
-					fmt.Println()
-				}
+			for _, e := range wg.entries {
+				fmt.Println()
 				st := e.status
 				stateColor := dim
 				switch st.DisplayState {
