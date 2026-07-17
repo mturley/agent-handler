@@ -15,10 +15,12 @@ At the start of each session, tell the user exactly:
 > - `/message` — message another session
 > - `/done` — log completion summary
 > - `/handler` — become the command center
-> - `/awaiting` — switch to a session awaiting approval (cmux)
-> - `/switch` — switch to another session by name (cmux)
 >
 > **Useful CLI commands:** `handler status`, `handler log --global`, `handler tail`, `handler cleanup`, `handler update`, `handler switch <name>`, `handler switch -a`
+>
+> If handler was set up within cmux, keyboard shortcuts are available:
+> - **cmd+shift+a** — switch to a session awaiting approval
+> - **cmd+shift+s** — interactive session switcher
 
 Then run `handler --help` and `handler emit --help` to learn the available commands and flags. These steps — showing the introduction, reading the CLI help — must happen before any other work, even if the user's first prompt includes a task.
 

@@ -111,6 +111,44 @@ func hasCmuxActions() bool {
 	return false
 }
 
+// CmuxShortcuts holds the configured keyboard shortcuts for handler cmux actions.
+type CmuxShortcuts struct {
+	SwitchToAwaiting string
+	SwitchToSession  string
+}
+
+// GetCmuxShortcuts reads the configured shortcuts from the cmux config.
+// Returns nil if cmux-settings is not available or actions aren't configured.
+func GetCmuxShortcuts() *CmuxShortcuts {
+	cmuxSettings := findCmuxSettings()
+	if cmuxSettings == "" {
+		return nil
+	}
+	out, err := exec.Command(cmuxSettings, "get", "actions").Output()
+	if err != nil || len(out) == 0 {
+		return nil
+	}
+	var actions map[string]map[string]interface{}
+	if json.Unmarshal(out, &actions) != nil {
+		return nil
+	}
+	shortcuts := &CmuxShortcuts{}
+	if a, ok := actions["handler-switch-to-awaiting"]; ok {
+		if s, ok := a["shortcut"].(string); ok {
+			shortcuts.SwitchToAwaiting = s
+		}
+	}
+	if a, ok := actions["handler-switch-to-session"]; ok {
+		if s, ok := a["shortcut"].(string); ok {
+			shortcuts.SwitchToSession = s
+		}
+	}
+	if shortcuts.SwitchToAwaiting == "" && shortcuts.SwitchToSession == "" {
+		return nil
+	}
+	return shortcuts
+}
+
 func removeCmuxActions() {
 	cmuxSettings := findCmuxSettings()
 	if cmuxSettings == "" {

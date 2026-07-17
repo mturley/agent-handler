@@ -35,8 +35,6 @@ var skillNames = []string{
 	"handler",
 	"catchup",
 	"done",
-	"awaiting",
-	"switch",
 	"handler-debug",
 }
 

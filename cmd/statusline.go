@@ -232,14 +232,23 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	renderAutoDeliveredLine(d, session)
 	renderInboxModeLine(session)
 	renderWatchingLine(d, session, cfg, false)
-	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
-		colorDim, colorCyan, colorReset, colorDim, colorReset)
 
 	// Dispatch terminal notification
 	dispatchNotification(session, unreadCount, unreadMsg)
 
 	// Awaiting approval
-	renderAwaitingLine(session, awaitingNames)
+	var shortcuts *CmuxShortcuts
+	if session.TerminalType == "cmux" {
+		shortcuts = GetCmuxShortcuts()
+	}
+	renderAwaitingLine(session, awaitingNames, shortcuts)
+
+	// Footer
+	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
+		colorDim, colorCyan, colorReset, colorDim, colorReset)
+	if session.TerminalType == "cmux" {
+		renderCmuxShortcutsLine(shortcuts)
+	}
 
 	return nil
 }
@@ -303,12 +312,21 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	dispatchNotification(session, unreadCount, unreadMsg)
 
 	// Awaiting approval
-	renderAwaitingLine(session, awaitingNames)
+	var shortcuts *CmuxShortcuts
+	if session.TerminalType == "cmux" {
+		shortcuts = GetCmuxShortcuts()
+	}
+	renderAwaitingLine(session, awaitingNames, shortcuts)
+
+	// Footer (cmux shortcuts)
+	if session.TerminalType == "cmux" {
+		renderCmuxShortcutsLine(shortcuts)
+	}
 
 	return nil
 }
 
-func renderAwaitingLine(session *db.Session, awaitingNames []string) {
+func renderAwaitingLine(session *db.Session, awaitingNames []string, shortcuts *CmuxShortcuts) {
 	if len(awaitingNames) == 0 {
 		return
 	}
@@ -317,14 +335,32 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string) {
 	if count > 1 {
 		label = "sessions"
 	}
-	if session.TerminalType == "cmux" {
-		fmt.Printf("%s%d other %s awaiting approval%s %s— %s/awaiting%s%s to auto-switch or %s/switch%s%s to switch by name%s\n",
-			colorYellow, count, label, colorReset, colorDim, colorCyan, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
+	if shortcuts != nil && shortcuts.SwitchToAwaiting != "" {
+		fmt.Printf("%s%d other %s awaiting approval%s %s— %s to auto-switch%s\n",
+			colorYellow, count, label, colorReset, colorDim, shortcuts.SwitchToAwaiting, colorReset)
 	} else {
 		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
 	}
 	nameList := formatNameList(awaitingNames, 5)
 	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorYellow, nameList, colorReset)
+}
+
+func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
+	if shortcuts == nil {
+		fmt.Printf("%sRun %shandler setup%s%s from within cmux to set up keyboard shortcuts%s\n",
+			colorDim, colorCyan, colorReset, colorDim, colorReset)
+		return
+	}
+	var parts []string
+	if shortcuts.SwitchToAwaiting != "" {
+		parts = append(parts, fmt.Sprintf("%s switch to awaiting", shortcuts.SwitchToAwaiting))
+	}
+	if shortcuts.SwitchToSession != "" {
+		parts = append(parts, fmt.Sprintf("%s switch by name", shortcuts.SwitchToSession))
+	}
+	if len(parts) > 0 {
+		fmt.Printf("%s%s%s\n", colorDim, strings.Join(parts, " · "), colorReset)
+	}
 }
 
 // --- Shared rendering helpers ---
