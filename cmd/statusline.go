@@ -784,7 +784,7 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 				return
 			}
 		} else {
-			middleSegment = fmt.Sprintf(" %s| %s/watch%s%s to follow PRs or Jira issues%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+			middleSegment = fmt.Sprintf(" %s· %s/watch%s%s to follow PRs or Jira issues%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
 		}
 	}
 
