@@ -414,9 +414,17 @@ func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
 			colorDim, colorCyan, colorReset, colorDim, colorReset)
 		return
 	}
+	var parts []string
 	if shortcuts.SwitchToSession != "" {
-		fmt.Printf("%s%s%s%s to list and switch between sessions%s\n",
-			colorDim, colorCyan, shortcuts.SwitchToSession, colorReset+colorDim, colorReset)
+		parts = append(parts, fmt.Sprintf("%s%s%s to switch sessions", colorCyan, shortcuts.SwitchToSession, colorReset+colorDim))
+	}
+	if shortcuts.FocusBack != "" && shortcuts.FocusForward != "" {
+		parts = append(parts, fmt.Sprintf("%s%s%s / %s%s%s for focus back/forward",
+			colorCyan, shortcuts.FocusBack, colorReset+colorDim,
+			colorCyan, shortcuts.FocusForward, colorReset+colorDim))
+	}
+	if len(parts) > 0 {
+		fmt.Printf("%s%s%s\n", colorDim, strings.Join(parts, " · "), colorReset)
 	}
 }
 

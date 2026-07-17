@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const cmuxConfigPath = ".config/cmux/cmux.json"
@@ -96,6 +97,8 @@ func hasCmuxActions() bool {
 type CmuxShortcuts struct {
 	SwitchToAwaiting string
 	SwitchToSession  string
+	FocusBack    string
+	FocusForward string
 }
 
 // GetCmuxShortcuts reads the configured shortcuts from the cmux config.
@@ -124,6 +127,28 @@ func GetCmuxShortcuts() *CmuxShortcuts {
 			shortcuts.SwitchToSession = s
 		}
 	}
+	// Read browser back/forward from cmux shortcuts bindings
+	// These have defaults even without explicit config, so try to read them
+	if sOut, err := exec.Command(cmuxSettings, "get", "shortcuts.bindings.browserBack").Output(); err == nil {
+		s := strings.TrimSpace(strings.Trim(string(sOut), "\""))
+		if s != "" {
+			shortcuts.FocusBack = s
+		}
+	}
+	if sOut, err := exec.Command(cmuxSettings, "get", "shortcuts.bindings.browserForward").Output(); err == nil {
+		s := strings.TrimSpace(strings.Trim(string(sOut), "\""))
+		if s != "" {
+			shortcuts.FocusForward = s
+		}
+	}
+	// Default cmux shortcuts if not explicitly configured
+	if shortcuts.FocusBack == "" {
+		shortcuts.FocusBack = "cmd+["
+	}
+	if shortcuts.FocusForward == "" {
+		shortcuts.FocusForward = "cmd+]"
+	}
+
 	if shortcuts.SwitchToAwaiting == "" && shortcuts.SwitchToSession == "" {
 		return nil
 	}
