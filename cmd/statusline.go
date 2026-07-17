@@ -244,11 +244,11 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	renderAwaitingLine(session, awaitingNames, shortcuts)
 
 	// Footer
-	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
-		colorDim, colorCyan, colorReset, colorDim, colorReset)
 	if session.TerminalType == "cmux" {
 		renderCmuxShortcutsLine(shortcuts)
 	}
+	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
+		colorDim, colorCyan, colorReset, colorDim, colorReset)
 
 	return nil
 }
