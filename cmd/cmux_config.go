@@ -57,6 +57,16 @@ func configureCmuxActions() {
 		return
 	}
 
+	if os.Getenv("CMUX_SURFACE_ID") == "" {
+		fmt.Println("\n  \033[33m⚠ Not running inside cmux.\033[0m cmux actions cannot be configured from outside cmux.")
+		if !setupYes && !confirm("  Skip cmux action setup and continue?") {
+			fmt.Println("  Aborted. Re-run handler setup from inside cmux to configure actions.")
+			os.Exit(1)
+		}
+		fmt.Println("  Skipping cmux action setup. Run 'handler setup' from inside cmux later.")
+		return
+	}
+
 	// Check if actions already exist
 	out, _ := exec.Command(cmuxSettings, "get", "actions").Output()
 	if len(out) > 0 {
@@ -114,6 +124,16 @@ func hasCmuxActions() bool {
 func removeCmuxActions() {
 	cmuxSettings := findCmuxSettings()
 	if cmuxSettings == "" {
+		return
+	}
+
+	if os.Getenv("CMUX_SURFACE_ID") == "" {
+		fmt.Println("\n  \033[33m⚠ Not running inside cmux.\033[0m cmux actions cannot be removed from outside cmux.")
+		if !confirm("  Skip cmux action removal and continue?") {
+			fmt.Println("  Aborted. Re-run handler uninstall from inside cmux to remove actions.")
+			os.Exit(1)
+		}
+		fmt.Println("  Skipping cmux action removal. Run 'handler uninstall' from inside cmux later.")
 		return
 	}
 
