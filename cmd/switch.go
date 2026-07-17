@@ -74,11 +74,15 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("session %q is missing cmux surface or workspace ID", session.SessionName)
 	}
 
-	out, err := exec.Command("cmux", "focus-panel",
+	if out, err := exec.Command("cmux", "workspace", "select",
+		"--workspace", session.CmuxWorkspaceID,
+	).CombinedOutput(); err != nil {
+		return fmt.Errorf("cmux workspace select failed: %s", string(out))
+	}
+	if out, err := exec.Command("cmux", "focus-panel",
 		"--panel", session.TerminalID,
 		"--workspace", session.CmuxWorkspaceID,
-	).CombinedOutput()
-	if err != nil {
+	).CombinedOutput(); err != nil {
 		return fmt.Errorf("cmux focus-panel failed: %s", string(out))
 	}
 
