@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ var switchCmd = &cobra.Command{
 	Short:              "Switch to another session's cmux workspace and surface",
 	Long:               "Navigate to another session's cmux workspace and focus its surface tab. Must be run from within cmux.",
 	DisableFlagParsing: false,
+	SilenceUsage:       true,
 	RunE:               runSwitch,
 }
 
@@ -55,16 +57,19 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	if switchFirstAwaiting {
 		session, err = findFirstAwaiting(d)
 		if err != nil {
+			closeCallerOnError(err)
 			return err
 		}
 	} else if switchSession != "" {
 		session, err = resolveSessionByTarget(d, switchSession)
 		if err != nil {
+			closeCallerOnError(err)
 			return err
 		}
 	} else {
 		session, err = interactiveSwitch(d)
 		if err != nil {
+			closeCallerOnError(err)
 			return err
 		}
 	}
@@ -186,6 +191,23 @@ func interactiveSwitch(d *db.DB) (*db.Session, error) {
 	}
 
 	return nil, fmt.Errorf("session %q not found", input)
+}
+
+func closeCallerOnError(switchErr error) {
+	if !switchCloseCaller {
+		return
+	}
+	selfSurface := os.Getenv("CMUX_SURFACE_ID")
+	if selfSurface == "" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "Error: %v\n", switchErr)
+	fmt.Fprint(os.Stderr, "Press Enter to close...")
+	bufio.NewReader(os.Stdin).ReadString('\n')
+	exec.Command("cmux", "close-surface",
+		"--surface", selfSurface,
+		"--workspace", os.Getenv("CMUX_WORKSPACE_ID"),
+	).Run()
 }
 
 func findFirstAwaiting(d *db.DB) (*db.Session, error) {
