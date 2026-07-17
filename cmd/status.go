@@ -314,7 +314,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 					indent = "        "
 				}
 
-				fmt.Printf("%sSession: %s%s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
+				fmt.Printf("%sSession: %s%s%s%s %s%s%s%s\n", indent, bold, colorUnderline, name, reset, stateColor, st.DisplayState, reset, peekableStr)
 
 				if st.Branch != name {
 					fmt.Printf("%s%s@ %s%s\n", indent, dim, st.Branch, reset)
