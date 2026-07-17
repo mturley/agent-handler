@@ -63,7 +63,12 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	for _, name := range skillNames {
 		fmt.Printf("    - /%s\n", name)
 	}
-	fmt.Printf("  Install global rules to %s\n", claudeRulesDir)
+	fmt.Printf("  Install global rules to %s:\n", claudeRulesDir)
+	if ruleFiles, err := fs.Glob(embeddedRules, "rules/*.md"); err == nil {
+		for _, r := range ruleFiles {
+			fmt.Printf("    - %s\n", filepath.Base(r))
+		}
+	}
 	fmt.Printf("  Configure Claude Code hooks in %s:\n", settingsPath)
 	for _, hook := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact"} {
 		fmt.Printf("    - %s\n", hook)
