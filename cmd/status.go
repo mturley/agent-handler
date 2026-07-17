@@ -32,6 +32,21 @@ func init() {
 	statusCmd.Flags().IntVar(&statusLimit, "limit", 20, "maximum number of sessions to show")
 }
 
+type sessionStatus struct {
+	SessionID    string         `json:"session_id"`
+	SessionName  string         `json:"session_name"`
+	Branch       string         `json:"branch"`
+	PID          int            `json:"pid"`
+	Status       string         `json:"status"`
+	DisplayState string         `json:"display_state"`
+	InboxMode    string         `json:"inbox_mode"`
+	Peekable     bool           `json:"peekable"`
+	TerminalType string         `json:"terminal_type,omitempty"`
+	UnreadCount  int            `json:"unread_count"`
+	LastActive   string         `json:"last_active"`
+	Breakdown    map[string]int `json:"unread_breakdown,omitempty"`
+}
+
 func runStatus(cmd *cobra.Command, args []string) error {
 	d, err := openReadOnlyDB()
 	if err != nil {
@@ -42,21 +57,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	sessions, err := d.ListSessions(statusAll, statusLimit, 0)
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
-	}
-
-	type sessionStatus struct {
-		SessionID    string         `json:"session_id"`
-		SessionName  string         `json:"session_name"`
-		Branch       string         `json:"branch"`
-		PID          int            `json:"pid"`
-		Status       string         `json:"status"`
-		DisplayState string         `json:"display_state"`
-		InboxMode    string         `json:"inbox_mode"`
-		Peekable     bool           `json:"peekable"`
-		TerminalType string         `json:"terminal_type,omitempty"`
-		UnreadCount  int            `json:"unread_count"`
-		LastActive   string         `json:"last_active"`
-		Breakdown    map[string]int `json:"unread_breakdown,omitempty"`
 	}
 
 	statuses := []sessionStatus{}
@@ -136,120 +136,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			return nil
 		}
 
+		renderSessionList(sessions, statuses)
+
 		dim := "\033[2m"
 		reset := "\033[0m"
 		bold := "\033[1m"
 		green := "\033[32m"
 		yellow := "\033[33m"
 		red := "\033[31m"
-		dimPurple := "\033[2;35m"
-
-		// Group sessions: repo → workspace → sessions
-		type sessionEntry struct {
-			status  sessionStatus
-			session db.Session
-		}
-
-		// Collect repos in order of first appearance, workspaces within each repo
-		type workspaceGroup struct {
-			name    string
-			entries []sessionEntry
-		}
-		type repoGroup struct {
-			name       string
-			workspaces []*workspaceGroup
-			wsIndex    map[string]int
-		}
-		var repoOrder []*repoGroup
-		repoIndex := make(map[string]int)
-
-		for i, st := range statuses {
-			s := sessions[i]
-			ri, exists := repoIndex[s.Repo]
-			if !exists {
-				ri = len(repoOrder)
-				repoIndex[s.Repo] = ri
-				repoOrder = append(repoOrder, &repoGroup{name: s.Repo, wsIndex: make(map[string]int)})
-			}
-			rg := repoOrder[ri]
-
-			wsName := s.CmuxWorkspaceName
-			wi, wsExists := rg.wsIndex[wsName]
-			if !wsExists {
-				wi = len(rg.workspaces)
-				rg.wsIndex[wsName] = wi
-				rg.workspaces = append(rg.workspaces, &workspaceGroup{name: wsName})
-			}
-			rg.workspaces[wi].entries = append(rg.workspaces[wi].entries, sessionEntry{status: st, session: s})
-		}
-
-		for ri, rg := range repoOrder {
-			if ri > 0 {
-				fmt.Println()
-			}
-			fmt.Printf("%s%s%s\n", bold, rg.name, reset)
-
-			for _, wg := range rg.workspaces {
-				if wg.name != "" {
-					wsColor := dimPurple
-					if wg.entries[0].session.CmuxWorkspaceColor != "" {
-						wsColor = hexToDimANSI(wg.entries[0].session.CmuxWorkspaceColor)
-					}
-					fmt.Printf("  %sworkspace: %s%s\n", wsColor, wg.name, reset)
-				}
-
-				for _, e := range wg.entries {
-					st := e.status
-					stateColor := dim
-					switch st.DisplayState {
-					case "active":
-						stateColor = green
-					case "idle":
-						stateColor = yellow
-					case "dead":
-						stateColor = red
-					}
-
-					name := st.SessionName
-					if name == "" {
-						name = st.SessionID[:8]
-					}
-
-					peekableStr := ""
-					if st.Peekable {
-						peekableStr = fmt.Sprintf(" %s👁%s", dim, reset)
-					}
-
-					indent := "  "
-					if wg.name != "" {
-						indent = "    "
-					}
-
-					fmt.Printf("%s%s%s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
-
-					if st.Branch != name {
-						fmt.Printf("%s%s@ %s%s\n", indent, dim, st.Branch, reset)
-					}
-
-					if st.UnreadCount > 0 {
-						parts := ""
-						for eventType, count := range st.Breakdown {
-							if parts != "" {
-								parts += ", "
-							}
-							parts += fmt.Sprintf("%d %s", count, eventType)
-						}
-						fmt.Printf("%s%d unread (%s)\n", indent, st.UnreadCount, parts)
-					}
-
-					lastActive, parseErr := time.Parse(time.RFC3339, st.LastActive)
-					if parseErr == nil {
-						ago := time.Since(lastActive).Truncate(time.Second)
-						fmt.Printf("%s%sLast active: %s ago  |  ID: %s%s\n", indent, dim, formatDuration(ago), st.SessionID, reset)
-					}
-				}
-			}
-		}
 
 		// Watcher and resource summary
 		fmt.Printf("\n%s─── Watchers ───%s\n", dim, reset)
@@ -333,6 +227,130 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
+	dim := "\033[2m"
+	reset := "\033[0m"
+	bold := "\033[1m"
+	green := "\033[32m"
+	yellow := "\033[33m"
+	red := "\033[31m"
+
+	type sessionEntry struct {
+		status  sessionStatus
+		session db.Session
+	}
+	type workspaceGroup struct {
+		name    string
+		entries []sessionEntry
+	}
+	type repoGroup struct {
+		name       string
+		workspaces []*workspaceGroup
+		wsIndex    map[string]int
+	}
+	var repoOrder []*repoGroup
+	repoIndex := make(map[string]int)
+
+	for i, st := range statuses {
+		s := sessions[i]
+		ri, exists := repoIndex[s.Repo]
+		if !exists {
+			ri = len(repoOrder)
+			repoIndex[s.Repo] = ri
+			repoOrder = append(repoOrder, &repoGroup{name: s.Repo, wsIndex: make(map[string]int)})
+		}
+		rg := repoOrder[ri]
+		wsName := s.CmuxWorkspaceName
+		wi, wsExists := rg.wsIndex[wsName]
+		if !wsExists {
+			wi = len(rg.workspaces)
+			rg.wsIndex[wsName] = wi
+			rg.workspaces = append(rg.workspaces, &workspaceGroup{name: wsName})
+		}
+		rg.workspaces[wi].entries = append(rg.workspaces[wi].entries, sessionEntry{status: st, session: s})
+	}
+
+	for ri, rg := range repoOrder {
+		if ri > 0 {
+			fmt.Println()
+		}
+		fmt.Printf("%s%s%s\n", bold, rg.name, reset)
+
+		for _, wg := range rg.workspaces {
+			if wg.name != "" {
+				wsColor := "\033[35m"
+				if wg.entries[0].session.CmuxWorkspaceColor != "" {
+					wsColor = hexToANSI(wg.entries[0].session.CmuxWorkspaceColor)
+				}
+				fmt.Printf("  %sworkspace: %s%s\n", wsColor, wg.name, reset)
+			}
+
+			for _, e := range wg.entries {
+				st := e.status
+				stateColor := dim
+				switch st.DisplayState {
+				case "active":
+					stateColor = green
+				case "idle":
+					stateColor = yellow
+				case "dead":
+					stateColor = red
+				}
+
+				name := st.SessionName
+				if name == "" {
+					name = st.SessionID[:8]
+				}
+
+				peekableStr := ""
+				if st.Peekable {
+					peekableStr = fmt.Sprintf(" %s👁%s", dim, reset)
+				}
+
+				indent := "  "
+				if wg.name != "" {
+					indent = "    "
+				}
+
+				fmt.Printf("%s%sSession: %s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
+
+				if st.Branch != name {
+					fmt.Printf("%s%s@ %s%s\n", indent, dim, st.Branch, reset)
+				}
+
+				if st.UnreadCount > 0 {
+					parts := ""
+					for eventType, count := range st.Breakdown {
+						if parts != "" {
+							parts += ", "
+						}
+						parts += fmt.Sprintf("%d %s", count, eventType)
+					}
+					fmt.Printf("%s%d unread (%s)\n", indent, st.UnreadCount, parts)
+				}
+
+				lastActive, parseErr := time.Parse(time.RFC3339, st.LastActive)
+				if parseErr == nil {
+					ago := time.Since(lastActive).Truncate(time.Second)
+					fmt.Printf("%s%sLast active: %s ago  |  ID: %s%s\n", indent, dim, formatDuration(ago), st.SessionID, reset)
+				}
+			}
+		}
+	}
+}
+
+func hexToANSI(hex string) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return "\033[35m"
+	}
+	var r, g, b uint64
+	r, _ = strconv.ParseUint(hex[0:2], 16, 8)
+	g, _ = strconv.ParseUint(hex[2:4], 16, 8)
+	b, _ = strconv.ParseUint(hex[4:6], 16, 8)
+	return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
 }
 
 func hexToDimANSI(hex string) string {

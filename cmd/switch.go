@@ -123,50 +123,20 @@ func interactiveSwitch(d *db.DB) (*db.Session, error) {
 		return nil, fmt.Errorf("no other cmux sessions to switch to")
 	}
 
-	// Display grouped list
-	type groupKey struct{ repo, workspace string }
-	groups := make(map[groupKey][]int)
-	var groupOrder []groupKey
-	for i, s := range candidates {
-		key := groupKey{repo: s.Repo, workspace: s.CmuxWorkspaceName}
-		if _, exists := groups[key]; !exists {
-			groupOrder = append(groupOrder, key)
-		}
-		groups[key] = append(groups[key], i)
+	// Build minimal statuses for renderSessionList
+	var statuses []sessionStatus
+	for _, s := range candidates {
+		statuses = append(statuses, sessionStatus{
+			SessionID:    s.SessionID,
+			SessionName:  s.SessionName,
+			Branch:       s.Branch,
+			DisplayState: "active",
+			Peekable:     s.TerminalType != "",
+			TerminalType: s.TerminalType,
+			LastActive:   s.LastActive,
+		})
 	}
-
-	bold := "\033[1m"
-	reset := "\033[0m"
-	white := "\033[37m"
-	dimPurple := "\033[2;35m"
-
-	lastRepo := ""
-	for _, key := range groupOrder {
-		if key.repo != lastRepo {
-			if lastRepo != "" {
-				fmt.Println()
-			}
-			fmt.Printf("%s%s%s\n", bold, key.repo, reset)
-			lastRepo = key.repo
-		}
-		if key.workspace != "" {
-			wsColor := dimPurple
-			indices := groups[key]
-			if len(indices) > 0 {
-				if c := candidates[indices[0]].CmuxWorkspaceColor; c != "" {
-					wsColor = hexToDimANSI(c)
-				}
-			}
-			fmt.Printf("  %sworkspace: %s%s\n", wsColor, key.workspace, reset)
-		}
-		for _, idx := range groups[key] {
-			indent := "    "
-			if key.workspace == "" {
-				indent = "  "
-			}
-			fmt.Printf("%s%s%s%s\n", indent, white, names[idx], reset)
-		}
-	}
+	renderSessionList(candidates, statuses)
 	fmt.Println()
 
 	// Readline with tab completion
@@ -176,7 +146,7 @@ func interactiveSwitch(d *db.DB) (*db.Session, error) {
 	}
 
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:       "Switch to: ",
+		Prompt:       "Switch to session \033[2m(tab-complete supported)\033[0m: ",
 		AutoComplete: completer,
 	})
 	if err != nil {
