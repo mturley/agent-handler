@@ -184,6 +184,19 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 
 	isHandler := session.Role == "handler"
 
+	// Compute cost display values
+	trueCost := input.Cost.TotalCostUSD
+	todayCost := 0.0
+	if input.Cost.TotalCostUSD > 0 {
+		if adj, err := d.GetTotalAdjustment(input.SessionID); err == nil {
+			trueCost += adj
+		}
+		today := time.Now().UTC().Format("2006-01-02")
+		if dc, err := d.GetDailyCostForSession(input.SessionID, today); err == nil && dc != nil {
+			todayCost = dc.CostUSD
+		}
+	}
+
 	// Launch parallel goroutines for expensive operations
 	var gitStatus *gitpkg.Status
 	var awaitingNames []string
@@ -217,9 +230,9 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	// Assemble output
 	var err2 error
 	if isHandler {
-		err2 = renderHandlerStatusline(d, session, cfg, &input, awaitingNames)
+		err2 = renderHandlerStatusline(d, session, cfg, &input, trueCost, todayCost, awaitingNames)
 	} else {
-		err2 = renderWorkerStatusline(d, session, cfg, &input, gitStatus, awaitingNames)
+		err2 = renderWorkerStatusline(d, session, cfg, &input, trueCost, todayCost, gitStatus, awaitingNames)
 	}
 	if err2 != nil {
 		return err2
@@ -255,9 +268,9 @@ func runStatuslineDirect(cmd *cobra.Command) error {
 
 	if session.Role == "handler" {
 		awaitingNames := scanAwaitingApproval(d, session.SessionID)
-		return renderHandlerStatusline(d, session, cfg, nil, awaitingNames)
+		return renderHandlerStatusline(d, session, cfg, nil, 0.0, 0.0, awaitingNames)
 	}
-	return renderWorkerStatusline(d, session, cfg, nil, nil, nil)
+	return renderWorkerStatusline(d, session, cfg, nil, 0.0, 0.0, nil, nil)
 }
 
 // scanAwaitingApproval checks all peekable sessions for approval prompts.
@@ -279,7 +292,7 @@ func scanAwaitingApproval(d *db.DB, selfSessionID string) []string {
 }
 
 // renderWorkerStatusline outputs the complete statusline for a regular session.
-func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, gs *gitpkg.Status, awaitingNames []string) error {
+func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, gs *gitpkg.Status, awaitingNames []string) error {
 	// Line 1: Git status
 	if gs != nil && gs.InGit {
 		fmt.Println(formatGitLine(gs))
@@ -287,7 +300,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 
 	// Line 2: Model/context/cost
 	if input != nil && input.Model.DisplayName != "" {
-		fmt.Println(formatModelLine(input))
+		fmt.Println(formatModelLine(input, trueCost, todayCost))
 	}
 
 	// Handler lines (inbox, inbox-mode, watching)
@@ -317,7 +330,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 }
 
 // renderHandlerStatusline outputs the complete statusline for a handler session.
-func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, awaitingNames []string) error {
+func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, awaitingNames []string) error {
 	// Count active sessions
 	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
@@ -362,7 +375,21 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 
 	// Model line (if from hook)
 	if input != nil && input.Model.DisplayName != "" {
-		fmt.Println(formatModelLine(input))
+		fmt.Println(formatModelLine(input, trueCost, todayCost))
+	}
+
+	// Aggregate cost line
+	today := time.Now().UTC().Format("2006-01-02")
+	now := time.Now().UTC()
+	monthStart := fmt.Sprintf("%04d-%02d-01", now.Year(), now.Month())
+	monthEnd := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), daysInMonth(now.Year(), now.Month()))
+
+	todayTotal, _, _, _ := d.QueryTotalCost(today, today)
+	monthTotal, _, _, _ := d.QueryTotalCost(monthStart, monthEnd)
+
+	if todayTotal > 0 || monthTotal > 0 {
+		fmt.Printf("%sCost%s: $%.2f today | $%.2f this month\n",
+			colorBoldWhite, colorReset, todayTotal, monthTotal)
 	}
 
 	// Inbox (global for handler)
@@ -489,7 +516,7 @@ func formatGitLine(gs *gitpkg.Status) string {
 	return result
 }
 
-func formatModelLine(input *hookInput) string {
+func formatModelLine(input *hookInput, trueCost float64, todayCost float64) string {
 	pct := input.ContextWindow.UsedPercentage
 	filled := pct * 20 / 100
 	empty := 20 - filled
@@ -503,11 +530,16 @@ func formatModelLine(input *hookInput) string {
 		barColor = colorYellow
 	}
 
-	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s| $%.2f%s",
+	costStr := fmt.Sprintf("$%.2f", trueCost)
+	if todayCost > 0 {
+		costStr += fmt.Sprintf(" ($%.2f today)", todayCost)
+	}
+
+	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s| %s%s",
 		colorClaudeOrange, input.Model.DisplayName, colorReset,
 		barColor, bar, colorReset,
 		pct,
-		colorDim, input.Cost.TotalCostUSD, colorReset)
+		colorDim, costStr, colorReset)
 }
 
 func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
