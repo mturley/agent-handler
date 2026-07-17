@@ -78,7 +78,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	if _, err := exec.LookPath("cmux"); err == nil {
 		if _, err := os.Stat(cmuxConfigFilePath()); err == nil {
 			cmuxAvailable = true
-			fmt.Printf("  Add cmux actions (session switching shortcuts) to %s\n", cmuxConfigFilePath())
+			fmt.Printf("  Add cmux actions to %s:\n", cmuxConfigFilePath())
+			for _, id := range handlerCmuxActionIDs {
+				action := handlerCmuxActions[id]
+				fmt.Printf("    - %s (%s)\n", id, action["shortcut"])
+			}
 		}
 	}
 	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")

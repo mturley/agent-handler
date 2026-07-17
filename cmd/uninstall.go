@@ -74,7 +74,10 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 
 	// Check cmux actions
 	if hasCmuxActions() {
-		fmt.Printf("  Remove cmux actions from %s\n", cmuxConfigFilePath())
+		fmt.Printf("  Remove cmux actions from %s:\n", cmuxConfigFilePath())
+		for _, id := range handlerCmuxActionIDs {
+			fmt.Printf("    - %s\n", id)
+		}
 	}
 
 	// Check watcher schedules
