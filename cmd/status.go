@@ -44,6 +44,7 @@ type sessionStatus struct {
 	TerminalType string         `json:"terminal_type,omitempty"`
 	UnreadCount  int            `json:"unread_count"`
 	LastActive   string         `json:"last_active"`
+	LastPrompt   string         `json:"last_prompt,omitempty"`
 	Breakdown    map[string]int `json:"unread_breakdown,omitempty"`
 }
 
@@ -69,17 +70,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			if !processAlive {
 				displayState = "dead"
 			} else {
-				// Check if heartbeat is recent (within 5 minutes)
-				lastActive, err := time.Parse(time.RFC3339, s.LastActive)
-				if err == nil {
-					age := time.Since(lastActive)
-					if age < 5*time.Minute {
-						displayState = "active"
-					} else {
-						displayState = "idle"
+				// active = prompt within last 24h, idle = process alive but no recent prompt
+				displayState = "idle"
+				if s.LastPrompt != "" {
+					if lastPrompt, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
+						if time.Since(lastPrompt) < 24*time.Hour {
+							displayState = "active"
+						}
 					}
-				} else {
-					displayState = "idle"
 				}
 			}
 		}
@@ -107,6 +105,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 			TerminalType: s.TerminalType,
 			UnreadCount:  unreadCount,
 			LastActive:   s.LastActive,
+			LastPrompt:   s.LastPrompt,
 			Breakdown:    breakdown,
 		})
 	}
@@ -333,10 +332,13 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 					fmt.Printf("%s%d unread (%s)\n", indent, st.UnreadCount, parts)
 				}
 
-				lastActive, parseErr := time.Parse(time.RFC3339, st.LastActive)
-				if parseErr == nil {
-					ago := time.Since(lastActive).Truncate(time.Second)
-					fmt.Printf("%s%sLast active: %s ago  |  ID: %s%s\n", indent, dim, formatDuration(ago), st.SessionID, reset)
+				if st.LastPrompt != "" {
+					if lastPrompt, parseErr := time.Parse(time.RFC3339, st.LastPrompt); parseErr == nil {
+						ago := time.Since(lastPrompt).Truncate(time.Second)
+						fmt.Printf("%s%sLast prompt: %s ago  |  ID: %s%s\n", indent, dim, formatDuration(ago), st.SessionID, reset)
+					}
+				} else {
+					fmt.Printf("%s%sID: %s%s\n", indent, dim, st.SessionID, reset)
 				}
 			}
 		}

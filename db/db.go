@@ -84,6 +84,10 @@ func runMigrations(conn *sql.DB) error {
 	if err := addColumnIfMissing(conn, "sessions", "cmux_workspace_color", "TEXT"); err != nil {
 		return err
 	}
+	// Add last_prompt column to sessions if it doesn't exist
+	if err := addColumnIfMissing(conn, "sessions", "last_prompt", "TEXT"); err != nil {
+		return err
+	}
 	return nil
 }
 

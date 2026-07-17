@@ -81,9 +81,10 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 
 	isAutoInbox := input.Prompt == "/inbox --auto"
 
-	// Heartbeat: bump last_active
+	// Heartbeat: bump last_active and last_prompt
 	now := time.Now().UTC().Format(time.RFC3339)
 	d.BumpLastActive(input.SessionID, now)
+	d.BumpLastPrompt(input.SessionID, now)
 
 	// Catch up human cursor for real user prompts in auto mode
 	if !isAutoInbox && session.InboxMode == "auto" {
