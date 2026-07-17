@@ -27,7 +27,7 @@ func TestOpen(t *testing.T) {
 		t.Errorf("expected journal_mode=wal, got %s", journalMode)
 	}
 
-	// Verify all 8 tables exist
+	// Verify all 11 tables exist
 	expectedTables := []string{
 		"events",
 		"event_recipients",
@@ -37,6 +37,9 @@ func TestOpen(t *testing.T) {
 		"subscriptions",
 		"resource_relationships",
 		"resource_state",
+		"cost_snapshots",
+		"cost_adjustments",
+		"daily_cost",
 	}
 
 	for _, table := range expectedTables {

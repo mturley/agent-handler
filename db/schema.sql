@@ -102,3 +102,31 @@ CREATE TABLE IF NOT EXISTS resource_state (
     watcher_updated_at TEXT NOT NULL,
     PRIMARY KEY (resource_type, resource_id)
 );
+
+CREATE TABLE IF NOT EXISTS cost_snapshots (
+    session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),
+    reported_cost_usd REAL NOT NULL,
+    total_input_tokens INTEGER NOT NULL,
+    total_output_tokens INTEGER NOT NULL,
+    model TEXT,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS cost_adjustments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES sessions(session_id),
+    adjustment_usd REAL NOT NULL,
+    reason TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS daily_cost (
+    session_id TEXT NOT NULL REFERENCES sessions(session_id),
+    date TEXT NOT NULL,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (session_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_cost_date ON daily_cost(date);
