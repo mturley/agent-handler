@@ -276,7 +276,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 		if ri > 0 {
 			fmt.Println()
 		}
-		fmt.Printf("%sRepo: %s%s\n", bold, rg.name, reset)
+		fmt.Printf("Repo: %s%s%s\n", bold, rg.name, reset)
 
 		for _, wg := range rg.workspaces {
 			if wg.name != "" {
@@ -314,7 +314,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 					indent = "        "
 				}
 
-				fmt.Printf("%s%sSession: %s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
+				fmt.Printf("%sSession: %s%s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
 
 				if st.Branch != name {
 					fmt.Printf("%s%s@ %s%s\n", indent, dim, st.Branch, reset)
