@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/chzyer/readline"
 	"github.com/mturley/agent-handler/db"
@@ -151,17 +152,26 @@ func interactiveSwitch(d *db.DB) (*db.Session, error) {
 		return nil, fmt.Errorf("no other cmux sessions to switch to")
 	}
 
-	// Build minimal statuses for renderSessionList
+	// Build statuses for renderSessionList
 	var statuses []sessionStatus
 	for _, s := range candidates {
+		state := "idle"
+		if s.LastPrompt != "" {
+			if lp, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
+				if time.Since(lp) < 24*time.Hour {
+					state = "active"
+				}
+			}
+		}
 		statuses = append(statuses, sessionStatus{
 			SessionID:    s.SessionID,
 			SessionName:  s.SessionName,
 			Branch:       s.Branch,
-			DisplayState: "active",
+			DisplayState: state,
 			Peekable:     s.TerminalType != "",
 			TerminalType: s.TerminalType,
 			LastActive:   s.LastActive,
+			LastPrompt:   s.LastPrompt,
 		})
 	}
 	renderSessionList(candidates, statuses)
