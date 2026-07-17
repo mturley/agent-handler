@@ -135,13 +135,20 @@ func interactiveSwitch(d *db.DB) (*db.Session, error) {
 		groups[key] = append(groups[key], i)
 	}
 
-	dim := "\033[2m"
 	bold := "\033[1m"
 	reset := "\033[0m"
+	white := "\033[37m"
 	dimPurple := "\033[2;35m"
 
+	lastRepo := ""
 	for _, key := range groupOrder {
-		fmt.Printf("%s%s%s\n", bold, key.repo, reset)
+		if key.repo != lastRepo {
+			if lastRepo != "" {
+				fmt.Println()
+			}
+			fmt.Printf("%s%s%s\n", bold, key.repo, reset)
+			lastRepo = key.repo
+		}
 		if key.workspace != "" {
 			wsColor := dimPurple
 			indices := groups[key]
@@ -153,11 +160,11 @@ func interactiveSwitch(d *db.DB) (*db.Session, error) {
 			fmt.Printf("  %sworkspace: %s%s\n", wsColor, key.workspace, reset)
 		}
 		for _, idx := range groups[key] {
-			indent := "  "
-			if key.workspace != "" {
-				indent = "    "
+			indent := "    "
+			if key.workspace == "" {
+				indent = "  "
 			}
-			fmt.Printf("%s%s%s%s\n", indent, dim, names[idx], reset)
+			fmt.Printf("%s%s%s%s\n", indent, white, names[idx], reset)
 		}
 	}
 	fmt.Println()
