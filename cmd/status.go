@@ -276,7 +276,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 		if ri > 0 {
 			fmt.Println()
 		}
-		fmt.Printf("%s%s%s\n", bold, rg.name, reset)
+		fmt.Printf("%sRepo: %s%s\n", bold, rg.name, reset)
 
 		for _, wg := range rg.workspaces {
 			if wg.name != "" {
@@ -284,7 +284,7 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 				if wg.entries[0].session.CmuxWorkspaceColor != "" {
 					wsColor = hexToANSI(wg.entries[0].session.CmuxWorkspaceColor)
 				}
-				fmt.Printf("  %sworkspace: %s%s\n", wsColor, wg.name, reset)
+				fmt.Printf("    %sWorkspace: %s%s\n", wsColor, wg.name, reset)
 			}
 
 			for _, e := range wg.entries {
@@ -309,9 +309,9 @@ func renderSessionList(sessions []db.Session, statuses []sessionStatus) {
 					peekableStr = fmt.Sprintf(" %s👁%s", dim, reset)
 				}
 
-				indent := "  "
+				indent := "    "
 				if wg.name != "" {
-					indent = "    "
+					indent = "        "
 				}
 
 				fmt.Printf("%s%sSession: %s%s %s%s%s%s\n", indent, bold, name, reset, stateColor, st.DisplayState, reset, peekableStr)
