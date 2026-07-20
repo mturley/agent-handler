@@ -83,6 +83,7 @@ A global rules file (`~/.claude/rules/agent-handler.md`) loads at every session 
 
 Hooks wire Claude Code session lifecycle events to handler:
 - **UserPromptSubmit** -- registers sessions on first prompt, heartbeat, event injection based on inbox mode, auto-catchup summary on user return
+- **SessionEnd** -- archives the session and soft-deletes subscriptions
 - **Statusline** -- heartbeat, session metadata sync, unread notifications, awaiting-approval scan
 - **PreCompact** -- snapshots context before compaction
 
