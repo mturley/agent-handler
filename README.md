@@ -11,7 +11,7 @@ Requires Go 1.22+ and Claude Code to already be installed.
 ### Using `go install`
 
 ```bash
-go install github.com/mturley/agent-handler
+go install github.com/mturley/agent-handler@latest
 handler setup
 ```
 
@@ -57,48 +57,53 @@ The binary and skill/hook configuration will be cleaned up, but your database an
 
 ## Key Commands
 
+These are the commands you'll use directly from your terminal:
+
 ```bash
-handler status      # Show all sessions with liveness and unread counts
-handler session-name # Print the current session's name
-handler emit        # Write an event to the ledger
-handler unread      # Check unread events for a session
-handler subscribe   # Subscribe to external resource events
-handler triage      # What needs attention across all sessions
-handler switch      # Interactive session switcher (cmux)
-handler switch -a   # Jump to first session awaiting approval (cmux)
-handler peek        # Capture terminal content of a live session
-handler claude      # Start a peekable Claude session
-handler tail        # Live event stream
-handler cost        # Show API cost breakdown (monthly/daily/per-session)
-handler query       # Run ad-hoc read-only SQL
-handler schema      # Dump table definitions
-handler health      # Database health and statistics
+handler status          # Show all sessions with liveness and unread counts
+handler log --global    # Cross-session event timeline
+handler triage          # What needs attention across all sessions
+handler tail            # Live event stream
+handler cost            # API cost breakdown (today/month/per-session)
+handler switch          # Interactive session switcher (cmux)
+handler switch -a       # Jump to first session awaiting approval (cmux)
+handler claude          # Start a peekable Claude session
+handler watching        # Show watched resources and watcher status
+handler health          # Database health and statistics
+handler cleanup         # Archive dead sessions
+handler query "SQL"     # Run ad-hoc read-only SQL
 ```
 
-Run `handler --help` for the full command list, or `handler <command> --help` for details on any command.
+There are also commands used by hooks and skills (`emit`, `peek`, `register`, `unread`, `statusline`, etc.) that you won't need to run directly. Run `handler --help` for the full list.
 
-## Claude Code Integration
+## How It Works
 
-A global rules file (`~/.claude/rules/agent-handler.md`) loads at every session start with the emit mandate, event type reference, and available skills/commands.
+Sessions auto-register on their first prompt — you don't need to do anything. The UserPromptSubmit hook detects new sessions and registers them with the current git repo, branch, and terminal environment.
+
+Once registered, sessions emit events to a central SQLite ledger as they work. The global rules file (`~/.claude/rules/agent-handler.md`) teaches each session what events to emit and when — milestones, decisions, blockers, status check-ins. Other sessions and the handler can see these events, enabling cross-session awareness.
+
+### Hooks
 
 Hooks wire Claude Code session lifecycle events to handler:
-- **UserPromptSubmit** -- registers sessions on first prompt, heartbeat, event injection based on inbox mode, auto-catchup summary on user return
-- **SessionEnd** -- archives the session and soft-deletes subscriptions
-- **Statusline** -- heartbeat, session metadata sync, unread notifications, awaiting-approval scan
-- **PreCompact** -- snapshots context before compaction
+- **UserPromptSubmit** — registers sessions on first prompt, heartbeat, event injection based on inbox mode, auto-catchup summary on user return
+- **SessionEnd** — archives the session and soft-deletes subscriptions
+- **Statusline** — heartbeat, session metadata sync, unread notifications, awaiting-approval scan
+- **PreCompact** — snapshots context before compaction
 
-Skills are available as `/slash-commands` in any Claude session:
-- `/inbox` -- check and act on unread events
-- `/inbox-clear` -- dismiss unread events without reading them
-- `/inbox-mode` -- configure manual, on-submit, or auto delivery
-- `/watch` / `/unwatch` -- subscribe to PRs and Jira issues
-- `/watching` -- show watched resources and watcher status
-- `/message` -- send messages to other sessions
-- `/done` -- log a completion summary before closing a session
-- `/handler` -- turn a session into a command center for all sessions
-- `/handler-debug` -- debug session identity and inbox state
+### Slash commands
 
-### Inbox modes
+These are available as `/slash-commands` in any Claude session:
+- `/inbox` — check and act on unread events
+- `/inbox-clear` — dismiss unread events without reading them
+- `/inbox-mode` — configure manual, on-submit, or auto delivery
+- `/watch` / `/unwatch` — subscribe to PRs and Jira issues
+- `/watching` — show watched resources and watcher status
+- `/message` — send messages to other sessions
+- `/done` — log a completion summary before closing a session
+- `/handler` — turn a session into a command center for all sessions
+- `/handler-debug` — debug session identity and inbox state
+
+## Inbox Modes
 
 Each session has an inbox mode that controls how it receives events from other sessions and watchers:
 
@@ -109,6 +114,10 @@ Each session has an inbox mode that controls how it receives events from other s
 | **auto** | A cron job polls for new events every minute and invokes `/inbox --auto` in the background. When you return after being away, the agent summarizes what happened while you were gone. |
 
 Use `/inbox-mode manual`, `/inbox-mode on-submit`, or `/inbox-mode auto` to switch. Auto mode sets up a session-scoped cron job that does not survive session restarts — inbox mode resets to manual when the session ends.
+
+## Handler Session
+
+Use `/handler` in a Claude session to turn it into a command center for managing all active sessions. The handler session delivers a prioritized briefing combining triage data, terminal peek results, and a timeline of recent events. It gets a custom statusline showing active/blocked session counts, global event status, and aggregate API cost.
 
 ## External Watchers
 
@@ -165,21 +174,6 @@ handler watcher run github   # Run once manually
 handler watcher uninstall    # Remove all watchers (or: handler watcher uninstall github)
 ```
 
-## Handler Session
-
-Use `/handler` in a Claude session to turn it into a command center for managing all active sessions. The handler delivers a prioritized briefing combining triage data, terminal peek results, and a timeline of recent events.
-
-```bash
-handler configure --role handler   # Set session as handler
-handler triage                     # What needs attention across all sessions
-handler peek --session <id>        # Inspect what a session is doing
-handler log --global               # Cross-session event timeline
-handler log --global --since-cursor  # What changed since last check
-handler emit --to handler          # Send a message to the handler session
-```
-
-The handler session gets a custom statusline showing active/blocked session counts, global event status, and aggregate API cost across all sessions (today / this month / last month).
-
 ## cmux Integration
 
 When running inside [cmux](https://cmux.dev), agent-handler integrates deeply with the terminal environment:
@@ -205,10 +199,6 @@ handler status                     # Shows 👁 indicator for peekable sessions
 ```
 
 Sessions started via `handler claude` or in cmux are automatically peekable. The handler session uses peek via subagents to detect sessions waiting for input.
-
-## .worktree-resources
-
-The `.worktree-resources` file lets any tool declare which external resources a worktree cares about. See [docs/worktree-resources.md](docs/worktree-resources.md) for the format spec and integration guide.
 
 ## Cost Tracking
 
