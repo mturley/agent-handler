@@ -105,6 +105,9 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to archive sessions: %w", err)
 	}
 
+	// Clean up peek_state for archived sessions
+	d.DeletePeekStatesForSessions(toArchive)
+
 	if jsonOutput {
 		output := map[string]interface{}{
 			"archived":    archived,
