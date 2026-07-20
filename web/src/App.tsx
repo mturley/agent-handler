@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import './App.css';
+import { SessionsPage } from './pages/SessionsPage';
 
 type Tab = 'sessions' | 'timeline' | 'resources';
 
@@ -34,9 +35,7 @@ function App() {
       </nav>
 
       <main className="content">
-        {activeTab === 'sessions' && (
-          <div className="placeholder">Sessions view coming soon</div>
-        )}
+        {activeTab === 'sessions' && <SessionsPage />}
         {activeTab === 'timeline' && (
           <div className="placeholder">Timeline view coming soon</div>
         )}

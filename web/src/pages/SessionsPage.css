@@ -1,0 +1,31 @@
+.sessions-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sessions-loading,
+.sessions-error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.sessions-error {
+  color: var(--danger);
+}
+
+.sessions-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.sessions-count {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
