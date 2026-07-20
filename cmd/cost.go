@@ -79,17 +79,38 @@ func runCostMonth(d *db.DB) error {
 		return err
 	}
 
+	// Compute summary figures
+	now := time.Now().UTC()
+	today := now.Format("2006-01-02")
+	todayCost, _, _, _ := d.QueryTotalCost(today, today)
+
+	lastMonth := now.AddDate(0, -1, 0)
+	lastMonthStart := fmt.Sprintf("%04d-%02d-01", lastMonth.Year(), lastMonth.Month())
+	lastMonthEnd := fmt.Sprintf("%04d-%02d-%02d", lastMonth.Year(), lastMonth.Month(), daysInMonth(lastMonth.Year(), lastMonth.Month()))
+	lastMonthCost, _, _, _ := d.QueryTotalCost(lastMonthStart, lastMonthEnd)
+
+	allTimeCost, _, _, _ := d.QueryTotalCost("2000-01-01", "2099-12-31")
+
 	if jsonOutput {
 		return json.NewEncoder(os.Stdout).Encode(map[string]interface{}{
-			"period":        fmt.Sprintf("%04d-%02d", year, month),
-			"total_cost":    totalCost,
-			"input_tokens":  totalInput,
-			"output_tokens": totalOutput,
-			"by_day":        days,
-			"by_session":    sessions,
+			"period":          fmt.Sprintf("%04d-%02d", year, month),
+			"total_cost":      totalCost,
+			"input_tokens":    totalInput,
+			"output_tokens":   totalOutput,
+			"today_cost":      todayCost,
+			"last_month_cost": lastMonthCost,
+			"all_time_cost":   allTimeCost,
+			"by_day":          days,
+			"by_session":      sessions,
 		})
 	}
 
+	// Summary header
+	lastMonthName := lastMonth.Month().String()
+	fmt.Printf("Today: $%.2f | This month: $%.2f | %s: $%.2f | All time: $%.2f\n\n",
+		todayCost, totalCost, lastMonthName, lastMonthCost, allTimeCost)
+
+	// Month detail
 	monthName := time.Month(month).String()
 	fmt.Printf("%s %d: $%.2f\n", monthName, year, totalCost)
 
