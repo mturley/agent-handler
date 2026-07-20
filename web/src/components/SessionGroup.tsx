@@ -9,6 +9,7 @@ interface SessionGroupProps {
   cmuxAvailable: boolean;
   onUnreadClick: (sessionId: string) => void;
   onSwitchClick: (sessionId: string) => void;
+  switchingSessionId: string | null;
 }
 
 export function SessionGroup({
@@ -18,6 +19,7 @@ export function SessionGroup({
   cmuxAvailable,
   onUnreadClick,
   onSwitchClick,
+  switchingSessionId,
 }: SessionGroupProps) {
   // Check if all sessions share the same branch
   const branches = new Set(sessions.map((s) => s.branch));
@@ -51,6 +53,7 @@ export function SessionGroup({
               cmuxAvailable={cmuxAvailable}
               onUnreadClick={onUnreadClick}
               onSwitchClick={onSwitchClick}
+              isSwitching={switchingSessionId === session.session_id}
             />
           ))}
         </div>

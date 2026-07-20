@@ -8,6 +8,7 @@ interface SessionCardProps {
   cmuxAvailable: boolean;
   onUnreadClick: (sessionId: string) => void;
   onSwitchClick: (sessionId: string) => void;
+  isSwitching?: boolean;
 }
 
 export function SessionCard({
@@ -16,6 +17,7 @@ export function SessionCard({
   cmuxAvailable,
   onUnreadClick,
   onSwitchClick,
+  isSwitching = false,
 }: SessionCardProps) {
   const {
     session_id,
@@ -65,8 +67,9 @@ export function SessionCard({
               className="session-card-switch-btn"
               onClick={() => onSwitchClick(session_id)}
               title="Switch to this session"
+              disabled={isSwitching}
             >
-              Switch
+              {isSwitching ? 'Switching...' : 'Switch'}
             </button>
           )}
         </div>

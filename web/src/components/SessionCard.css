@@ -96,9 +96,14 @@
   transition: all 0.2s;
 }
 
-.session-card-switch-btn:hover {
+.session-card-switch-btn:hover:not(:disabled) {
   background-color: var(--accent);
   border-color: var(--accent);
+}
+
+.session-card-switch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .session-card-meta {

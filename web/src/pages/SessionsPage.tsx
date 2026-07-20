@@ -1,8 +1,12 @@
+import { useState } from 'react';
 import { useSessions } from '../hooks/useSessions';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { TopBar } from '../components/TopBar';
 import { SessionGroup } from '../components/SessionGroup';
 import { SessionCard } from '../components/SessionCard';
+import { InboxModal } from '../components/InboxModal';
+import { useToast } from '../hooks/useToast';
+import { postSwitch } from '../api/client';
 import './SessionsPage.css';
 
 export function SessionsPage() {
@@ -25,18 +29,41 @@ export function SessionsPage() {
     toggleSortDirection,
     groupByRepo,
     setGroupByRepo,
+    refresh,
   } = useSessions();
 
   const { capabilities } = useCapabilities();
   const cmuxAvailable = capabilities?.cmux ?? false;
+  const { showToast } = useToast();
 
-  // Placeholder handlers for Task 8
+  const [inboxModalOpen, setInboxModalOpen] = useState(false);
+  const [inboxSessionId, setInboxSessionId] = useState<string>('');
+  const [inboxSessionName, setInboxSessionName] = useState<string>('');
+  const [switchingSessionId, setSwitchingSessionId] = useState<string | null>(null);
+
   const handleUnreadClick = (sessionId: string) => {
-    console.log('Open inbox modal for session:', sessionId);
+    const session = sessions.find((s) => s.session_id === sessionId);
+    if (session) {
+      setInboxSessionId(sessionId);
+      setInboxSessionName(session.session_name);
+      setInboxModalOpen(true);
+    }
   };
 
-  const handleSwitchClick = (sessionId: string) => {
-    console.log('Switch to session:', sessionId);
+  const handleSwitchClick = async (sessionId: string) => {
+    const session = sessions.find((s) => s.session_id === sessionId);
+    if (!session) return;
+
+    setSwitchingSessionId(sessionId);
+    try {
+      await postSwitch(sessionId);
+      showToast(`Switched to session ${session.session_name}`, 'success');
+    } catch (err) {
+      console.error('Failed to switch session:', err);
+      showToast('Failed to switch session', 'error');
+    } finally {
+      setSwitchingSessionId(null);
+    }
   };
 
   // Sort groups by their top-ranked member
@@ -98,6 +125,7 @@ export function SessionsPage() {
                 cmuxAvailable={cmuxAvailable}
                 onUnreadClick={handleUnreadClick}
                 onSwitchClick={handleSwitchClick}
+                switchingSessionId={switchingSessionId}
               />
             ))}
           </div>
@@ -111,11 +139,20 @@ export function SessionsPage() {
                 cmuxAvailable={cmuxAvailable}
                 onUnreadClick={handleUnreadClick}
                 onSwitchClick={handleSwitchClick}
+                isSwitching={switchingSessionId === session.session_id}
               />
             ))}
           </div>
         )}
       </div>
+
+      <InboxModal
+        isOpen={inboxModalOpen}
+        sessionId={inboxSessionId}
+        sessionName={inboxSessionName}
+        onClose={() => setInboxModalOpen(false)}
+        onRefetch={refresh}
+      />
     </div>
   );
 }
