@@ -76,10 +76,10 @@ These are available as `/slash-commands` in any Claude session:
 - `/inbox` — check and act on unread events
 - `/inbox-clear` — dismiss unread events without reading them
 - `/inbox-mode` — configure manual, on-submit, or auto delivery
+- `/catchup` — in auto-inbox mode, summarize auto-delivered events since the last `/catchup`
 - `/watch` / `/unwatch` — subscribe to PRs and Jira issues
 - `/watching` — show watched resources and watcher status
 - `/message` — send messages to other sessions
-- `/catchup` — summarize auto-delivered events and advance the cursor
 - `/done` — log a completion summary before closing a session
 - `/handler` — turn a session into a command center for all sessions
 - `/handler-debug` — debug session identity and inbox state
