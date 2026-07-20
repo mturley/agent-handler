@@ -123,36 +123,6 @@ func claudePID() int {
 	return os.Getppid()
 }
 
-// findSessionsAwaitingApproval scans all peekable sessions for approval prompts.
-func findSessionsAwaitingApproval(d *db.DB) []db.Session {
-	sessions, err := d.ListSessions(false, 1000, 0)
-	if err != nil {
-		return nil
-	}
-
-	var awaiting []db.Session
-	for _, s := range sessions {
-		if s.TerminalType == "" || s.TerminalID == "" || s.Role == "handler" {
-			continue
-		}
-		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
-			continue
-		}
-		backend, err := terminal.NewBackend(s.TerminalType)
-		if err != nil {
-			continue
-		}
-		content, err := backend.Capture(s.TerminalID, 10)
-		if err != nil {
-			continue
-		}
-		if needsInput, _ := terminal.NeedsInput(content); needsInput {
-			awaiting = append(awaiting, s)
-		}
-	}
-	return awaiting
-}
-
 // syncSessionMetadata updates session name, PID, and terminal info only if changed.
 func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID string) {
 	session, err := d.GetSession(sessionID)
