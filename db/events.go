@@ -7,7 +7,7 @@ import (
 
 // inboxExcludedTypes are event types excluded from non-handler inbox queries.
 // These are bookkeeping events that shouldn't appear as unread in session inboxes.
-const inboxExcludedTypesSQL = "AND e.type NOT IN ('watch_started')"
+const inboxExcludedTypesSQL = "AND e.type NOT IN ('watch_started', 'watcher_error')"
 
 // Event represents an event in the system.
 type Event struct {
