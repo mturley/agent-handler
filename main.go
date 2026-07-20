@@ -4,5 +4,6 @@ import "github.com/mturley/agent-handler/cmd"
 
 func main() {
 	cmd.SetEmbedded(EmbeddedSkills, EmbeddedHooks, EmbeddedRules)
+	cmd.SetWebFS(EmbeddedWeb)
 	cmd.Execute()
 }

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,12 +17,18 @@ import (
 
 var jsonOutput bool
 
+var globalWebFS embed.FS
+
+func SetWebFS(fs embed.FS) {
+	globalWebFS = fs
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "handler",
 	Short: "Agent handler CLI for managing Claude Code agent sessions",
 	Long:  `A CLI tool backed by SQLite for managing Claude Code agent sessions.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "claude" {
+		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "claude" || cmd.Name() == "ui" {
 			return nil
 		}
 		dbPath := db.DefaultPath()
