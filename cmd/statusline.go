@@ -327,13 +327,17 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	// Dispatch terminal notification
 	dispatchNotification(session, unreadCount, unreadMsg)
 
-	// Awaiting approval
+	// Other sessions section (awaiting approval, unreads)
 	var shortcuts *CmuxShortcuts
 	if session.TerminalType == "cmux" {
 		shortcuts = GetCmuxShortcuts()
 	}
-	renderAwaitingLine(session, awaitingNames, shortcuts)
-	renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
+	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 {
+		fmt.Printf("%s·%s\n", colorDim, colorReset)
+		renderAwaitingLine(session, awaitingNames, shortcuts)
+		renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
+		fmt.Printf("%s·%s\n", colorDim, colorReset)
+	}
 
 	// Footer
 	if session.TerminalType == "cmux" {
@@ -423,13 +427,17 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	// Dispatch terminal notification
 	dispatchNotification(session, unreadCount, unreadMsg)
 
-	// Awaiting approval
+	// Other sessions section (awaiting approval, unreads)
 	var shortcuts *CmuxShortcuts
 	if session.TerminalType == "cmux" {
 		shortcuts = GetCmuxShortcuts()
 	}
-	renderAwaitingLine(session, awaitingNames, shortcuts)
-	renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
+	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 {
+		fmt.Printf("%s·%s\n", colorDim, colorReset)
+		renderAwaitingLine(session, awaitingNames, shortcuts)
+		renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
+		fmt.Printf("%s·%s\n", colorDim, colorReset)
+	}
 
 	// Footer (cmux shortcuts)
 	if session.TerminalType == "cmux" {
