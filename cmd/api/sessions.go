@@ -33,7 +33,7 @@ type enrichedSession struct {
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
-	sessions, err := s.DB.ListSessions(true, 1000, 0)
+	sessions, err := s.DB.ListSessions(false, 1000, 0)
 	if err != nil {
 		s.Logger.Printf("Error listing sessions: %v", err)
 		writeError(w, http.StatusInternalServerError, "Failed to list sessions")
