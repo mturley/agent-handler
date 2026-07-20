@@ -608,8 +608,12 @@ func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
 	if err != nil || autoCount == 0 {
 		return
 	}
-	fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s· %s/catchup%s %sfor a summary%s\n",
-		colorYellow, autoCount, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
+	msgWord := "messages"
+	if autoCount == 1 {
+		msgWord = "message"
+	}
+	fmt.Printf("%s  ● %d %s auto-delivered%s %s· %s/catchup%s %sfor a summary%s\n",
+		colorYellow, autoCount, msgWord, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
 }
 
 func renderInboxModeLine(session *db.Session) {
