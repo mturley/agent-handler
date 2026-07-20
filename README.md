@@ -79,6 +79,7 @@ These are available as `/slash-commands` in any Claude session:
 - `/watch` / `/unwatch` — subscribe to PRs and Jira issues
 - `/watching` — show watched resources and watcher status
 - `/message` — send messages to other sessions
+- `/catchup` — summarize auto-delivered events and advance the cursor
 - `/done` — log a completion summary before closing a session
 - `/handler` — turn a session into a command center for all sessions
 - `/handler-debug` — debug session identity and inbox state
@@ -91,9 +92,11 @@ Each session has an inbox mode that controls how it receives events from other s
 |------|----------|
 | **manual** (default) | The statusline shows an unread count. The agent checks with `/inbox` when you ask. |
 | **on-submit** | The UserPromptSubmit hook notifies the agent of unread messages on every prompt, so it checks `/inbox` automatically before responding. |
-| **auto** | A cron job polls for new events every minute and invokes `/inbox --auto` in the background. When you return after being away, the agent summarizes what happened while you were gone. |
+| **auto** | A cron job polls for new events every minute and invokes `/inbox --auto` in the background. When you return, use `/catchup` for a summary of what happened. |
 
 Use `/inbox-mode manual`, `/inbox-mode on-submit`, or `/inbox-mode auto` to switch. Auto mode sets up a session-scoped cron job that does not survive session restarts — inbox mode resets to manual when the session ends.
+
+In auto mode, the agent processes events in the background but tracks what you've seen separately (dual cursor). When you send a prompt after being away, the hook detects undelivered events and prompts the agent to invoke `/catchup`, which summarizes everything from the conversation history — including what the agent did in response — and then advances your cursor.
 
 ## Handler Session
 
