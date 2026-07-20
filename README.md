@@ -87,7 +87,7 @@ Hooks wire Claude Code session lifecycle events to handler:
 - **Statusline** -- heartbeat, session metadata sync, unread notifications, awaiting-approval scan
 - **PreCompact** -- snapshots context before compaction
 
-Skills teach agents how to interact with handler:
+Skills are available as `/slash-commands` in any Claude session:
 - `/inbox` -- check and act on unread events
 - `/inbox-clear` -- dismiss unread events without reading them
 - `/inbox-mode` -- configure manual, on-submit, or auto delivery
