@@ -60,6 +60,8 @@ handler emit        # Write an event to the ledger
 handler unread      # Check unread events for a session
 handler subscribe   # Subscribe to external resource events
 handler triage      # What needs attention across all sessions
+handler switch      # Interactive session switcher (cmux)
+handler switch -a   # Jump to first session awaiting approval (cmux)
 handler peek        # Capture terminal content of a live session
 handler claude      # Start a peekable Claude session
 handler tail        # Live event stream
@@ -134,6 +136,20 @@ handler emit --to handler          # Send a message to the handler session
 ```
 
 The handler session gets a custom statusline showing active/blocked session counts and global event status.
+
+## cmux Integration
+
+When running inside [cmux](https://cmux.dev), agent-handler integrates deeply with the terminal environment:
+
+- **Session switching** — `handler switch` navigates to any session's cmux workspace and surface tab, with an interactive mode featuring readline tab completion
+- **Keyboard shortcuts** — `handler setup` configures cmux actions for quick session switching:
+  - `cmd+shift+a` — jump to the first session awaiting approval
+  - `cmd+shift+s` — interactive session switcher
+- **Workspace tracking** — sessions store their cmux workspace ID, name, and color; `handler status` groups sessions by repo and workspace with colored indicators
+- **Awaiting approval detection** — the statusline scans other sessions for approval prompts and shows the keyboard shortcut to jump to them
+- **Terminal notifications** — flash and notify via cmux's native notification system when new events arrive
+
+All cmux features degrade gracefully outside cmux — the statusline adapts, keyboard shortcuts don't render, and `handler switch` exits with a clear error.
 
 ## Session Inspection (Peek)
 
