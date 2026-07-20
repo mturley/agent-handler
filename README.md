@@ -1,6 +1,6 @@
 # agent-handler
 
-Manage parallel Claude Code sessions: event ledger, resource watchers, session inboxes, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
+Manage parallel Claude Code sessions: SQLite event ledger, pub/sub messaging, resource watchers, session inboxes, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
 
 ![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-statusline.png)
 
