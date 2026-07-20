@@ -115,6 +115,15 @@ handler watcher install github
 handler watcher install jira
 ```
 
+`handler watcher install` creates a scheduled job that runs `handler watcher run <service>` periodically. On macOS this creates a launchd plist; on Linux it adds a cron entry. Both poll at a configurable interval (default: every 2 minutes).
+
+Alternatively, you can skip `handler watcher install` and schedule the watcher runs yourself with cron or any other scheduler:
+```bash
+# Example crontab entries (every 2 minutes)
+*/2 * * * * /usr/local/bin/handler watcher run github
+*/2 * * * * /usr/local/bin/handler watcher run jira
+```
+
 Jira custom fields (epic link, blocked status, story points, etc.) can be configured in `~/.agent-handler/config.yaml` under `services.jira.custom_fields`.
 
 ### Management
