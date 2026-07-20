@@ -72,10 +72,11 @@ Run `handler --help` for the full command list, or `handler <command> --help` fo
 
 ## Claude Code Integration
 
+A global rules file (`~/.claude/rules/agent-handler.md`) loads at every session start with the emit mandate, event type reference, and available skills/commands.
+
 Hooks wire Claude Code session lifecycle events to handler:
-- **SessionStart** -- directs the agent to invoke `/using-handler` for ledger awareness
-- **UserPromptSubmit** -- registers sessions on first prompt, heartbeat, event injection based on inbox mode
-- **Statusline** -- session registration, session name sync, unread notifications
+- **UserPromptSubmit** -- registers sessions on first prompt, heartbeat, event injection based on inbox mode, auto-catchup summary on user return
+- **Statusline** -- heartbeat, session metadata sync, unread notifications, awaiting-approval scan
 - **PreCompact** -- snapshots context before compaction
 
 Skills teach agents how to interact with handler:
@@ -86,8 +87,8 @@ Skills teach agents how to interact with handler:
 - `/watching` -- show watched resources and watcher status
 - `/message` -- send messages to other sessions
 - `/done` -- log a completion summary before closing a session
-- `/catchup` -- summarize events auto-delivered while the user was away
 - `/handler` -- turn a session into a command center for all sessions
+- `/handler-debug` -- debug session identity and inbox state
 
 ## External Watchers
 
