@@ -8,24 +8,6 @@ Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inbox
 
 Requires Go 1.22+ and Claude Code to already be installed.
 
-### Using `go install`
-
-```bash
-go install github.com/mturley/agent-handler@latest
-handler setup
-```
-
-Note: `go install` puts the binary in `$(go env GOPATH)/bin`. If you get `command not found: handler`, make sure the go bin directory is on your PATH by adding this to your shell's rc file:
-```bash
-export PATH="$PATH:$(go env GOPATH)/bin"
-```
-
-Then run `handler setup` again.
-
-`handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
-
-### From source
-
 ```bash
 git clone https://github.com/mturley/agent-handler.git
 cd agent-handler
@@ -33,14 +15,10 @@ make build
 make install # Copies `handler` binary to /usr/local/bin and runs `handler setup`
 ```
 
+`handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
+
 ## Update
 
-If installed via `go install`:
-```bash
-handler update
-```
-
-If installed from source:
 ```bash
 cd agent-handler
 git pull
