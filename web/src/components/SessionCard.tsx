@@ -1,4 +1,3 @@
-import './SessionCard.css';
 import type { Session } from '../api/types';
 import { timeAgo } from '../utils/time';
 
@@ -33,29 +32,39 @@ export function SessionCard({
   // State dot color
   const stateColor =
     display_state === 'active'
-      ? 'var(--success)'
+      ? 'var(--color-success)'
       : display_state === 'idle'
-        ? 'var(--warning)'
-        : 'var(--danger)';
+        ? 'var(--color-warning)'
+        : 'var(--color-danger)';
 
   return (
-    <div className={`session-card ${needs_input ? 'needs-input' : ''}`}>
-      <div className="session-card-header">
-        <div className="session-card-name-row">
+    <div
+      className={`rounded-md p-3.5 transition-all duration-200 cursor-pointer border
+        ${needs_input
+          ? 'bg-warning/15 border-warning'
+          : 'bg-bg-secondary border-bg-tertiary hover:bg-[#1c2640] hover:border-accent'
+        }`}
+    >
+      <div className="flex justify-between items-start gap-3 mb-2 max-[480px]:flex-col max-[480px]:items-stretch">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
           <span
-            className="session-card-state-dot"
+            className="w-2 h-2 rounded-full shrink-0"
             style={{ backgroundColor: stateColor }}
             title={display_state}
           />
-          <span className="session-card-name">{session_name}</span>
-          <span className="session-card-state-label">{display_state}</span>
-          {needs_input && <span className="session-card-needs-input-icon">✋</span>}
+          <span className="font-semibold text-[0.95rem] text-text-primary whitespace-nowrap overflow-hidden text-ellipsis">
+            {session_name}
+          </span>
+          <span className="text-xs text-text-secondary lowercase shrink-0">
+            {display_state}
+          </span>
+          {needs_input && <span className="text-base shrink-0">✋</span>}
         </div>
 
-        <div className="session-card-actions">
+        <div className="flex gap-2 items-center shrink-0 max-[480px]:justify-end">
           {unread_count > 0 && (
             <button
-              className="session-card-unread-badge"
+              className="bg-accent text-text-primary border-none rounded-xl px-2.5 py-1 text-xs font-semibold cursor-pointer transition-all duration-200 hover:bg-accent/85 hover:scale-105"
               onClick={() => onUnreadClick(session_id)}
               title="View unread events"
             >
@@ -64,7 +73,7 @@ export function SessionCard({
           )}
           {cmuxAvailable && (
             <button
-              className="session-card-switch-btn"
+              className="bg-bg-tertiary text-text-primary border border-bg-tertiary rounded px-3 py-1.5 text-xs cursor-pointer transition-all duration-200 hover:not-disabled:bg-accent hover:not-disabled:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => onSwitchClick(session_id)}
               title="Switch to this session"
               disabled={isSwitching}
@@ -75,14 +84,18 @@ export function SessionCard({
         </div>
       </div>
 
-      <div className="session-card-meta">
-        {showBranch && <span className="session-card-branch">{branch}</span>}
-        <span className="session-card-time">{timeAgo(last_prompt)}</span>
+      <div className="flex gap-3 items-center text-xs text-text-secondary mb-2 max-[480px]:flex-wrap">
+        {showBranch && (
+          <span className="font-mono bg-bg-primary px-2 py-0.5 rounded-sm text-xs">
+            {branch}
+          </span>
+        )}
+        <span className="whitespace-nowrap">{timeAgo(last_prompt)}</span>
       </div>
 
       {subscriptions_count > 0 && (
-        <div className="session-card-resources">
-          <span className="session-card-resource-count">
+        <div className="mt-2 max-[480px]:mt-1">
+          <span className="inline-block bg-bg-primary text-text-secondary px-2.5 py-1 rounded-xl text-xs">
             {subscriptions_count} resource{subscriptions_count !== 1 ? 's' : ''}
           </span>
         </div>

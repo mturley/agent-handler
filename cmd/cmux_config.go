@@ -28,9 +28,17 @@ var handlerCmuxActions = map[string]map[string]interface{}{
 		"shortcut": "cmd+shift+s",
 		"palette":  true,
 	},
+	"handler-switch-to-unread": {
+		"type":     "command",
+		"title":    "agent-handler: Switch to Unread Session",
+		"subtitle": "Jump to the first session with unread messages",
+		"command":  "handler switch -u --close-caller",
+		"shortcut": "cmd+shift+i",
+		"palette":  true,
+	},
 }
 
-var handlerCmuxActionIDs = []string{"handler-switch-to-awaiting", "handler-switch-to-session"}
+var handlerCmuxActionIDs = []string{"handler-switch-to-awaiting", "handler-switch-to-session", "handler-switch-to-unread"}
 
 func cmuxConfigFilePath() string {
 	home, _ := os.UserHomeDir()
@@ -97,8 +105,9 @@ func hasCmuxActions() bool {
 type CmuxShortcuts struct {
 	SwitchToAwaiting string
 	SwitchToSession  string
-	FocusBack    string
-	FocusForward string
+	SwitchToUnread   string
+	FocusBack        string
+	FocusForward     string
 }
 
 // GetCmuxShortcuts reads the configured shortcuts from the cmux config.
@@ -125,6 +134,11 @@ func GetCmuxShortcuts() *CmuxShortcuts {
 	if a, ok := actions["handler-switch-to-session"]; ok {
 		if s, ok := a["shortcut"].(string); ok {
 			shortcuts.SwitchToSession = s
+		}
+	}
+	if a, ok := actions["handler-switch-to-unread"]; ok {
+		if s, ok := a["shortcut"].(string); ok {
+			shortcuts.SwitchToUnread = s
 		}
 	}
 	// Read browser back/forward from cmux shortcuts bindings

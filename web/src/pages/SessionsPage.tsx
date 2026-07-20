@@ -7,7 +7,6 @@ import { SessionCard } from '../components/SessionCard';
 import { InboxModal } from '../components/InboxModal';
 import { useToast } from '../hooks/useToast';
 import { postSwitch } from '../api/client';
-import './SessionsPage.css';
 
 export function SessionsPage() {
   const {
@@ -77,22 +76,26 @@ export function SessionsPage() {
 
   if (loading) {
     return (
-      <div className="sessions-page">
-        <div className="sessions-loading">Loading sessions...</div>
+      <div className="flex flex-col h-full">
+        <div className="flex justify-center items-center h-full text-text-secondary text-base">
+          Loading sessions...
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="sessions-page">
-        <div className="sessions-error">Error loading sessions: {error.message}</div>
+      <div className="flex flex-col h-full">
+        <div className="flex justify-center items-center h-full text-danger text-base">
+          Error loading sessions: {error.message}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="sessions-page">
+    <div className="flex flex-col h-full">
       <TopBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -109,13 +112,13 @@ export function SessionsPage() {
         onSelectRepo={setSelectedRepo}
       />
 
-      <div className="sessions-content">
-        <div className="sessions-count">
+      <div className="flex-1 overflow-y-auto p-4 max-[480px]:p-2">
+        <div className="text-text-secondary text-[0.9rem] mb-4 px-4 max-[480px]:px-2">
           Showing {sortedSessions.length} of {sessions.length} sessions
         </div>
 
         {groupByRepo ? (
-          <div className="sessions-grouped">
+          <div className="mt-4">
             {sortedGroups.map((group) => (
               <SessionGroup
                 key={`${group.repo}::${group.workspace}`}
@@ -130,7 +133,7 @@ export function SessionsPage() {
             ))}
           </div>
         ) : (
-          <div className="sessions-flat">
+          <div className="flex flex-col gap-3 mt-4 px-4 max-[480px]:px-2">
             {sortedSessions.map((session) => (
               <SessionCard
                 key={session.session_id}

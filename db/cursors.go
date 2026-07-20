@@ -19,6 +19,23 @@ func (db *DB) GetCursor(sessionID string) (string, error) {
 	return lastSeenTS, nil
 }
 
+// GetHumanCursor returns the human_seen_ts for the given session.
+// Falls back to last_seen_ts if human_seen_ts is NULL.
+func (db *DB) GetHumanCursor(sessionID string) (string, error) {
+	var cursor string
+	err := db.conn.QueryRow(
+		"SELECT COALESCE(human_seen_ts, last_seen_ts) FROM session_cursors WHERE session_id = ?",
+		sessionID,
+	).Scan(&cursor)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get human cursor for session %q: %w", sessionID, err)
+	}
+	return cursor, nil
+}
+
 // AdvanceCursor inserts or updates the agent cursor for the given session.
 func (db *DB) AdvanceCursor(sessionID, ts string) error {
 	_, err := db.conn.Exec(`

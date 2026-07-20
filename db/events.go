@@ -323,6 +323,46 @@ func (db *DB) GlobalUnreadForSession(sessionID string) ([]Event, error) {
 	return scanEvents(rows)
 }
 
+// HumanUnreadCountForSession returns the count of events unread by the human
+// (using human_seen_ts cursor instead of last_seen_ts). This counts auto-delivered
+// events as unread until the user has actually seen them.
+func (db *DB) HumanUnreadCountForSession(sessionID string) (int, error) {
+	cursor, err := db.GetHumanCursor(sessionID)
+	if err != nil {
+		return 0, err
+	}
+
+	session, err := db.GetSession(sessionID)
+	if err != nil || session == nil {
+		return 0, err
+	}
+
+	query := `
+		SELECT COUNT(DISTINCT e.id)
+		FROM events e
+		LEFT JOIN event_recipients er ON e.id = er.event_id
+		LEFT JOIN event_resources eres ON e.id = eres.event_id
+		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
+		WHERE e.ts > ?
+		  ` + inboxExcludedTypesSQL + `
+		  AND (
+		    e.broadcast = 1
+		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
+		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
+		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
+		    OR s.id IS NOT NULL
+		  )
+	`
+
+	repoBranch := session.Repo + ":" + session.Branch
+	var count int
+	err = db.conn.QueryRow(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // GlobalUnreadCountForSession returns the total count and breakdown by type of ALL events since the session's cursor.
 func (db *DB) GlobalUnreadCountForSession(sessionID string) (int, map[string]int, error) {
 	cursor, err := db.GetCursor(sessionID)

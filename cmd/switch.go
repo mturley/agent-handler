@@ -25,6 +25,7 @@ var switchCmd = &cobra.Command{
 var (
 	switchSession       string
 	switchFirstAwaiting bool
+	switchFirstUnread   bool
 	switchCloseCaller   bool
 )
 
@@ -33,6 +34,7 @@ func init() {
 	rootCmd.AddCommand(switchCmd)
 	switchCmd.Flags().StringVar(&switchSession, "session", "", "session name, ID, or branch to switch to")
 	switchCmd.Flags().BoolVarP(&switchFirstAwaiting, "first-awaiting", "a", false, "switch to the first session awaiting approval")
+	switchCmd.Flags().BoolVarP(&switchFirstUnread, "first-unread", "u", false, "switch to the first session with unread messages")
 	switchCmd.Flags().BoolVar(&switchCloseCaller, "close-caller", false, "close the calling cmux surface after switching (for keyboard shortcut actions)")
 }
 
@@ -56,6 +58,12 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 
 	if switchFirstAwaiting {
 		session, err = findFirstAwaiting(d)
+		if err != nil {
+			closeCallerOnError(err)
+			return err
+		}
+	} else if switchFirstUnread {
+		session, err = findFirstWithUnread(d)
 		if err != nil {
 			closeCallerOnError(err)
 			return err
@@ -208,6 +216,17 @@ func closeCallerOnError(switchErr error) {
 		"--surface", selfSurface,
 		"--workspace", os.Getenv("CMUX_WORKSPACE_ID"),
 	).Run()
+}
+
+func findFirstWithUnread(d *db.DB) (*db.Session, error) {
+	selfSurface := os.Getenv("CMUX_SURFACE_ID")
+	unreads := findSessionsWithUnreads(d, "")
+	for _, s := range unreads {
+		if s.TerminalType == "cmux" && s.TerminalID != "" && s.CmuxWorkspaceID != "" && s.TerminalID != selfSurface {
+			return &s, nil
+		}
+	}
+	return nil, fmt.Errorf("no cmux sessions with unread messages")
 }
 
 func findFirstAwaiting(d *db.DB) (*db.Session, error) {

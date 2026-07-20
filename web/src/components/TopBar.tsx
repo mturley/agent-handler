@@ -1,4 +1,3 @@
-import './TopBar.css';
 import type { SortOption, SortDirection, FilterChip } from '../hooks/useSessions';
 
 interface TopBarProps {
@@ -35,6 +34,15 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'name', label: 'Name (A-Z)' },
 ];
 
+const FILTER_ACTIVE_COLORS: Record<FilterChip, string> = {
+  active: 'bg-success text-text-primary border-success',
+  idle: 'bg-warning text-bg-primary border-warning',
+  dead: 'bg-danger text-text-primary border-danger',
+  needs_input: 'bg-warning text-bg-primary border-warning',
+  has_unread: 'bg-accent text-text-primary border-accent',
+  blocked: 'bg-danger text-text-primary border-danger',
+};
+
 export function TopBar({
   searchQuery,
   onSearchChange,
@@ -51,28 +59,32 @@ export function TopBar({
   onSelectRepo,
 }: TopBarProps) {
   return (
-    <div className="top-bar">
+    <div className="flex flex-col gap-4 p-4 bg-bg-secondary border-b border-bg-tertiary">
       {/* Search and controls row */}
-      <div className="top-bar-controls">
+      <div className="flex gap-3 items-center flex-wrap max-[480px]:flex-col max-[480px]:items-stretch">
         <input
           type="text"
-          className="search-input"
+          className="flex-1 min-w-[200px] max-[480px]:min-w-0 max-[480px]:w-full px-3 py-2 bg-bg-primary text-text-primary border border-bg-tertiary rounded text-[0.9rem] placeholder:text-text-secondary focus:outline-none focus:border-accent"
           placeholder="Search sessions..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
         />
 
         <button
-          className={`group-toggle ${groupByRepo ? 'active' : ''}`}
+          className={`px-4 py-2 border rounded cursor-pointer text-[0.9rem] transition-all duration-200
+            ${groupByRepo
+              ? 'bg-accent text-text-primary border-accent'
+              : 'bg-bg-primary text-text-secondary border-bg-tertiary hover:bg-bg-tertiary'
+            }`}
           onClick={onToggleGrouping}
           title={groupByRepo ? 'Ungroup sessions' : 'Group by repo'}
         >
           Group
         </button>
 
-        <div className="sort-control">
+        <div className="flex gap-0.5 max-[480px]:-order-1">
           <select
-            className="sort-select"
+            className="px-3 py-2 bg-bg-primary text-text-primary border border-bg-tertiary rounded-l cursor-pointer text-[0.9rem] focus:outline-none focus:border-accent"
             value={sortOption}
             onChange={(e) => onSortOptionChange(e.target.value as SortOption)}
           >
@@ -83,7 +95,7 @@ export function TopBar({
             ))}
           </select>
           <button
-            className="sort-direction"
+            className="px-3 py-2 bg-bg-primary text-text-secondary border border-bg-tertiary border-l-0 rounded-r cursor-pointer text-base leading-none transition-all duration-200 hover:bg-bg-tertiary hover:text-text-primary"
             onClick={onToggleSortDirection}
             title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
           >
@@ -94,7 +106,7 @@ export function TopBar({
         {/* Repo filter (only shown when multiple repos) */}
         {availableRepos.length > 1 && (
           <select
-            className="repo-filter"
+            className="px-3 py-2 bg-bg-primary text-text-primary border border-bg-tertiary rounded cursor-pointer text-[0.9rem] focus:outline-none focus:border-accent"
             value={selectedRepo || ''}
             onChange={(e) => onSelectRepo(e.target.value || null)}
           >
@@ -109,11 +121,15 @@ export function TopBar({
       </div>
 
       {/* Filter chips row */}
-      <div className="filter-chips">
+      <div className="flex gap-2 flex-wrap overflow-x-auto pb-1 max-[480px]:overflow-x-scroll max-[480px]:flex-nowrap">
         {FILTER_CHIPS.map((chip) => (
           <button
             key={chip.id}
-            className={`filter-chip ${chip.id} ${activeFilters.has(chip.id) ? 'active' : ''}`}
+            className={`px-3.5 py-1.5 border rounded-2xl cursor-pointer text-[0.85rem] whitespace-nowrap transition-all duration-200
+              ${activeFilters.has(chip.id)
+                ? FILTER_ACTIVE_COLORS[chip.id]
+                : 'bg-bg-primary text-text-secondary border-bg-tertiary hover:bg-bg-tertiary'
+              }`}
             onClick={() => onToggleFilter(chip.id)}
           >
             {chip.label}

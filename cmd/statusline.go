@@ -200,6 +200,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	// Launch parallel goroutines for expensive operations
 	var gitStatus *gitpkg.Status
 	var awaitingNames []string
+	var unreadSessionNames []string
 	var wg sync.WaitGroup
 
 	// Git status (only for non-handler sessions)
@@ -218,6 +219,20 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		awaitingNames = scanAwaitingApproval(d, session.SessionID)
 	}()
 
+	// Scan for sessions with unread messages
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		unreads := findSessionsWithUnreads(d, session.SessionID)
+		for _, s := range unreads {
+			name := s.SessionName
+			if name == "" {
+				name = s.SessionID[:8]
+			}
+			unreadSessionNames = append(unreadSessionNames, name)
+		}
+	}()
+
 	// While goroutines run, fetch handler data (fast SQLite queries)
 	cfg, _ := config.Read(config.DefaultPath())
 	if cfg == nil {
@@ -230,9 +245,9 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	// Assemble output
 	var err2 error
 	if isHandler {
-		err2 = renderHandlerStatusline(d, session, cfg, &input, trueCost, todayCost, awaitingNames)
+		err2 = renderHandlerStatusline(d, session, cfg, &input, trueCost, todayCost, awaitingNames, unreadSessionNames)
 	} else {
-		err2 = renderWorkerStatusline(d, session, cfg, &input, trueCost, todayCost, gitStatus, awaitingNames)
+		err2 = renderWorkerStatusline(d, session, cfg, &input, trueCost, todayCost, gitStatus, awaitingNames, unreadSessionNames)
 	}
 	if err2 != nil {
 		return err2
@@ -268,9 +283,9 @@ func runStatuslineDirect(cmd *cobra.Command) error {
 
 	if session.Role == "handler" {
 		awaitingNames := scanAwaitingApproval(d, session.SessionID)
-		return renderHandlerStatusline(d, session, cfg, nil, 0.0, 0.0, awaitingNames)
+		return renderHandlerStatusline(d, session, cfg, nil, 0.0, 0.0, awaitingNames, nil)
 	}
-	return renderWorkerStatusline(d, session, cfg, nil, 0.0, 0.0, nil, nil)
+	return renderWorkerStatusline(d, session, cfg, nil, 0.0, 0.0, nil, nil, nil)
 }
 
 // scanAwaitingApproval checks all peekable sessions for approval prompts.
@@ -292,7 +307,7 @@ func scanAwaitingApproval(d *db.DB, selfSessionID string) []string {
 }
 
 // renderWorkerStatusline outputs the complete statusline for a regular session.
-func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, gs *gitpkg.Status, awaitingNames []string) error {
+func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, gs *gitpkg.Status, awaitingNames []string, unreadSessionNames []string) error {
 	// Line 1: Git status
 	if gs != nil && gs.InGit {
 		fmt.Println(formatGitLine(gs))
@@ -318,6 +333,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 		shortcuts = GetCmuxShortcuts()
 	}
 	renderAwaitingLine(session, awaitingNames, shortcuts)
+	renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
 
 	// Footer
 	if session.TerminalType == "cmux" {
@@ -330,7 +346,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 }
 
 // renderHandlerStatusline outputs the complete statusline for a handler session.
-func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, awaitingNames []string) error {
+func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, awaitingNames []string, unreadSessionNames []string) error {
 	// Count active sessions
 	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
@@ -413,6 +429,7 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 		shortcuts = GetCmuxShortcuts()
 	}
 	renderAwaitingLine(session, awaitingNames, shortcuts)
+	renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
 
 	// Footer (cmux shortcuts)
 	if session.TerminalType == "cmux" {
@@ -438,6 +455,25 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string, shortcuts *
 		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
 	}
 	nameList := formatNameList(awaitingNames, 5)
+	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorYellow, nameList, colorReset)
+}
+
+func renderUnreadSessionsLine(session *db.Session, unreadSessionNames []string, shortcuts *CmuxShortcuts) {
+	if len(unreadSessionNames) == 0 {
+		return
+	}
+	count := len(unreadSessionNames)
+	label := "session"
+	if count > 1 {
+		label = "sessions"
+	}
+	if shortcuts != nil && shortcuts.SwitchToUnread != "" {
+		fmt.Printf("%s%d other %s with unread messages%s %s· %s%s%s to switch%s\n",
+			colorYellow, count, label, colorReset, colorDim, colorCyan, shortcuts.SwitchToUnread, colorReset+colorDim, colorReset)
+	} else {
+		fmt.Printf("%s%d other %s with unread messages%s\n", colorYellow, count, label, colorReset)
+	}
+	nameList := formatNameList(unreadSessionNames, 5)
 	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorYellow, nameList, colorReset)
 }
 

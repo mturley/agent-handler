@@ -130,6 +130,29 @@ func claudePID() int {
 	return os.Getppid()
 }
 
+// findSessionsWithUnreads returns sessions (other than self) that have human-unread events.
+func findSessionsWithUnreads(d *db.DB, selfSessionID string) []db.Session {
+	sessions, err := d.ListSessions(false, 1000, 0)
+	if err != nil {
+		return nil
+	}
+
+	var withUnreads []db.Session
+	for _, s := range sessions {
+		if s.SessionID == selfSessionID || s.Role == "handler" {
+			continue
+		}
+		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
+			continue
+		}
+		count, err := d.HumanUnreadCountForSession(s.SessionID)
+		if err == nil && count > 0 {
+			withUnreads = append(withUnreads, s)
+		}
+	}
+	return withUnreads
+}
+
 // syncSessionMetadata updates session name, PID, and terminal info only if changed.
 func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID string) {
 	session, err := d.GetSession(sessionID)
