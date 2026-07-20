@@ -42,12 +42,14 @@ export async function fetchCapabilities(): Promise<Capabilities> {
 }
 
 export async function postSwitch(sessionId: string): Promise<void> {
-  return postJSON('/switch', { session_id: sessionId });
+  return postJSON('/actions/switch', { session_id: sessionId });
 }
 
 export async function postForcePeek(sessionId: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/sessions/${sessionId}/force-peek`, {
+  const response = await fetch(`${API_BASE}/actions/peek`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId }),
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -56,5 +58,5 @@ export async function postForcePeek(sessionId: string): Promise<any> {
 }
 
 export async function postDismissInbox(sessionId: string): Promise<void> {
-  return postJSON(`/sessions/${sessionId}/dismiss-inbox`);
+  return postJSON('/actions/dismiss-inbox', { session_id: sessionId });
 }

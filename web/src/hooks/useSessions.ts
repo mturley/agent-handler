@@ -30,10 +30,9 @@ export function useSessions() {
   // Grouping state
   const [groupByRepo, setGroupByRepo] = useState(true);
 
-  // Fetch sessions
+  // Fetch sessions (don't set loading on refetches to avoid flicker)
   const loadSessions = useCallback(async () => {
     try {
-      setLoading(true);
       const data = await fetchSessions();
       setSessions(data);
       setError(null);
