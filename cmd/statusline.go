@@ -384,12 +384,18 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	monthStart := fmt.Sprintf("%04d-%02d-01", now.Year(), now.Month())
 	monthEnd := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), daysInMonth(now.Year(), now.Month()))
 
+	lastMonth := now.AddDate(0, -1, 0)
+	lastMonthStart := fmt.Sprintf("%04d-%02d-01", lastMonth.Year(), lastMonth.Month())
+	lastMonthEnd := fmt.Sprintf("%04d-%02d-%02d", lastMonth.Year(), lastMonth.Month(), daysInMonth(lastMonth.Year(), lastMonth.Month()))
+
 	todayTotal, _, _, _ := d.QueryTotalCost(today, today)
 	monthTotal, _, _, _ := d.QueryTotalCost(monthStart, monthEnd)
+	lastMonthTotal, _, _, _ := d.QueryTotalCost(lastMonthStart, lastMonthEnd)
 
 	if todayTotal > 0 || monthTotal > 0 {
-		fmt.Printf("%sCost%s: $%.2f today · $%.2f this month\n",
-			colorBoldWhite, colorReset, todayTotal, monthTotal)
+		lastMonthName := lastMonth.Month().String()[:3]
+		fmt.Printf("%sCost (all sessions)%s: $%.2f today · $%.2f this month · $%.2f %s\n",
+			colorBoldWhite, colorReset, todayTotal, monthTotal, lastMonthTotal, lastMonthName)
 	}
 
 	// Inbox (global for handler)
@@ -602,8 +608,8 @@ func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
 	if err != nil || autoCount == 0 {
 		return
 	}
-	fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s· send any prompt or %s/catchup%s %sfor a recap%s\n",
-		colorYellow, autoCount, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
+	fmt.Printf("%s  ● %d auto-delivered since last prompt%s %s· send any prompt for a summary%s\n",
+		colorYellow, autoCount, colorReset, colorDim, colorReset)
 }
 
 func renderInboxModeLine(session *db.Session) {

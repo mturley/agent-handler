@@ -80,26 +80,19 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	}
 
 	isAutoInbox := input.Prompt == "/inbox --auto"
-	isCatchup := input.Prompt == "/catchup"
 
 	// Heartbeat: bump last_active and last_prompt
 	now := time.Now().UTC().Format(time.RFC3339)
 	d.BumpLastActive(input.SessionID, now)
 	d.BumpLastPrompt(input.SessionID, now)
 
-	// Auto mode catchup: check BEFORE advancing cursors.
-	// On a real user prompt, if there are auto-delivered events the user hasn't
-	// seen, tell the agent to invoke /catchup so it can summarize them.
-	if session.InboxMode == "auto" && !isAutoInbox && !isCatchup {
-		autoCount, err := d.AutoDeliveredCount(input.SessionID)
-		if err == nil && autoCount > 0 {
-			fmt.Println("Invoke the /catchup skill now before responding to the user's prompt.")
+	// Auto mode: catch up human cursor on real user prompts
+	if !isAutoInbox && session.InboxMode == "auto" {
+		// Check for auto-delivered events before advancing the cursor
+		autoCount, _ := d.AutoDeliveredCount(input.SessionID)
+		if autoCount > 0 {
+			fmt.Printf("The user is back. %d event(s) were auto-delivered while they were away. Before responding to their prompt, briefly summarize what happened — look back through your conversation for the /inbox --auto results and your responses to them since the user's last real prompt.\n", autoCount)
 		}
-	}
-
-	// Catch up human cursor for real user prompts in auto mode.
-	// Skip for /catchup — it needs the cursor gap to know what to summarize.
-	if !isAutoInbox && !isCatchup && session.InboxMode == "auto" {
 		d.CatchUpHumanCursor(input.SessionID)
 	}
 
