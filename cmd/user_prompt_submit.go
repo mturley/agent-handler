@@ -91,7 +91,7 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	if !isAutoInbox && session.InboxMode == "auto" {
 		autoCount, _ := d.AutoDeliveredCount(input.SessionID)
 		if autoCount > 0 {
-			fmt.Printf("The user is back. %d event(s) were auto-delivered while they were away. Invoke the /catchup skill now before responding to their prompt.\n", autoCount)
+			fmt.Printf("IMPORTANT: %d event(s) were auto-delivered while the user was away. You MUST invoke the /catchup skill NOW, before doing anything else. Do not respond to the user's prompt until /catchup has run.\n", autoCount)
 		}
 	}
 
