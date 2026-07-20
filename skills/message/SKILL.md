@@ -24,31 +24,17 @@ Then run `handler status` and list the active sessions by name so the user can s
 
 After printing the explanation and session list, stop — do not proceed to the send steps below.
 
-## Step 1: Check emit capabilities
-
-Run `handler emit --help` to see the current flags and supported options.
-
-## Step 2: Get your session name
+## Step 1: Get your session name
 
 ```bash
 handler session-name
 ```
 
-Include this in the message body so the recipient can reply. Names can change during a session (via `/rename`), so always look it up rather than caching it.
+Include this in the message body so the recipient can reply.
 
-## Step 3: Resolve the target
+## Step 2: Compose and send
 
-The user's args contain a target name — but it may be informal or abbreviated. **Always resolve it against actual sessions before sending:**
-
-```bash
-handler status
-```
-
-Find the active session whose name best matches what the user said. Use the **exact session name** from the output as the `--to` value. If no session matches, tell the user and show the available sessions.
-
-Do NOT pass the user's raw input as `--to` — always look up the real name first.
-
-## Step 4: Compose and send
+Use the target name from the user's args directly — `handler emit` validates `--to` and errors if the session doesn't exist.
 
 ```bash
 handler emit --type message --to "<target>" --title "<subject>" --body "<message body>
@@ -56,8 +42,13 @@ handler emit --type message --to "<target>" --title "<subject>" --body "<message
 —from session: <your-session-name>"
 ```
 
-**Rules:**
-- Always append `\n\n—from session: <your-session-name>` to the body so the recipient can reply with `--to <your-session-name>`
+## Step 3: If emit fails with "no session or branch found"
+
+The target name didn't match. Run `handler status` to find similar session names and suggest the closest match to the user.
+
+## Rules
+
+- Always append `\n\n—from session: <your-session-name>` to the body so the recipient can reply
 - Use `--type message` for direct messages
 - The `--title` should be a brief subject line
 - The `--body` should contain the full message content
