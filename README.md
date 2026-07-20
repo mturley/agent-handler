@@ -15,7 +15,9 @@ make build
 make install # Copies `handler` binary to /usr/local/bin and runs `handler setup`
 ```
 
-`handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
+`handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding. If you skip any of its steps (e.g. there are issues authenticating the watchers), run `handler setup` again to retry.
+
+A more convenient install/update script will come soon.
 
 ## Update
 
