@@ -3,7 +3,7 @@ import { fetchSessions } from '../api/client';
 import { useSSE } from './useSSE';
 import type { Session } from '../api/types';
 
-export type SortOption = 'last_prompt' | 'created' | 'unread_count' | 'cost' | 'name';
+export type SortOption = 'cmux' | 'last_prompt' | 'created' | 'unread_count' | 'cost' | 'name';
 export type SortDirection = 'asc' | 'desc';
 export type FilterChip = 'active' | 'idle' | 'dead' | 'needs_input' | 'has_unread' | 'blocked';
 
@@ -24,7 +24,7 @@ export function useSessions() {
   const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
 
   // Sort state
-  const [sortOption, setSortOption] = useState<SortOption>('last_prompt');
+  const [sortOption, setSortOption] = useState<SortOption>('cmux');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
   // Grouping state
@@ -120,6 +120,9 @@ export function useSessions() {
       let comparison = 0;
 
       switch (sortOption) {
+        case 'cmux':
+          comparison = (a.cmux_order ?? 999999) - (b.cmux_order ?? 999999);
+          break;
         case 'last_prompt':
           comparison = new Date(a.last_prompt).getTime() - new Date(b.last_prompt).getTime();
           break;

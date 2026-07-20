@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
+	"os/exec"
 	"time"
 
 	"github.com/mturley/agent-handler/db"
@@ -27,6 +29,7 @@ type enrichedSession struct {
 	PID                int            `json:"pid"`
 	Status             string         `json:"status"`
 	SubscriptionCount  int            `json:"subscriptions_count"`
+	CmuxOrder          int            `json:"cmux_order"`
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -37,9 +40,17 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Build cmux ordering map (surface ID → ordinal)
+	cmuxOrder := buildCmuxOrderMap()
+
 	enriched := make([]enrichedSession, len(sessions))
 	for i, session := range sessions {
 		enriched[i] = s.enrichSession(session)
+		if order, ok := cmuxOrder[session.TerminalID]; ok {
+			enriched[i].CmuxOrder = order
+		} else {
+			enriched[i].CmuxOrder = 999999
+		}
 	}
 
 	writeJSON(w, http.StatusOK, enriched)
@@ -105,6 +116,97 @@ func (s *Server) handleSessionInbox(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, events)
+}
+
+// buildCmuxOrderMap queries cmux for workspace and surface ordering,
+// returning a map of surface UUID → ordinal position.
+func buildCmuxOrderMap() map[string]int {
+	result := make(map[string]int)
+
+	// Get workspace list (ordered as they appear in cmux)
+	wsOut, err := exec.Command("cmux", "workspace", "list", "--json").Output()
+	if err != nil {
+		return result
+	}
+	var wsData struct {
+		Workspaces []struct {
+			Ref string `json:"ref"`
+		} `json:"workspaces"`
+	}
+	if err := json.Unmarshal(wsOut, &wsData); err != nil {
+		return result
+	}
+
+	// For each workspace, get surface ordering
+	for wsIdx, ws := range wsData.Workspaces {
+		surfOut, err := exec.Command("cmux", "list-pane-surfaces",
+			"--workspace", ws.Ref, "--id-format", "uuids").Output()
+		if err != nil {
+			continue
+		}
+		// Parse surface list — each line starts with optional "* " then "UUID"
+		for surfIdx, line := range splitLines(string(surfOut)) {
+			uuid := extractSurfaceUUID(line)
+			if uuid != "" {
+				result[uuid] = wsIdx*1000 + surfIdx
+			}
+		}
+	}
+
+	return result
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	for _, line := range splitString(s, '\n') {
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func splitString(s string, sep byte) []string {
+	var result []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			result = append(result, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		result = append(result, s[start:])
+	}
+	return result
+}
+
+func extractSurfaceUUID(line string) string {
+	// Lines look like: "* UUID  ..." or "  UUID  ..."
+	// UUID is 36 chars: 8-4-4-4-12
+	for i := 0; i <= len(line)-36; i++ {
+		candidate := line[i : i+36]
+		if isUUID(candidate) {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+	for i, c := range s {
+		if i == 8 || i == 13 || i == 18 || i == 23 {
+			if c != '-' {
+				return false
+			}
+		} else if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // enrichSession computes derived fields for a session

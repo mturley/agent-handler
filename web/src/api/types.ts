@@ -15,6 +15,7 @@ export interface Session {
   cmux_workspace_color: string;
   needs_input: boolean;
   subscriptions_count: number;
+  cmux_order: number;
 }
 
 export interface PeekState {

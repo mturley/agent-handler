@@ -27,6 +27,7 @@ const FILTER_CHIPS: { id: FilterChip; label: string }[] = [
 ];
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'cmux', label: 'Match cmux' },
   { value: 'last_prompt', label: 'Last prompt' },
   { value: 'created', label: 'Created' },
   { value: 'unread_count', label: 'Unread count' },
