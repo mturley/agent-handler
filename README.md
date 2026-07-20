@@ -33,7 +33,7 @@ make build && make install
 handler uninstall
 ```
 
-The binary and skill/hook configuration will be cleaned up, but your database and session data will remain in `~/.agent-handler`. To fully clean up your installation you can delete that directory.
+The binary and skill/hook configuration will be cleaned up, but your database and configuration will remain in `~/.agent-handler`. To fully clean up your installation you can delete that directory.
 
 ## Key Commands
 
