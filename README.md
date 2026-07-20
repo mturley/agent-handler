@@ -1,6 +1,8 @@
 # agent-handler
 
-Centralized logging, publish/subscribe messaging, event handling and external resource watching for code agents.
+Manage parallel Claude Code sessions: event ledger, resource watchers, session inboxes, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
+
+![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-statusline.png)
 
 ## Install
 
@@ -65,6 +67,7 @@ handler switch -a   # Jump to first session awaiting approval (cmux)
 handler peek        # Capture terminal content of a live session
 handler claude      # Start a peekable Claude session
 handler tail        # Live event stream
+handler cost        # Show API cost breakdown (monthly/daily/per-session)
 handler query       # Run ad-hoc read-only SQL
 handler schema      # Dump table definitions
 handler health      # Database health and statistics
@@ -135,7 +138,7 @@ handler log --global --since-cursor  # What changed since last check
 handler emit --to handler          # Send a message to the handler session
 ```
 
-The handler session gets a custom statusline showing active/blocked session counts and global event status.
+The handler session gets a custom statusline showing active/blocked session counts, global event status, and aggregate API cost across all sessions (today / this month / last month).
 
 ## cmux Integration
 
@@ -166,6 +169,36 @@ Sessions started via `handler claude` or in cmux are automatically peekable. The
 ## .worktree-resources
 
 The `.worktree-resources` file lets any tool declare which external resources a worktree cares about. See [docs/worktree-resources.md](docs/worktree-resources.md) for the format spec and integration guide.
+
+## Cost Tracking
+
+Track Claude API spend across all sessions with daily rollups and reset detection.
+
+```bash
+handler cost                    # Summary header + current month breakdown
+handler cost --today            # Today's spend by session
+handler cost --month 2026-06    # Specific month breakdown
+handler cost --session <id>     # Single session detail (true cost, adjustments, model)
+handler cost --json             # Machine-readable output
+```
+
+Cost data is captured automatically from the statusline hook (every ~10s) — no manual action needed. The summary header shows today, this month, last month, and all time:
+
+```
+Today: $48.23 | This month: $342.17 | June: $280.44 | All time: $622.61
+```
+
+**Reset detection:** Claude Code's in-memory cost counter resets when a laptop restarts and a session resumes. handler detects this (new value lower than last snapshot) and records a cost adjustment, preserving the true lifetime total for each session.
+
+**Statusline integration:** Every session's model line shows its true session cost plus today's spend:
+```
+Opus 4.6 (1M context) ▓▓▓░░░░░░░░░░░░░░░░░ 18% ctx | $39.07 ($18.42 today)
+```
+
+The handler session additionally shows aggregate cost across all sessions:
+```
+Cost (all sessions): $48.23 today · $342.17 this month · $280.44 Jun
+```
 
 ## Design
 
