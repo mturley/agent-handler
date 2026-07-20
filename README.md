@@ -37,7 +37,7 @@ The binary and skill/hook configuration will be cleaned up, but your database an
 
 ## Key Commands
 
-These are the commands you'll use directly from your terminal:
+These are the commands you can use directly from your terminal:
 
 ```bash
 handler status          # Show all sessions with liveness and unread counts
