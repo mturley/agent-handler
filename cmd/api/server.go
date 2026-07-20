@@ -24,6 +24,13 @@ func (s *Server) Start() error {
 
 	// API routes
 	mux.HandleFunc("GET /api/capabilities", s.handleCapabilities)
+	mux.HandleFunc("GET /api/sessions", s.handleSessions)
+	mux.HandleFunc("GET /api/sessions/{id}", s.handleSession)
+	mux.HandleFunc("GET /api/sessions/{id}/peek", s.handleSessionPeek)
+	mux.HandleFunc("GET /api/sessions/{id}/inbox", s.handleSessionInbox)
+	mux.HandleFunc("POST /api/actions/switch", s.handleSwitch)
+	mux.HandleFunc("POST /api/actions/peek", s.handleForcePeek)
+	mux.HandleFunc("POST /api/actions/dismiss-inbox", s.handleDismissInbox)
 
 	// Static files (skip in dev mode — Vite serves them)
 	if !s.DevMode && s.WebFS != nil {
