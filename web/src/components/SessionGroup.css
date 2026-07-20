@@ -1,0 +1,75 @@
+.session-group {
+  margin-bottom: 2rem;
+}
+
+.session-group-repo-header {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.session-group-workspace {
+  margin-bottom: 1.5rem;
+}
+
+.session-group-workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0 1rem;
+}
+
+.session-group-workspace-bar {
+  width: 4px;
+  height: 1.5rem;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.session-group-workspace-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.session-group-workspace-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.session-group-branch {
+  font-family: 'Monaco', 'Courier New', monospace;
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  padding: 0.2rem 0.6rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+}
+
+.session-group-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 1rem;
+}
+
+/* Responsive: narrow screens */
+@media (max-width: 480px) {
+  .session-group-repo-header {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+
+  .session-group-workspace-header {
+    padding: 0 0.5rem;
+  }
+
+  .session-group-cards {
+    padding: 0 0.5rem;
+  }
+}

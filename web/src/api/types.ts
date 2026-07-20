@@ -12,6 +12,7 @@ export interface Session {
   last_active: string;
   last_prompt: string;
   cmux_workspace: string;
+  cmux_workspace_color: string;
   needs_input: boolean;
   subscriptions_count: number;
 }

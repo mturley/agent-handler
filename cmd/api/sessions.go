@@ -9,23 +9,24 @@ import (
 )
 
 type enrichedSession struct {
-	SessionID         string         `json:"session_id"`
-	SessionName       string         `json:"session_name"`
-	Branch            string         `json:"branch"`
-	Repo              string         `json:"repo"`
-	DisplayState      string         `json:"display_state"`
-	InboxMode         string         `json:"inbox_mode"`
-	Peekable          bool           `json:"peekable"`
-	TerminalType      string         `json:"terminal_type,omitempty"`
-	UnreadCount       int            `json:"unread_count"`
-	UnreadBreakdown   map[string]int `json:"unread_breakdown,omitempty"`
-	LastActive        string         `json:"last_active"`
-	LastPrompt        string         `json:"last_prompt,omitempty"`
-	CmuxWorkspace     string         `json:"cmux_workspace,omitempty"`
-	NeedsInput        bool           `json:"needs_input"`
-	PID               int            `json:"pid"`
-	Status            string         `json:"status"`
-	SubscriptionCount int            `json:"subscription_count"`
+	SessionID          string         `json:"session_id"`
+	SessionName        string         `json:"session_name"`
+	Branch             string         `json:"branch"`
+	Repo               string         `json:"repo"`
+	DisplayState       string         `json:"display_state"`
+	InboxMode          string         `json:"inbox_mode"`
+	Peekable           bool           `json:"peekable"`
+	TerminalType       string         `json:"terminal_type,omitempty"`
+	UnreadCount        int            `json:"unread_count"`
+	UnreadBreakdown    map[string]int `json:"unread_breakdown,omitempty"`
+	LastActive         string         `json:"last_active"`
+	LastPrompt         string         `json:"last_prompt,omitempty"`
+	CmuxWorkspace      string         `json:"cmux_workspace,omitempty"`
+	CmuxWorkspaceColor string         `json:"cmux_workspace_color,omitempty"`
+	NeedsInput         bool           `json:"needs_input"`
+	PID                int            `json:"pid"`
+	Status             string         `json:"status"`
+	SubscriptionCount  int            `json:"subscriptions_count"`
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -148,22 +149,23 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 	}
 
 	return enrichedSession{
-		SessionID:         session.SessionID,
-		SessionName:       session.SessionName,
-		Branch:            session.Branch,
-		Repo:              session.Repo,
-		DisplayState:      displayState,
-		InboxMode:         session.InboxMode,
-		Peekable:          session.TerminalType != "",
-		TerminalType:      session.TerminalType,
-		UnreadCount:       unreadCount,
-		UnreadBreakdown:   breakdown,
-		LastActive:        session.LastActive,
-		LastPrompt:        session.LastPrompt,
-		CmuxWorkspace:     session.CmuxWorkspaceName,
-		NeedsInput:        needsInput,
-		PID:               session.PID,
-		Status:            session.Status,
-		SubscriptionCount: subscriptionCount,
+		SessionID:          session.SessionID,
+		SessionName:        session.SessionName,
+		Branch:             session.Branch,
+		Repo:               session.Repo,
+		DisplayState:       displayState,
+		InboxMode:          session.InboxMode,
+		Peekable:           session.TerminalType != "",
+		TerminalType:       session.TerminalType,
+		UnreadCount:        unreadCount,
+		UnreadBreakdown:    breakdown,
+		LastActive:         session.LastActive,
+		LastPrompt:         session.LastPrompt,
+		CmuxWorkspace:      session.CmuxWorkspaceName,
+		CmuxWorkspaceColor: session.CmuxWorkspaceColor,
+		NeedsInput:         needsInput,
+		PID:                session.PID,
+		Status:             session.Status,
+		SubscriptionCount:  subscriptionCount,
 	}
 }
