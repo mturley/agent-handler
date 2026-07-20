@@ -1,24 +1,15 @@
 # agent-handler
 
-Manage parallel Claude Code sessions: SQLite event ledger, pub/sub messaging, resource watchers, session inboxes, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
+Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, GitHub and Jira resource watchers, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
 
 ![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-statusline.png)
 
 ## Install
 
-### From source (requires Go 1.22+)
-
-```bash
-git clone https://github.com/mturley/agent-handler.git
-cd agent-handler
-make build
-make install # Copies `handler` binary to /usr/local/bin and runs `handler setup`
-```
-
 ### Using `go install`
 
 ```bash
-go install github.com/mturley/agent-handler@latest
+go install github.com/mturley/agent-handler
 handler setup
 ```
 
@@ -30,6 +21,15 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 Then run `handler setup` again.
 
 `handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
+
+### From source (requires Go 1.22+)
+
+```bash
+git clone https://github.com/mturley/agent-handler.git
+cd agent-handler
+make build
+make install # Copies `handler` binary to /usr/local/bin and runs `handler setup`
+```
 
 ## Update
 
