@@ -77,7 +77,13 @@ func configureCmuxActions() {
 	}
 
 	exec.Command("cmux", "reload-config").Run()
-	fmt.Println("  ✓ Configured cmux actions: handler-switch-to-awaiting (cmd+shift+a), handler-switch-to-session (cmd+shift+s)")
+	var actionSummary []string
+	for _, id := range handlerCmuxActionIDs {
+		if s, ok := handlerCmuxActions[id]["shortcut"].(string); ok {
+			actionSummary = append(actionSummary, fmt.Sprintf("%s (%s)", id, s))
+		}
+	}
+	fmt.Printf("  ✓ Configured cmux actions: %s\n", strings.Join(actionSummary, ", "))
 }
 
 func hasCmuxActions() bool {
