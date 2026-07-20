@@ -131,3 +131,11 @@ CREATE TABLE IF NOT EXISTS daily_cost (
 );
 
 CREATE INDEX IF NOT EXISTS idx_daily_cost_date ON daily_cost(date);
+
+CREATE TABLE IF NOT EXISTS peek_state (
+    session_id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    needs_input INTEGER NOT NULL DEFAULT 0,
+    reason TEXT,
+    updated_at TEXT NOT NULL
+);
