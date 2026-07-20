@@ -124,7 +124,23 @@ Alternatively, you can skip `handler watcher install` and schedule the watcher r
 */2 * * * * /usr/local/bin/handler watcher run jira
 ```
 
-Jira custom fields (epic link, blocked status, story points, etc.) can be configured in `~/.agent-handler/config.yaml` under `services.jira.custom_fields`.
+### Jira custom fields
+
+Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. Configure them in `~/.agent-handler/config.yaml`:
+
+```yaml
+services:
+  jira:
+    custom_fields:
+      blocked: customfield_10517        # Blocked flag
+      blocked_reason: customfield_10483 # Blocked reason (rich text)
+      epic_key: customfield_10014       # Epic link
+      flagged: customfield_10021        # Impediment flag
+      story_points: customfield_10028   # Story points estimate
+      git_pull_request: customfield_10875 # Linked PR
+```
+
+Default custom fields are added automatically during `handler watcher auth`. The field IDs above are common for Jira Cloud but may differ for your instance — check your Jira admin or use the Jira REST API to find the right IDs.
 
 ### Management
 

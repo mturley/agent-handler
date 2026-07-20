@@ -200,5 +200,21 @@ func configureJira(reader *bufio.Reader, cfg *config.Config) (bool, error) {
 	cfg.Services.Jira.Email = email
 	cfg.Services.Jira.Token = token
 
+	// Add default custom fields if none are configured
+	if len(cfg.Services.Jira.CustomFields) == 0 {
+		cfg.Services.Jira.CustomFields = map[string]string{
+			"blocked":        "customfield_10517",
+			"blocked_reason": "customfield_10483",
+			"epic_key":       "customfield_10014",
+			"flagged":        "customfield_10021",
+			"story_points":   "customfield_10028",
+			"git_pull_request": "customfield_10875",
+		}
+		fmt.Println("")
+		fmt.Println("  Default custom fields have been added to your config. These are common")
+		fmt.Println("  field IDs for Jira Cloud — adjust them in ~/.agent-handler/config.yaml")
+		fmt.Println("  if your instance uses different field IDs.")
+	}
+
 	return true, nil
 }
