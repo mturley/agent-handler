@@ -6,6 +6,8 @@ Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inbox
 
 ## Install
 
+Requires Go 1.22+ and Claude Code to already be installed.
+
 ### Using `go install`
 
 ```bash
@@ -22,7 +24,7 @@ Then run `handler setup` again.
 
 `handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding.
 
-### From source (requires Go 1.22+)
+### From source
 
 ```bash
 git clone https://github.com/mturley/agent-handler.git
