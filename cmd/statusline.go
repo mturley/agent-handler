@@ -457,7 +457,7 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string, shortcuts *
 		label = "sessions"
 	}
 	if shortcuts != nil && shortcuts.SwitchToAwaiting != "" {
-		fmt.Printf("%s%d other %s awaiting approval%s %s· %s%s%s to auto-switch%s\n",
+		fmt.Printf("%s%d other %s awaiting approval%s %s· %s%s%s to switch%s\n",
 			colorYellow, count, label, colorReset, colorDim, colorCyan, shortcuts.SwitchToAwaiting, colorReset+colorDim, colorReset)
 	} else {
 		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
