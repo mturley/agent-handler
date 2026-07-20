@@ -1,35 +1,32 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react"
 
 export function useSSE(onHeartbeat: () => void) {
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const callbackRef = useRef(onHeartbeat)
+  callbackRef.current = onHeartbeat
 
   useEffect(() => {
-    let reconnectTimeout: number | undefined;
+    let es: EventSource | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
     function connect() {
-      const eventSource = new EventSource('/api/stream');
-      eventSourceRef.current = eventSource;
+      es = new EventSource("/api/stream")
 
-      eventSource.addEventListener('heartbeat', () => {
-        onHeartbeat();
-      });
+      es.addEventListener("heartbeat", () => {
+        callbackRef.current()
+      })
 
-      eventSource.onerror = () => {
-        eventSource.close();
-        // Auto-reconnect after 5 seconds
-        reconnectTimeout = window.setTimeout(connect, 5000);
-      };
+      es.onerror = () => {
+        es?.close()
+        es = null
+        reconnectTimer = setTimeout(connect, 3000)
+      }
     }
 
-    connect();
+    connect()
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-      if (reconnectTimeout !== undefined) {
-        clearTimeout(reconnectTimeout);
-      }
-    };
-  }, [onHeartbeat]);
+      es?.close()
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+    }
+  }, [])
 }

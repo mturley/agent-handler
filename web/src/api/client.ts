@@ -1,62 +1,52 @@
-import type { Session, PeekState, Event, Capabilities } from './types';
+import type { Session, PeekState, Event, Capabilities, ActionResponse } from "./types"
 
-const API_BASE = '/api';
+const BASE = ""
 
-async function fetchJSON<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${url}`, options)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`${res.status}: ${text}`)
   }
-  return response.json();
+  return res.json()
 }
 
-async function postJSON(path: string, body?: unknown): Promise<void> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: body ? { 'Content-Type': 'application/json' } : {},
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
+export async function getSessions(): Promise<Session[]> {
+  return fetchJSON<Session[]>("/api/sessions")
 }
 
-export async function fetchSessions(): Promise<Session[]> {
-  return fetchJSON<Session[]>('/sessions');
+export async function getSessionPeek(id: string): Promise<PeekState> {
+  return fetchJSON<PeekState>(`/api/sessions/${encodeURIComponent(id)}/peek`)
 }
 
-export async function fetchSession(id: string): Promise<Session> {
-  return fetchJSON<Session>(`/sessions/${id}`);
+export async function getSessionInbox(id: string): Promise<Event[]> {
+  return fetchJSON<Event[]>(`/api/sessions/${encodeURIComponent(id)}/inbox`)
 }
 
-export async function fetchSessionPeek(id: string): Promise<PeekState> {
-  return fetchJSON<PeekState>(`/sessions/${id}/peek`);
+export async function getCapabilities(): Promise<Capabilities> {
+  return fetchJSON<Capabilities>("/api/capabilities")
 }
 
-export async function fetchSessionInbox(id: string): Promise<Event[]> {
-  return fetchJSON<Event[]>(`/sessions/${id}/inbox`);
-}
-
-export async function fetchCapabilities(): Promise<Capabilities> {
-  return fetchJSON<Capabilities>('/capabilities');
-}
-
-export async function postSwitch(sessionId: string): Promise<void> {
-  return postJSON('/actions/switch', { session_id: sessionId });
-}
-
-export async function postForcePeek(sessionId: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/actions/peek`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+export async function switchSession(sessionId: string): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/switch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-  }
-  return response.json();
+  })
 }
 
-export async function postDismissInbox(sessionId: string): Promise<void> {
-  return postJSON('/actions/dismiss-inbox', { session_id: sessionId });
+export async function forcePeek(sessionId: string): Promise<Record<string, unknown>> {
+  return fetchJSON<Record<string, unknown>>("/api/actions/peek", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  })
+}
+
+export async function dismissInbox(sessionId: string): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/dismiss-inbox", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  })
 }

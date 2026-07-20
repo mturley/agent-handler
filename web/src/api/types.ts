@@ -1,43 +1,54 @@
+export type DisplayState = "active" | "idle" | "dead" | "archived"
+
 export interface Session {
-  session_id: string;
-  session_name: string;
-  branch: string;
-  repo: string;
-  display_state: string;
-  inbox_mode: string;
-  peekable: boolean;
-  terminal_type: string;
-  unread_count: number;
-  unread_breakdown: Record<string, number>;
-  last_active: string;
-  last_prompt: string;
-  cmux_workspace: string;
-  cmux_workspace_color: string;
-  needs_input: boolean;
-  subscriptions_count: number;
-  cmux_order: number;
+  session_id: string
+  session_name: string
+  branch: string
+  repo: string
+  display_state: DisplayState
+  inbox_mode: string
+  peekable: boolean
+  terminal_type?: string
+  unread_count: number
+  unread_breakdown?: Record<string, number>
+  last_active: string
+  last_prompt?: string
+  cmux_workspace?: string
+  cmux_workspace_color?: string
+  needs_input: boolean
+  pid: number
+  status: string
+  subscriptions_count: number
+  cmux_order: number
 }
 
 export interface PeekState {
-  session_id: string;
-  content: string;
-  needs_input: boolean;
-  reason: string;
-  updated_at: string;
+  content: string
+  needs_input: boolean
+  reason: string
+  updated_at: string
 }
 
 export interface Event {
-  ID: string;
-  TS: string;
-  Source: string;
-  SessionID: string | null;
-  Type: string;
-  Title: string;
-  Body: string | null;
-  Author: string | null;
-  Broadcast: boolean;
+  id: string
+  ts: string
+  external_ts?: string
+  source: string
+  session_id?: string
+  type: string
+  title: string
+  body?: string
+  author?: string
+  author_type?: string
+  broadcast: boolean
+  tags?: string
 }
 
 export interface Capabilities {
-  cmux: boolean;
+  cmux: boolean
+}
+
+export interface ActionResponse {
+  success: boolean
+  output?: string
 }

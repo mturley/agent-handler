@@ -1,218 +1,183 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { fetchSessions } from '../api/client';
-import { useSSE } from './useSSE';
-import type { Session } from '../api/types';
+import { useState, useEffect, useCallback, useMemo } from "react"
+import type { Session, DisplayState } from "@/api/types"
+import { getSessions } from "@/api/client"
+import { useSSE } from "./useSSE"
 
-export type SortOption = 'cmux' | 'last_prompt' | 'created' | 'unread_count' | 'cost' | 'name';
-export type SortDirection = 'asc' | 'desc';
-export type FilterChip = 'active' | 'idle' | 'dead' | 'needs_input' | 'has_unread' | 'blocked';
+export type SortField = "cmux" | "last_prompt" | "unread" | "name"
 
-export interface GroupedSessions {
-  repo: string;
-  workspace: string;
-  sessions: Session[];
+export type FilterChip =
+  | "active"
+  | "idle"
+  | "dead"
+  | "needs_input"
+  | "has_unread"
+  | "blocked"
+
+export interface SessionGroup {
+  repo: string
+  workspace?: string
+  workspaceColor?: string
+  branch?: string
+  sessions: Session[]
+}
+
+function fuzzyMatch(query: string, session: Session): boolean {
+  const q = query.toLowerCase()
+  const name = (session.session_name || session.session_id).toLowerCase()
+  const branch = (session.branch || "").toLowerCase()
+  return name.includes(q) || branch.includes(q)
+}
+
+function matchesFilters(session: Session, filters: Set<FilterChip>): boolean {
+  if (filters.size === 0) return true
+
+  const stateFilters: DisplayState[] = []
+  if (filters.has("active")) stateFilters.push("active")
+  if (filters.has("idle")) stateFilters.push("idle")
+  if (filters.has("dead")) stateFilters.push("dead")
+
+  // State filters are OR-ed together
+  const passesState =
+    stateFilters.length === 0 || stateFilters.includes(session.display_state)
+
+  // Property filters are AND-ed
+  if (filters.has("needs_input") && !session.needs_input) return false
+  if (filters.has("has_unread") && session.unread_count === 0) return false
+  // "blocked" — no dedicated field yet, skip for now
+
+  return passesState
+}
+
+function sortSessions(a: Session, b: Session, field: SortField, reverse: boolean): number {
+  let cmp = 0
+  switch (field) {
+    case "cmux":
+      cmp = a.cmux_order - b.cmux_order
+      break
+    case "last_prompt":
+      cmp = (b.last_prompt || "").localeCompare(a.last_prompt || "")
+      break
+    case "unread":
+      cmp = b.unread_count - a.unread_count
+      break
+    case "name":
+      cmp = (a.session_name || a.session_id).localeCompare(
+        b.session_name || b.session_id
+      )
+      break
+  }
+  return reverse ? -cmp : cmp
+}
+
+function repoName(repo: string): string {
+  if (!repo) return "(no repo)"
+  // Extract last path component
+  const parts = repo.split("/")
+  return parts[parts.length - 1] || repo
 }
 
 export function useSessions() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [search, setSearch] = useState("")
+  const [filters, setFilters] = useState<Set<FilterChip>>(new Set())
+  const [sortField, setSortField] = useState<SortField>("cmux")
+  const [sortReverse, setSortReverse] = useState(false)
+  const [groupByRepo, setGroupByRepo] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  // Search and filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilters, setActiveFilters] = useState<Set<FilterChip>>(new Set());
-  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const fetchSessions = useCallback(() => {
+    getSessions()
+      .then((data) => {
+        setSessions(data)
+        setLoading(false)
+      })
+      .catch(console.error)
+  }, [])
 
-  // Sort state
-  const [sortOption, setSortOption] = useState<SortOption>('cmux');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-
-  // Grouping state
-  const [groupByRepo, setGroupByRepo] = useState(true);
-
-  // Fetch sessions (don't set loading on refetches to avoid flicker)
-  const loadSessions = useCallback(async () => {
-    try {
-      const data = await fetchSessions();
-      setSessions(data);
-      setError(null);
-    } catch (err) {
-      setError(err as Error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Initial load
   useEffect(() => {
-    loadSessions();
-  }, [loadSessions]);
+    fetchSessions()
+  }, [fetchSessions])
 
-  // Refetch on SSE heartbeat
-  useSSE(loadSessions);
+  useSSE(fetchSessions)
 
-  // Filter chips toggle
-  const toggleFilter = useCallback((filter: FilterChip) => {
-    setActiveFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(filter)) {
-        next.delete(filter);
+  const toggleFilter = useCallback((chip: FilterChip) => {
+    setFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(chip)) {
+        next.delete(chip)
       } else {
-        next.add(filter);
+        next.add(chip)
       }
-      return next;
-    });
-  }, []);
+      return next
+    })
+  }, [])
 
-  // Clear all filters
-  const clearFilters = useCallback(() => {
-    setActiveFilters(new Set());
-    setSelectedRepo(null);
-    setSearchQuery('');
-  }, []);
+  const filtered = useMemo(() => {
+    let result = sessions.filter((s) => s.display_state !== "archived")
 
-  // Fuzzy search helper (matches on session_name AND branch)
-  const matchesSearch = useCallback((session: Session, query: string): boolean => {
-    if (!query) return true;
-    const lowerQuery = query.toLowerCase();
-    const nameMatch = session.session_name.toLowerCase().includes(lowerQuery);
-    const branchMatch = session.branch.toLowerCase().includes(lowerQuery);
-    return nameMatch || branchMatch;
-  }, []);
-
-  // Filter helper
-  const matchesFilters = useCallback((session: Session): boolean => {
-    if (activeFilters.size === 0 && !selectedRepo) return true;
-
-    // Check repo filter
-    if (selectedRepo && session.repo !== selectedRepo) {
-      return false;
+    if (search) {
+      result = result.filter((s) => fuzzyMatch(search, s))
     }
 
-    // If no chip filters, only repo filter was applied
-    if (activeFilters.size === 0) return true;
-
-    // Check chip filters (any match = include)
-    let matches = false;
-    if (activeFilters.has('active') && session.display_state === 'active') matches = true;
-    if (activeFilters.has('idle') && session.display_state === 'idle') matches = true;
-    if (activeFilters.has('dead') && session.display_state === 'dead') matches = true;
-    if (activeFilters.has('needs_input') && session.needs_input) matches = true;
-    if (activeFilters.has('has_unread') && session.unread_count > 0) matches = true;
-    if (activeFilters.has('blocked')) {
-      // Blocked sessions are those with unread_breakdown containing 'blocked' type
-      const blockedCount = session.unread_breakdown?.blocked || 0;
-      if (blockedCount > 0) matches = true;
+    if (filters.size > 0) {
+      result = result.filter((s) => matchesFilters(s, filters))
     }
 
-    return matches;
-  }, [activeFilters, selectedRepo]);
+    result.sort((a, b) => sortSessions(a, b, sortField, sortReverse))
 
-  // Filtered sessions (after search + filters)
-  const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => matchesSearch(s, searchQuery) && matchesFilters(s));
-  }, [sessions, searchQuery, matchesSearch, matchesFilters]);
+    return result
+  }, [sessions, search, filters, sortField, sortReverse])
 
-  // Sorted sessions
-  const sortedSessions = useMemo(() => {
-    const sorted = [...filteredSessions];
-    sorted.sort((a, b) => {
-      let comparison = 0;
+  const grouped = useMemo((): SessionGroup[] => {
+    if (!groupByRepo) return [{ repo: "", sessions: filtered }]
 
-      switch (sortOption) {
-        case 'cmux':
-          comparison = (a.cmux_order ?? 999999) - (b.cmux_order ?? 999999);
-          break;
-        case 'last_prompt':
-          comparison = new Date(a.last_prompt).getTime() - new Date(b.last_prompt).getTime();
-          break;
-        case 'created':
-          // Assuming session_id contains timestamp or we use last_active as proxy
-          comparison = new Date(a.last_active).getTime() - new Date(b.last_active).getTime();
-          break;
-        case 'unread_count':
-          comparison = a.unread_count - b.unread_count;
-          break;
-        case 'cost':
-          // TODO: Add cost field to Session type when available
-          comparison = 0;
-          break;
-        case 'name':
-          comparison = a.session_name.localeCompare(b.session_name);
-          break;
-      }
+    const map = new Map<string, Session[]>()
+    for (const s of filtered) {
+      const key = `${repoName(s.repo)}|${s.cmux_workspace || ""}`
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(s)
+    }
 
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
+    const groups: SessionGroup[] = []
+    for (const [key, sessions] of map) {
+      const [repo, workspace] = key.split("|")
+      const workspaceColor = sessions[0]?.cmux_workspace_color
+      // If all sessions share the same branch, hoist it to group level
+      const branches = new Set(sessions.map((s) => s.branch).filter(Boolean))
+      const sharedBranch = branches.size === 1 ? [...branches][0] : undefined
 
-    return sorted;
-  }, [filteredSessions, sortOption, sortDirection]);
+      groups.push({
+        repo,
+        workspace: workspace || undefined,
+        workspaceColor,
+        branch: sharedBranch,
+        sessions,
+      })
+    }
 
-  // Grouped sessions (by repo + workspace)
-  const groupedSessions = useMemo((): GroupedSessions[] => {
-    if (!groupByRepo) return [];
+    // Sort groups by the top session in each group
+    groups.sort((a, b) => {
+      if (a.sessions.length === 0 || b.sessions.length === 0) return 0
+      return sortSessions(a.sessions[0], b.sessions[0], sortField, sortReverse)
+    })
 
-    const groups = new Map<string, GroupedSessions>();
-
-    sortedSessions.forEach((session) => {
-      const key = `${session.repo}::${session.cmux_workspace || 'default'}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          repo: session.repo,
-          workspace: session.cmux_workspace || 'default',
-          sessions: [],
-        });
-      }
-      groups.get(key)!.sessions.push(session);
-    });
-
-    return Array.from(groups.values());
-  }, [sortedSessions, groupByRepo]);
-
-  // Available repos for filter dropdown
-  const availableRepos = useMemo(() => {
-    const repos = new Set<string>();
-    sessions.forEach((s) => repos.add(s.repo));
-    return Array.from(repos).sort();
-  }, [sessions]);
-
-  // Toggle sort direction
-  const toggleSortDirection = useCallback(() => {
-    setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-  }, []);
+    return groups
+  }, [filtered, groupByRepo, sortField, sortReverse])
 
   return {
-    // Data
-    sessions,
-    filteredSessions,
-    sortedSessions,
-    groupedSessions,
-    loading,
-    error,
-
-    // Search
-    searchQuery,
-    setSearchQuery,
-
-    // Filters
-    activeFilters,
+    sessions: filtered,
+    grouped,
+    search,
+    setSearch,
+    filters,
     toggleFilter,
-    clearFilters,
-    selectedRepo,
-    setSelectedRepo,
-    availableRepos,
-
-    // Sort
-    sortOption,
-    setSortOption,
-    sortDirection,
-    toggleSortDirection,
-
-    // Grouping
+    sortField,
+    setSortField,
+    sortReverse,
+    setSortReverse,
     groupByRepo,
     setGroupByRepo,
-
-    // Actions
-    refresh: loadSessions,
-  };
+    loading,
+    refetch: fetchSessions,
+  }
 }

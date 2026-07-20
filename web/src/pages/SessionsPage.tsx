@@ -1,161 +1,222 @@
-import { useState } from 'react';
-import { useSessions } from '../hooks/useSessions';
-import { useCapabilities } from '../hooks/useCapabilities';
-import { TopBar } from '../components/TopBar';
-import { SessionGroup } from '../components/SessionGroup';
-import { SessionCard } from '../components/SessionCard';
-import { InboxModal } from '../components/InboxModal';
-import { useToast } from '../hooks/useToast';
-import { postSwitch } from '../api/client';
+import { useCallback, useState } from "react"
+import { Input } from "@/components/ui/input"
+import { Toggle } from "@/components/ui/toggle"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { SessionCard } from "@/components/SessionCard"
+import { InboxDialog } from "@/components/InboxDialog"
+import { useSessions, type FilterChip, type SortField } from "@/hooks/useSessions"
+import { switchSession } from "@/api/client"
+import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
-export function SessionsPage() {
+const filterChips: { key: FilterChip; label: string }[] = [
+  { key: "active", label: "Active" },
+  { key: "idle", label: "Idle" },
+  { key: "dead", label: "Dead" },
+  { key: "needs_input", label: "Needs input" },
+  { key: "has_unread", label: "Has unread" },
+]
+
+interface SessionsPageProps {
+  cmuxAvailable: boolean
+}
+
+export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
   const {
-    sessions,
-    sortedSessions,
-    groupedSessions,
-    loading,
-    error,
-    searchQuery,
-    setSearchQuery,
-    activeFilters,
+    grouped,
+    search,
+    setSearch,
+    filters,
     toggleFilter,
-    selectedRepo,
-    setSelectedRepo,
-    availableRepos,
-    sortOption,
-    setSortOption,
-    sortDirection,
-    toggleSortDirection,
+    sortField,
+    setSortField,
+    sortReverse,
+    setSortReverse,
     groupByRepo,
     setGroupByRepo,
-    refresh,
-  } = useSessions();
+    loading,
+    refetch,
+  } = useSessions()
 
-  const { capabilities } = useCapabilities();
-  const cmuxAvailable = capabilities?.cmux ?? false;
-  const { showToast } = useToast();
+  const [inboxSession, setInboxSession] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
-  const [inboxModalOpen, setInboxModalOpen] = useState(false);
-  const [inboxSessionId, setInboxSessionId] = useState<string>('');
-  const [inboxSessionName, setInboxSessionName] = useState<string>('');
-  const [switchingSessionId, setSwitchingSessionId] = useState<string | null>(null);
+  const handleSwitch = useCallback(
+    async (id: string) => {
+      try {
+        await switchSession(id)
+        toast.success("Switched session")
+      } catch (e) {
+        console.error(e)
+        toast.error("Failed to switch")
+      }
+    },
+    []
+  )
 
-  const handleUnreadClick = (sessionId: string) => {
-    const session = sessions.find((s) => s.session_id === sessionId);
-    if (session) {
-      setInboxSessionId(sessionId);
-      setInboxSessionName(session.session_name);
-      setInboxModalOpen(true);
-    }
-  };
+  const handleInboxOpen = useCallback(
+    (id: string) => {
+      const all = grouped.flatMap((g) => g.sessions)
+      const s = all.find((s) => s.session_id === id)
+      setInboxSession({
+        id,
+        name: s?.session_name || id.slice(0, 12),
+      })
+    },
+    [grouped]
+  )
 
-  const handleSwitchClick = async (sessionId: string) => {
-    const session = sessions.find((s) => s.session_id === sessionId);
-    if (!session) return;
-
-    setSwitchingSessionId(sessionId);
-    try {
-      await postSwitch(sessionId);
-      showToast(`Switched to session ${session.session_name}`, 'success');
-    } catch (err) {
-      console.error('Failed to switch session:', err);
-      showToast('Failed to switch session', 'error');
-    } finally {
-      setSwitchingSessionId(null);
-    }
-  };
-
-  // Sort groups by their top-ranked member
-  const sortedGroups = [...groupedSessions].sort((a, b) => {
-    const aTopSession = a.sessions[0];
-    const bTopSession = b.sessions[0];
-    const aIndex = sortedSessions.indexOf(aTopSession);
-    const bIndex = sortedSessions.indexOf(bTopSession);
-    return aIndex - bIndex;
-  });
-
-  if (loading) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex justify-center items-center h-full text-text-secondary text-base">
-          Loading sessions...
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex justify-center items-center h-full text-danger text-base">
-          Error loading sessions: {error.message}
-        </div>
-      </div>
-    );
-  }
+  const totalSessions = grouped.reduce((n, g) => n + g.sessions.length, 0)
 
   return (
-    <div className="flex flex-col h-full">
-      <TopBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        sortOption={sortOption}
-        onSortOptionChange={setSortOption}
-        sortDirection={sortDirection}
-        onToggleSortDirection={toggleSortDirection}
-        activeFilters={activeFilters}
-        onToggleFilter={toggleFilter}
-        groupByRepo={groupByRepo}
-        onToggleGrouping={() => setGroupByRepo(!groupByRepo)}
-        availableRepos={availableRepos}
-        selectedRepo={selectedRepo}
-        onSelectRepo={setSelectedRepo}
-      />
-
-      <div className="flex-1 overflow-y-auto p-4 max-[480px]:p-2">
-        <div className="text-text-secondary text-[0.9rem] mb-4 px-4 max-[480px]:px-2">
-          Showing {sortedSessions.length} of {sessions.length} sessions
+    <div className="space-y-4">
+      {/* Top controls */}
+      <div className="space-y-3">
+        <div className="flex gap-2 flex-wrap">
+          <Input
+            placeholder="Search sessions..."
+            value={search}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+            className="flex-1 min-w-[200px]"
+          />
+          <Toggle
+            pressed={groupByRepo}
+            onPressedChange={setGroupByRepo}
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+          >
+            Group
+          </Toggle>
+          <div className="flex items-center gap-1">
+            <Select
+              value={sortField}
+              onValueChange={(v: string) => setSortField(v as SortField)}
+            >
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="cmux">cmux order</SelectItem>
+                <SelectItem value="last_prompt">Last prompt</SelectItem>
+                <SelectItem value="unread">Unread count</SelectItem>
+                <SelectItem value="name">Name</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 w-9 p-0"
+              onClick={() => setSortReverse((r) => !r)}
+              title={sortReverse ? "Reversed" : "Normal order"}
+            >
+              {sortReverse ? "↑" : "↓"}
+            </Button>
+          </div>
         </div>
 
-        {groupByRepo ? (
-          <div className="mt-4">
-            {sortedGroups.map((group) => (
-              <SessionGroup
-                key={`${group.repo}::${group.workspace}`}
-                repo={group.repo}
-                workspace={group.workspace}
-                sessions={group.sessions}
-                cmuxAvailable={cmuxAvailable}
-                onUnreadClick={handleUnreadClick}
-                onSwitchClick={handleSwitchClick}
-                switchingSessionId={switchingSessionId}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3 mt-4 px-4 max-[480px]:px-2">
-            {sortedSessions.map((session) => (
+        {/* Filter chips */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {filterChips.map((chip) => (
+            <Badge
+              key={chip.key}
+              variant={filters.has(chip.key) ? "default" : "outline"}
+              className={cn(
+                "cursor-pointer select-none whitespace-nowrap",
+                filters.has(chip.key) && "bg-primary text-primary-foreground"
+              )}
+              onClick={() => toggleFilter(chip.key)}
+            >
+              {chip.label}
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      {/* Session list */}
+      {loading && (
+        <p className="text-sm text-muted-foreground">Loading sessions...</p>
+      )}
+
+      {!loading && totalSessions === 0 && (
+        <p className="text-sm text-muted-foreground">No sessions match your filters.</p>
+      )}
+
+      {groupByRepo
+        ? grouped
+            .filter((g) => g.sessions.length > 0)
+            .map((group, gi) => (
+              <div key={gi} className="space-y-2">
+                <div className="flex items-center gap-2">
+                  {group.workspaceColor && (
+                    <div
+                      className="w-1 h-5 rounded-full shrink-0"
+                      style={{ backgroundColor: group.workspaceColor }}
+                    />
+                  )}
+                  <div className="flex items-center gap-2 text-sm">
+                    {group.repo && (
+                      <span className="font-semibold text-foreground">
+                        {group.repo}
+                      </span>
+                    )}
+                    {group.workspace && (
+                      <span className="text-muted-foreground">
+                        / {group.workspace}
+                      </span>
+                    )}
+                    {group.branch && (
+                      <span className="font-mono text-xs text-muted-foreground">
+                        ({group.branch})
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1.5 pl-3">
+                  {group.sessions.map((session) => (
+                    <SessionCard
+                      key={session.session_id}
+                      session={session}
+                      showBranch={!group.branch}
+                      cmuxAvailable={cmuxAvailable}
+                      onSwitch={handleSwitch}
+                      onInboxOpen={handleInboxOpen}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))
+        : grouped.flatMap((g) =>
+            g.sessions.map((session) => (
               <SessionCard
                 key={session.session_id}
                 session={session}
-                showBranch={true}
+                showRepoBadge
                 cmuxAvailable={cmuxAvailable}
-                onUnreadClick={handleUnreadClick}
-                onSwitchClick={handleSwitchClick}
-                isSwitching={switchingSessionId === session.session_id}
+                onSwitch={handleSwitch}
+                onInboxOpen={handleInboxOpen}
               />
-            ))}
-          </div>
-        )}
-      </div>
+            ))
+          )}
 
-      <InboxModal
-        isOpen={inboxModalOpen}
-        sessionId={inboxSessionId}
-        sessionName={inboxSessionName}
-        onClose={() => setInboxModalOpen(false)}
-        onRefetch={refresh}
+      {/* Inbox dialog */}
+      <InboxDialog
+        sessionId={inboxSession?.id ?? null}
+        sessionName={inboxSession?.name ?? ""}
+        cmuxAvailable={cmuxAvailable}
+        onClose={() => setInboxSession(null)}
+        onRefresh={refetch}
       />
     </div>
-  );
+  )
 }
