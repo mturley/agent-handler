@@ -255,7 +255,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 
 	// Debug output when debug mode is enabled in config
 	if cfg.Debug {
-		renderDebugInfo(d, session)
+		renderDebugInfo(d, session, &input)
 	}
 
 	return nil
@@ -862,7 +862,7 @@ func formatNameList(names []string, max int) string {
 	return strings.Join(names[:max], ", ") + fmt.Sprintf(", +%d more", len(names)-max)
 }
 
-func renderDebugInfo(d *db.DB, session *db.Session) {
+func renderDebugInfo(d *db.DB, session *db.Session, input *hookInput) {
 	dim := colorDim
 	reset := colorReset
 
@@ -889,5 +889,9 @@ func renderDebugInfo(d *db.DB, session *db.Session) {
 		dim, session.CmuxWorkspaceName, session.CmuxWorkspaceID, reset)
 	fmt.Printf("%s[debug] role=%s cursor=%s%s\n",
 		dim, session.Role, cursor, reset)
+	if input != nil {
+		fmt.Printf("%s[debug] reported_cost=$%.2f%s\n",
+			dim, input.Cost.TotalCostUSD, reset)
+	}
 	fmt.Printf("%s—%s\n", dim, reset)
 }
