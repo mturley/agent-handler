@@ -98,6 +98,18 @@ Skills teach agents how to interact with handler:
 - `/handler` -- turn a session into a command center for all sessions
 - `/handler-debug` -- debug session identity and inbox state
 
+### Inbox modes
+
+Each session has an inbox mode that controls how it receives events from other sessions and watchers:
+
+| Mode | Behavior |
+|------|----------|
+| **manual** (default) | The statusline shows an unread count. The agent checks with `/inbox` when you ask. |
+| **on-submit** | The UserPromptSubmit hook notifies the agent of unread messages on every prompt, so it checks `/inbox` automatically before responding. |
+| **auto** | A cron job polls for new events every minute and invokes `/inbox --auto` in the background. When you return after being away, the agent summarizes what happened while you were gone. |
+
+Use `/inbox-mode manual`, `/inbox-mode on-submit`, or `/inbox-mode auto` to switch. Auto mode sets up a session-scoped cron job that does not survive session restarts — inbox mode resets to manual when the session ends.
+
 ## External Watchers
 
 Watch for external events (PR reviews, Jira comments, CI status) and deliver them to your sessions. Watchers cache current resource state (PR review status, Jira priority, blocked status) for use in triage.
@@ -230,4 +242,4 @@ Cost (all sessions): $48.23 today · $342.17 this month · $280.44 Jun
 
 ## Design
 
-See [docs/superpowers/specs/2026-06-15-agent-handler-design.md](docs/superpowers/specs/2026-06-15-agent-handler-design.md) for the full design spec.
+See [docs/superpowers/specs/2026-06-15-agent-handler-design.md](docs/superpowers/specs/2026-06-15-agent-handler-design.md) for the original design spec. A lot has changed since that design, and I've preserved [superpowers](https://claude.com/plugins/superpowers) specs from features I've implemented if you want to explore the evolution of this tool.
