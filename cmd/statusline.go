@@ -333,10 +333,10 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 		shortcuts = GetCmuxShortcuts()
 	}
 	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 {
-		fmt.Printf("%s·%s\n", colorDim, colorReset)
+		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 		renderAwaitingLine(session, awaitingNames, shortcuts)
 		renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
-		fmt.Printf("%s·%s\n", colorDim, colorReset)
+		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 	}
 
 	// Footer
@@ -433,10 +433,10 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 		shortcuts = GetCmuxShortcuts()
 	}
 	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 {
-		fmt.Printf("%s·%s\n", colorDim, colorReset)
+		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 		renderAwaitingLine(session, awaitingNames, shortcuts)
 		renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
-		fmt.Printf("%s·%s\n", colorDim, colorReset)
+		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 	}
 
 	// Footer (cmux shortcuts)
