@@ -182,7 +182,7 @@ handler cost --session <id>     # Single session detail (true cost, adjustments,
 handler cost --json             # Machine-readable output
 ```
 
-Cost data is captured automatically from the statusline hook (every ~10s) — no manual action needed. The summary header shows today, this month, last month, and all time:
+Cost data is captured automatically from the statusline hook (every ~10s) — no manual action needed. This is especially useful in environments like Vertex AI where Anthropic's billing dashboard and Admin API are unavailable. The summary header shows today, this month, last month, and all time:
 
 ```
 Today: $48.23 | This month: $342.17 | June: $280.44 | All time: $622.61
