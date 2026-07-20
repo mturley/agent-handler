@@ -86,14 +86,13 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	d.BumpLastActive(input.SessionID, now)
 	d.BumpLastPrompt(input.SessionID, now)
 
-	// Auto mode: catch up human cursor on real user prompts
+	// Auto mode: notify about auto-delivered events but DON'T advance human cursor.
+	// The cursor only advances when the user explicitly runs /catchup or /inbox.
 	if !isAutoInbox && session.InboxMode == "auto" {
-		// Check for auto-delivered events before advancing the cursor
 		autoCount, _ := d.AutoDeliveredCount(input.SessionID)
 		if autoCount > 0 {
-			fmt.Printf("The user is back. %d event(s) were auto-delivered while they were away. Before responding to their prompt, briefly summarize what happened — look back through your conversation for the /inbox --auto results and your responses to them since the user's last real prompt.\n", autoCount)
+			fmt.Printf("The user is back. %d event(s) were auto-delivered while they were away. Invoke the /catchup skill now before responding to their prompt.\n", autoCount)
 		}
-		d.CatchUpHumanCursor(input.SessionID)
 	}
 
 	// Sync session metadata (name, terminal)
