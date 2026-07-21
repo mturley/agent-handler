@@ -65,8 +65,12 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		args = append(args, before)
 	}
 	if sessionFilter != "" {
-		query += " AND e.session_id = ?"
-		args = append(args, sessionFilter)
+		query += ` AND (e.session_id = ? OR e.id IN (
+			SELECT er.event_id FROM event_resources er
+			JOIN subscriptions sub ON er.resource_type = sub.resource_type AND er.resource_id = sub.resource_id
+			WHERE sub.session_id = ?
+		))`
+		args = append(args, sessionFilter, sessionFilter)
 	}
 	if typeFilter != "" {
 		types := strings.Split(typeFilter, ",")
@@ -127,6 +131,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		} else {
 			events[i].Resources = resources
 		}
+	}
+
+	if events == nil {
+		events = []timelineEvent{}
 	}
 
 	// Build response

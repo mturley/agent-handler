@@ -23,25 +23,18 @@ export default function App() {
   const cmuxAvailable = capabilities?.cmux ?? false
 
   const [location, setLocation] = useLocation()
-  const activeTab = pathToTab[location] || "sessions"
-
-  const [timelineSessionFilter, setTimelineSessionFilter] = useState<string | undefined>()
-  const [sessionsSearchQuery, setSessionsSearchQuery] = useState<string | undefined>()
+  const activeTab = pathToTab[location.split("?")[0]] || "sessions"
 
   const navigateToTimeline = useCallback((sessionId: string) => {
-    setTimelineSessionFilter(sessionId)
-    setLocation("/timeline")
+    setLocation(`/timeline?session=${encodeURIComponent(sessionId)}`)
   }, [setLocation])
 
   const navigateToSessions = useCallback((sessionName: string) => {
-    setSessionsSearchQuery(sessionName)
-    setLocation("/")
+    setLocation(`/?search=${encodeURIComponent(sessionName)}`)
   }, [setLocation])
 
   const handleTabChange = useCallback((value: string) => {
     setLocation(tabPaths[value] || "/")
-    setTimelineSessionFilter(undefined)
-    setSessionsSearchQuery(undefined)
   }, [setLocation])
 
   return (
@@ -62,14 +55,12 @@ export default function App() {
             <SessionsPage
               cmuxAvailable={cmuxAvailable}
               onTimelineClick={navigateToTimeline}
-              searchQuery={sessionsSearchQuery}
             />
           </TabsContent>
 
           <TabsContent value="timeline">
             <TimelinePage
               onSessionClick={navigateToSessions}
-              sessionFilter={timelineSessionFilter}
             />
           </TabsContent>
 

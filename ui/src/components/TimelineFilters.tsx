@@ -14,25 +14,30 @@ import { cn } from "@/lib/utils"
 
 export interface TimelineFiltersProps {
   sessionFilter: string | undefined
-  sourceFilters: Set<string>
+  categoryFilters: Set<string>
   searchText: string
   onSessionFilterChange: (session: string | undefined) => void
-  onSourceFilterToggle: (source: string) => void
+  onCategoryFilterToggle: (category: string) => void
   onSearchChange: (text: string) => void
 }
 
-const SOURCE_OPTIONS = [
-  { key: "agent", label: "Agent" },
-  { key: "github", label: "GitHub" },
-  { key: "jira", label: "Jira" },
-]
+export const CATEGORY_TYPES: Record<string, string[]> = {
+  Milestones: ["milestone", "decision"],
+  Messages: ["message"],
+  Status: ["status", "blocked", "unblocked", "handoff", "followup"],
+  CI: ["ci_check_passed", "ci_check_failed"],
+  "PR Activity": ["pr_comment", "pr_review_comment", "pr_approved", "pr_merged", "pr_closed"],
+  Jira: ["jira_comment", "jira_status_change", "jira_assigned", "jira_labels_changed", "jira_description_changed"],
+}
+
+const CATEGORY_OPTIONS = Object.keys(CATEGORY_TYPES)
 
 export function TimelineFilters({
   sessionFilter,
-  sourceFilters,
+  categoryFilters,
   searchText,
   onSessionFilterChange,
-  onSourceFilterToggle,
+  onCategoryFilterToggle,
   onSearchChange,
 }: TimelineFiltersProps) {
   const [sessions, setSessions] = useState<Session[]>([])
@@ -70,21 +75,21 @@ export function TimelineFilters({
         />
       </div>
 
-      {/* Source filter chips */}
+      {/* Category filter chips */}
       <div className="flex gap-1.5 flex-wrap">
-        {SOURCE_OPTIONS.map((option) => {
-          const isActive = sourceFilters.has(option.key)
+        {CATEGORY_OPTIONS.map((category) => {
+          const isActive = categoryFilters.has(category)
           return (
             <Badge
-              key={option.key}
+              key={category}
               variant={isActive ? "default" : "outline"}
               className={cn(
                 "cursor-pointer select-none whitespace-nowrap text-sm",
                 isActive && "bg-primary text-primary-foreground"
               )}
-              onClick={() => onSourceFilterToggle(option.key)}
+              onClick={() => onCategoryFilterToggle(category)}
             >
-              {option.label}
+              {category}
             </Badge>
           )
         })}

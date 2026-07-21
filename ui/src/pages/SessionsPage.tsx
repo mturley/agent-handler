@@ -30,10 +30,9 @@ const filterChips: { key: FilterChip; label: string }[] = [
 interface SessionsPageProps {
   cmuxAvailable: boolean
   onTimelineClick: (sessionId: string) => void
-  searchQuery?: string
 }
 
-export function SessionsPage({ cmuxAvailable, onTimelineClick, searchQuery }: SessionsPageProps) {
+export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPageProps) {
   const {
     grouped,
     search,
@@ -53,12 +52,13 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, searchQuery }: Se
     unreadSessions,
   } = useSessions()
 
-  // Apply search query from navigation
+  // Apply search query from URL
   useEffect(() => {
-    if (searchQuery !== undefined) {
-      setSearch(searchQuery)
+    const urlSearch = new URLSearchParams(window.location.search).get("search")
+    if (urlSearch) {
+      setSearch(urlSearch)
     }
-  }, [searchQuery, setSearch])
+  }, [setSearch])
 
   const [inboxSession, setInboxSession] = useState<{
     id: string
@@ -288,7 +288,11 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, searchQuery }: Se
       )}
 
       {!loading && totalSessions === 0 && (
-        <p className="text-sm text-muted-foreground">No sessions match your filters.</p>
+        <p className="text-sm text-muted-foreground py-8 text-center">
+          {filters.size > 0 || search
+            ? "No sessions match your filters."
+            : "No active sessions. Start a Claude Code session to see it here."}
+        </p>
       )}
 
       {grouped.map((repo, ri) => {

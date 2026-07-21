@@ -1,15 +1,15 @@
 import { useEffect, useRef, useCallback, useState } from "react"
+import { useLocation } from "wouter"
 import { TimelineEvent } from "@/components/TimelineEvent"
-import { TimelineFilters } from "@/components/TimelineFilters"
+import { TimelineFilters, CATEGORY_TYPES } from "@/components/TimelineFilters"
 import { useTimeline } from "@/hooks/useTimeline"
 import { Loader2 } from "lucide-react"
 
 interface TimelinePageProps {
   onSessionClick: (sessionName: string) => void
-  sessionFilter?: string
 }
 
-export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }: TimelinePageProps) {
+export function TimelinePage({ onSessionClick }: TimelinePageProps) {
   const {
     events,
     loading,
@@ -20,28 +20,33 @@ export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }
     updateFilters,
   } = useTimeline()
 
-  const [sessionFilter, setSessionFilter] = useState<string | undefined>()
-  const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set())
+  const [, setLocation] = useLocation()
+
+  const sessionFilter = new URLSearchParams(window.location.search).get("session") || undefined
+  const [categoryFilters, setCategoryFilters] = useState<Set<string>>(new Set())
   const [searchText, setSearchText] = useState("")
 
-  // Apply session filter from navigation
-  useEffect(() => {
-    if (navSessionFilter !== undefined) {
-      setSessionFilter(navSessionFilter)
+  const handleSessionFilterChange = useCallback((session: string | undefined) => {
+    if (session) {
+      setLocation(`/timeline?session=${encodeURIComponent(session)}`)
+    } else {
+      setLocation("/timeline")
     }
-  }, [navSessionFilter])
+  }, [setLocation])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   // Update filters in the hook when local state changes
   useEffect(() => {
-    const sourceParam = sourceFilters.size > 0 ? Array.from(sourceFilters).join(",") : undefined
+    const selectedTypes = categoryFilters.size > 0
+      ? Array.from(categoryFilters).flatMap((cat) => CATEGORY_TYPES[cat] || [])
+      : undefined
     updateFilters({
       session: sessionFilter,
-      source: sourceParam,
+      types: selectedTypes,
       search: searchText || undefined,
     })
-  }, [sessionFilter, sourceFilters, searchText, updateFilters])
+  }, [sessionFilter, categoryFilters, searchText, updateFilters])
 
   // Infinite scroll observer
   useEffect(() => {
@@ -71,13 +76,13 @@ export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }
     }
   }, [handleSSENewEvents])
 
-  const handleSourceFilterToggle = useCallback((source: string) => {
-    setSourceFilters((prev) => {
+  const handleCategoryFilterToggle = useCallback((category: string) => {
+    setCategoryFilters((prev) => {
       const next = new Set(prev)
-      if (next.has(source)) {
-        next.delete(source)
+      if (next.has(category)) {
+        next.delete(category)
       } else {
-        next.add(source)
+        next.add(category)
       }
       return next
     })
@@ -87,10 +92,10 @@ export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }
     <div className="space-y-4">
       <TimelineFilters
         sessionFilter={sessionFilter}
-        sourceFilters={sourceFilters}
+        categoryFilters={categoryFilters}
         searchText={searchText}
-        onSessionFilterChange={setSessionFilter}
-        onSourceFilterToggle={handleSourceFilterToggle}
+        onSessionFilterChange={handleSessionFilterChange}
+        onCategoryFilterToggle={handleCategoryFilterToggle}
         onSearchChange={setSearchText}
       />
 
@@ -107,12 +112,10 @@ export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }
       )}
 
       {!loading && events.length > 0 && (
-        <div className="relative">
-          {/* Timeline line */}
-          <div className="absolute left-[12px] top-0 bottom-0 w-0 border-l-2 border-slate-700" />
-
-          {/* Events */}
-          <div className="ml-8 space-y-4">
+        <div>
+          {/* Events with timeline line */}
+          <div className="relative ml-8 space-y-4">
+            <div className="absolute -left-[20px] top-0 bottom-0 w-0 border-l-2 border-slate-700" />
             {events.map((event) => (
               <TimelineEvent key={event.id} event={event} onSessionClick={onSessionClick} />
             ))}
