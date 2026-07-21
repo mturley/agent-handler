@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
@@ -962,5 +963,66 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 		d.AdvanceCursor(input.SessionID, now)
 	}
 
+	// Migrate subscriptions from archived session with same name (session IDs
+	// change on restart, so subscriptions get orphaned on the old ID)
+	if input.SessionName != "" {
+		migrateSubscriptionsFromArchived(d, input.SessionID, input.SessionName)
+	}
+
+	// Also migrate cursor from the old session if we don't have one
+	if existingCursor == "" && input.SessionName != "" {
+		migrateOldCursor(d, input.SessionID, input.SessionName)
+	}
+
 	go discover.CleanStalePIDCaches(sessionsDir)
+}
+
+func migrateSubscriptionsFromArchived(d *db.DB, newSessionID, sessionName string) {
+	rows, err := d.Conn().Query(`
+		SELECT sub.resource_type, sub.resource_id, sub.resource_url
+		FROM subscriptions sub
+		JOIN sessions s ON sub.session_id = s.session_id
+		WHERE s.session_name = ? AND s.status = 'archived' AND s.session_id != ?
+		ORDER BY sub.created_at DESC
+	`, sessionName, newSessionID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	seen := make(map[string]bool)
+	for rows.Next() {
+		var resType, resID string
+		var resURL *string
+		rows.Scan(&resType, &resID, &resURL)
+		key := resType + ":" + resID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		d.SubscribeIfNew(db.Subscription{
+			ID:           uuid.New().String(),
+			SessionID:    newSessionID,
+			ResourceType: resType,
+			ResourceID:   resID,
+			ResourceURL:  resURL,
+			CreatedAt:    now,
+		})
+	}
+}
+
+func migrateOldCursor(d *db.DB, newSessionID, sessionName string) {
+	var oldCursor string
+	err := d.Conn().QueryRow(`
+		SELECT sc.last_seen_ts
+		FROM session_cursors sc
+		JOIN sessions s ON sc.session_id = s.session_id
+		WHERE s.session_name = ? AND s.status = 'archived' AND s.session_id != ?
+		ORDER BY s.last_active DESC
+		LIMIT 1
+	`, sessionName, newSessionID).Scan(&oldCursor)
+	if err == nil && oldCursor != "" {
+		d.AdvanceCursor(newSessionID, oldCursor)
+	}
 }

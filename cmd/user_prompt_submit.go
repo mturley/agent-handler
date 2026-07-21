@@ -163,7 +163,19 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 	// Re-registered sessions keep their old cursor so queued inbox messages aren't lost.
 	existingCursor, _ := d.GetCursor(input.SessionID)
 	if existingCursor == "" {
-		d.AdvanceCursor(input.SessionID, now)
+		// Try migrating cursor from archived session with same name
+		if input.SessionTitle != "" {
+			migrateOldCursor(d, input.SessionID, input.SessionTitle)
+		}
+		// If still no cursor, initialize to now
+		if c, _ := d.GetCursor(input.SessionID); c == "" {
+			d.AdvanceCursor(input.SessionID, now)
+		}
+	}
+
+	// Migrate subscriptions from archived session with same name
+	if input.SessionTitle != "" {
+		migrateSubscriptionsFromArchived(d, input.SessionID, input.SessionTitle)
 	}
 
 	// Auto-subscribe from .worktree-resources
