@@ -47,8 +47,5 @@ clean:
 	rm -rf $(BIN_DIR) web/dist web/node_modules
 
 dev:
-	@echo "Starting dev servers..."
-	@echo "  API server: http://localhost:8420"
-	@echo "  Vite dev:   http://localhost:5173"
-	@(cd web && npm run dev) & go run . ui --dev &
-	@wait
+	@command -v mprocs >/dev/null 2>&1 || { echo "Error: mprocs is required for dev mode. Install it: brew install mprocs"; exit 1; }
+	mprocs "go run . ui --dev" "cd web && npm run dev"
