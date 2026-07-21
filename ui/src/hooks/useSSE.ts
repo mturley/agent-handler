@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react"
 
-export function useSSE(onHeartbeat: () => void) {
-  const callbackRef = useRef(onHeartbeat)
-  callbackRef.current = onHeartbeat
+export function useSSE(onHeartbeat: () => void, onEventsNew?: () => void) {
+  const heartbeatRef = useRef(onHeartbeat)
+  heartbeatRef.current = onHeartbeat
+  const eventsNewRef = useRef(onEventsNew)
+  eventsNewRef.current = onEventsNew
 
   useEffect(() => {
     let es: EventSource | null = null
@@ -12,7 +14,11 @@ export function useSSE(onHeartbeat: () => void) {
       es = new EventSource("/api/stream")
 
       es.addEventListener("heartbeat", () => {
-        callbackRef.current()
+        heartbeatRef.current()
+      })
+
+      es.addEventListener("events_new", () => {
+        eventsNewRef.current?.()
       })
 
       es.onerror = () => {

@@ -1,4 +1,4 @@
-import type { Session, PeekState, Event, Capabilities, ActionResponse } from "./types"
+import type { Session, PeekState, Event, Capabilities, ActionResponse, EventsResponse } from "./types"
 
 const BASE = ""
 
@@ -49,4 +49,25 @@ export async function dismissInbox(sessionId: string): Promise<ActionResponse> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId }),
   })
+}
+
+export interface EventsParams {
+  before?: string
+  limit?: number
+  session?: string
+  type?: string
+  source?: string
+  search?: string
+}
+
+export async function getEvents(params: EventsParams = {}): Promise<EventsResponse> {
+  const searchParams = new URLSearchParams()
+  if (params.before) searchParams.set("before", params.before)
+  if (params.limit) searchParams.set("limit", String(params.limit))
+  if (params.session) searchParams.set("session", params.session)
+  if (params.type) searchParams.set("type", params.type)
+  if (params.source) searchParams.set("source", params.source)
+  if (params.search) searchParams.set("search", params.search)
+  const qs = searchParams.toString()
+  return fetchJSON<EventsResponse>(`/api/events${qs ? `?${qs}` : ""}`)
 }

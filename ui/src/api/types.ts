@@ -53,3 +53,20 @@ export interface ActionResponse {
   success: boolean
   output?: string
 }
+
+export interface EventResource {
+  resource_type: string
+  resource_id: string
+  resource_url?: string
+}
+
+export interface TimelineEvent extends Event {
+  session_name: string
+  resources: EventResource[]
+}
+
+export interface EventsResponse {
+  events: TimelineEvent[]
+  has_more: boolean
+  next_cursor: string
+}
