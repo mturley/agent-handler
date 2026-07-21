@@ -180,6 +180,53 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 	return sessions, nil
 }
 
+// ListSessionsByName returns all active sessions with the given name.
+func (db *DB) ListSessionsByName(name string) ([]Session, error) {
+	query := `
+		SELECT
+			session_id, harness, repo, branch,
+			COALESCE(session_name, '') as session_name,
+			COALESCE(pid, 0) as pid,
+			status,
+			inbox_mode,
+			auto_poll_interval,
+			COALESCE(role, '') as role,
+			COALESCE(terminal_type, '') as terminal_type,
+			COALESCE(terminal_id, '') as terminal_id,
+			COALESCE(cmux_workspace_id, '') as cmux_workspace_id,
+			COALESCE(cmux_workspace_name, '') as cmux_workspace_name,
+			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
+			last_active,
+			COALESCE(last_prompt, '') as last_prompt,
+			registered_at, jsonl_path
+		FROM sessions
+		WHERE session_name = ? AND status = 'active'
+		ORDER BY last_active DESC
+	`
+	rows, err := db.conn.Query(query, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions by name: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []Session
+	for rows.Next() {
+		var s Session
+		err := rows.Scan(
+			&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
+			&s.SessionName, &s.PID, &s.Status,
+			&s.InboxMode, &s.AutoPollInterval, &s.Role,
+			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
+			&s.LastActive, &s.LastPrompt, &s.RegisteredAt, &s.JSONLPath,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session row: %w", err)
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, nil
+}
+
 // BumpLastActive updates the last_active timestamp for a session.
 // Returns an error if the session is not found.
 func (db *DB) BumpLastActive(sessionID, ts string) error {
