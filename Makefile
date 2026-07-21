@@ -63,4 +63,5 @@ dev:
 		echo ""; \
 		go build -o bin/handler . && \
 		mprocs "bin/handler ui --dev" "cd ui && npm run dev"; \
+		lsof -ti :8420 2>/dev/null | xargs kill 2>/dev/null; \
 	fi
