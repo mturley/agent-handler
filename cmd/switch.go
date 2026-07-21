@@ -92,14 +92,22 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	selfSurface := os.Getenv("CMUX_SURFACE_ID")
 	selfWorkspace := os.Getenv("CMUX_WORKSPACE_ID")
 
-	// If --close-caller and we're in the same workspace as the target,
-	// move our tab to just after the target so closing it falls back to the target.
-	if switchCloseCaller && selfSurface != "" && selfSurface != session.TerminalID &&
-		selfWorkspace == session.CmuxWorkspaceID {
-		exec.Command("cmux", "reorder-surface",
-			"--surface", selfSurface,
-			"--before", session.TerminalID,
-		).Run()
+	// Reposition the caller tab before closing so focus lands correctly.
+	// Same workspace: put it just before the target so closing advances to the target.
+	// Cross workspace: put it at index 0 so closing advances to the first real tab
+	// (preserving the previously selected tab when the user returns to this workspace).
+	if switchCloseCaller && selfSurface != "" && selfSurface != session.TerminalID {
+		if selfWorkspace == session.CmuxWorkspaceID {
+			exec.Command("cmux", "reorder-surface",
+				"--surface", selfSurface,
+				"--before", session.TerminalID,
+			).Run()
+		} else {
+			exec.Command("cmux", "reorder-surface",
+				"--surface", selfSurface,
+				"--index", "0",
+			).Run()
+		}
 	}
 
 	if out, err := exec.Command("cmux", "workspace", "select",
