@@ -891,19 +891,19 @@ func renderDuplicateNameWarning(d *db.DB, session *db.Session) {
 	}
 	fmt.Printf("\033[1;31m%d sessions are active with the name %q. You may have accidentally resumed twice and caused a fork.\033[0m\n", len(dupes), session.SessionName)
 	for _, s := range dupes {
-		marker := "  "
-		if s.SessionID == session.SessionID {
-			marker = "→ "
-		}
 		promptInfo := "no prompts yet"
 		if s.LastPrompt != "" {
 			if t, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
 				promptInfo = fmt.Sprintf("last prompt %s ago", formatDuration(time.Since(t)))
 			}
 		}
-		fmt.Printf("%s  ↳ %s%s%s %s(%s, pid %d)%s\n",
-			colorDim, colorReset, marker, s.SessionID[:12],
-			colorDim, promptInfo, s.PID, colorReset)
+		if s.SessionID == session.SessionID {
+			fmt.Printf("%s  ↳ This session: %s, %s, pid %d%s\n",
+				colorDim, promptInfo, s.SessionID, s.PID, colorReset)
+		} else {
+			fmt.Printf("%s  ↳ %s, %s, pid %d%s\n",
+				colorDim, promptInfo, s.SessionID, s.PID, colorReset)
+		}
 	}
 	fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 }
