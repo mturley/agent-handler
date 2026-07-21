@@ -889,7 +889,7 @@ func renderDuplicateNameWarning(d *db.DB, session *db.Session) {
 	if err != nil || len(dupes) <= 1 {
 		return
 	}
-	fmt.Printf("\033[1;31m%d sessions are active with the name %q. You may have accidentally resumed twice and caused a fork.\033[0m\n", len(dupes), session.SessionName)
+	fmt.Printf("\033[1;31m%d sessions are active with the name %q. You may have resumed multiple times and caused a fork.\033[0m\n", len(dupes), session.SessionName)
 	for _, s := range dupes {
 		promptInfo := "no prompts yet"
 		if s.LastPrompt != "" {
