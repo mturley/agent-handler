@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -160,10 +162,18 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		return fmt.Errorf("no session_id in stdin")
 	}
 
-	// Brief writable connection for heartbeat + cost tracking, then read-only for rendering
+	// Brief writable connection for heartbeat + cost tracking + registration
 	if wd, err := openDB(); err == nil {
 		now := time.Now().UTC().Format(time.RFC3339)
-		wd.BumpLastActive(input.SessionID, now)
+
+		// Register if not yet registered
+		existing, _ := wd.GetSession(input.SessionID)
+		if existing == nil || existing.Status == "archived" {
+			registerSessionFromHook(wd, &input)
+		} else {
+			wd.BumpLastActive(input.SessionID, now)
+		}
+
 		termType, termID, workspaceID := terminal.Detect()
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID)
 		recordCostSnapshot(wd, &input)
@@ -894,4 +904,63 @@ func renderDebugInfo(d *db.DB, session *db.Session, input *hookInput) {
 			dim, input.Cost.TotalCostUSD, reset)
 	}
 	fmt.Printf("%s—%s\n", dim, reset)
+}
+
+func registerSessionFromHook(d *db.DB, input *hookInput) {
+	cwd := input.CWD
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+
+	branch := "unknown"
+	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		branch = strings.TrimSpace(string(out))
+	}
+
+	repo := "unknown"
+	if out, err := exec.Command("git", "-C", cwd, "remote", "get-url", "origin").Output(); err == nil {
+		r := strings.TrimSpace(string(out))
+		if idx := strings.Index(r, "github.com"); idx >= 0 {
+			r = r[idx+len("github.com"):]
+			r = strings.TrimPrefix(r, ":")
+			r = strings.TrimPrefix(r, "/")
+			r = strings.TrimSuffix(r, ".git")
+			repo = r
+		}
+	}
+
+	termType, termID, workspaceID := terminal.Detect()
+
+	// Check if this session has an existing cursor (re-registration after archive)
+	existingCursor, _ := d.GetCursor(input.SessionID)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	d.UpsertSession(db.Session{
+		SessionID:       input.SessionID,
+		Harness:         "claude-code",
+		Repo:            repo,
+		Branch:          branch,
+		SessionName:     input.SessionName,
+		PID:             claudePID(),
+		Status:          "active",
+		InboxMode:       "manual",
+		LastActive:      now,
+		RegisteredAt:    now,
+		JSONLPath:       input.TranscriptPath,
+		TerminalType:    termType,
+		TerminalID:      termID,
+		CmuxWorkspaceID: workspaceID,
+	})
+
+	sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
+	os.MkdirAll(sessionsDir, 0755)
+	discover.WritePIDCache(sessionsDir, claudePID(), input.SessionID)
+
+	// Only initialize cursor for brand new sessions.
+	// Re-registered sessions keep their old cursor so queued inbox messages aren't lost.
+	if existingCursor == "" {
+		d.AdvanceCursor(input.SessionID, now)
+	}
+
+	go discover.CleanStalePIDCaches(sessionsDir)
 }

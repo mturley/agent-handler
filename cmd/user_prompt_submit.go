@@ -159,8 +159,12 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 	os.MkdirAll(sessionsDir, 0755)
 	discover.WritePIDCache(sessionsDir, claudePID(), input.SessionID)
 
-	// Initialize cursor
-	d.AdvanceCursor(input.SessionID, now)
+	// Only initialize cursor for brand new sessions.
+	// Re-registered sessions keep their old cursor so queued inbox messages aren't lost.
+	existingCursor, _ := d.GetCursor(input.SessionID)
+	if existingCursor == "" {
+		d.AdvanceCursor(input.SessionID, now)
+	}
 
 	// Auto-subscribe from .worktree-resources
 	resourcesPath := filepath.Join(cwd, ".worktree-resources")
