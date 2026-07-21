@@ -61,5 +61,5 @@ dev:
 			echo "  Then add GOPATH/bin to PATH: export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""; \
 		fi; \
 		echo ""; \
-		mprocs "go run . ui --dev" "cd ui && npm run dev"; \
+		mprocs "go build -o bin/handler . && bin/handler ui --dev" "cd ui && npm run dev"; \
 	fi
