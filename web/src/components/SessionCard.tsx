@@ -42,7 +42,8 @@ export function SessionCard({
     <Card
       className={cn(
         "transition-colors",
-        session.needs_input && "border-amber-500/50"
+        session.needs_input && "border-amber-500/50",
+        session.unread_count > 0 && "border-l-4 border-l-blue-500"
       )}
     >
       <CardHeader className="pb-2 pt-3 px-4">

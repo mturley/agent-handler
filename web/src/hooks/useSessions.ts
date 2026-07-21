@@ -8,17 +8,22 @@ export type SortField = "cmux" | "last_prompt" | "unread" | "name"
 export type FilterChip =
   | "active"
   | "idle"
-  | "dead"
   | "needs_input"
   | "has_unread"
   | "blocked"
 
-export interface SessionGroup {
-  repo: string
-  workspace?: string
+export interface WorkspaceGroup {
+  workspace: string
   workspaceColor?: string
   branch?: string
+  collapsed: boolean
   sessions: Session[]
+}
+
+export interface RepoGroup {
+  repo: string
+  collapsed: boolean
+  workspaces: WorkspaceGroup[]
 }
 
 function fuzzyMatch(query: string, session: Session): boolean {
@@ -34,7 +39,6 @@ function matchesFilters(session: Session, filters: Set<FilterChip>): boolean {
   const stateFilters: DisplayState[] = []
   if (filters.has("active")) stateFilters.push("active")
   if (filters.has("idle")) stateFilters.push("idle")
-  if (filters.has("dead")) stateFilters.push("dead")
 
   // State filters are OR-ed together
   const passesState =
@@ -128,41 +132,100 @@ export function useSessions() {
     return result
   }, [sessions, search, filters, sortField, sortReverse])
 
-  const grouped = useMemo((): SessionGroup[] => {
-    if (!groupByRepo) return [{ repo: "", sessions: filtered }]
-
-    const map = new Map<string, Session[]>()
-    for (const s of filtered) {
-      const key = `${repoName(s.repo)}|${s.cmux_workspace || ""}`
-      if (!map.has(key)) map.set(key, [])
-      map.get(key)!.push(s)
+  const grouped = useMemo((): RepoGroup[] => {
+    if (!groupByRepo) {
+      // Ungrouped: single repo with single workspace containing all sessions
+      return [{
+        repo: "",
+        collapsed: false,
+        workspaces: [{
+          workspace: "",
+          collapsed: false,
+          sessions: filtered
+        }]
+      }]
     }
 
-    const groups: SessionGroup[] = []
-    for (const [key, sessions] of map) {
-      const [repo, workspace] = key.split("|")
-      const workspaceColor = sessions[0]?.cmux_workspace_color
-      // If all sessions share the same branch, hoist it to group level
-      const branches = new Set(sessions.map((s) => s.branch).filter(Boolean))
-      const sharedBranch = branches.size === 1 ? [...branches][0] : undefined
+    // First, group sessions by repo and workspace
+    const repoMap = new Map<string, Map<string, Session[]>>()
+    for (const s of filtered) {
+      const repo = repoName(s.repo)
+      const workspace = s.cmux_workspace || ""
 
-      groups.push({
+      if (!repoMap.has(repo)) {
+        repoMap.set(repo, new Map())
+      }
+      const workspaceMap = repoMap.get(repo)!
+      if (!workspaceMap.has(workspace)) {
+        workspaceMap.set(workspace, [])
+      }
+      workspaceMap.get(workspace)!.push(s)
+    }
+
+    // Build nested structure
+    const repos: RepoGroup[] = []
+    for (const [repo, workspaceMap] of repoMap) {
+      const workspaces: WorkspaceGroup[] = []
+
+      for (const [workspace, sessions] of workspaceMap) {
+        const workspaceColor = sessions[0]?.cmux_workspace_color
+        // If all sessions share the same branch, hoist it to workspace level
+        const branches = new Set(sessions.map((s) => s.branch).filter(Boolean))
+        const sharedBranch = branches.size === 1 ? [...branches][0] : undefined
+
+        workspaces.push({
+          workspace,
+          workspaceColor,
+          branch: sharedBranch,
+          collapsed: false,
+          sessions,
+        })
+      }
+
+      // Sort workspaces by the top session in each workspace
+      workspaces.sort((a, b) => {
+        if (a.sessions.length === 0 || b.sessions.length === 0) return 0
+        return sortSessions(a.sessions[0], b.sessions[0], sortField, sortReverse)
+      })
+
+      repos.push({
         repo,
-        workspace: workspace || undefined,
-        workspaceColor,
-        branch: sharedBranch,
-        sessions,
+        collapsed: false,
+        workspaces,
       })
     }
 
-    // Sort groups by the top session in each group
-    groups.sort((a, b) => {
-      if (a.sessions.length === 0 || b.sessions.length === 0) return 0
-      return sortSessions(a.sessions[0], b.sessions[0], sortField, sortReverse)
+    // Sort repos by the top session in the top workspace
+    repos.sort((a, b) => {
+      const aTop = a.workspaces[0]?.sessions[0]
+      const bTop = b.workspaces[0]?.sessions[0]
+      if (!aTop || !bTop) return 0
+      return sortSessions(aTop, bTop, sortField, sortReverse)
     })
 
-    return groups
+    return repos
   }, [filtered, groupByRepo, sortField, sortReverse])
+
+  // Compute counts for each filter chip
+  const filterCounts = useMemo(() => {
+    const allSessions = sessions.filter((s) => s.display_state !== "archived")
+    const counts: Record<FilterChip, number> = {
+      active: 0,
+      idle: 0,
+      needs_input: 0,
+      has_unread: 0,
+      blocked: 0,
+    }
+
+    for (const s of allSessions) {
+      if (s.display_state === "active") counts.active++
+      if (s.display_state === "idle") counts.idle++
+      if (s.needs_input) counts.needs_input++
+      if (s.unread_count > 0) counts.has_unread++
+    }
+
+    return counts
+  }, [sessions])
 
   return {
     sessions: filtered,
@@ -171,6 +234,7 @@ export function useSessions() {
     setSearch,
     filters,
     toggleFilter,
+    filterCounts,
     sortField,
     setSortField,
     sortReverse,
