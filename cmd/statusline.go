@@ -645,7 +645,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 		fmt.Printf(" %s·%s %s● %d direct%s", colorDim, colorReset, colorYellow, directCount, colorReset)
 	}
 	if unreadCount > 0 {
-		fmt.Printf(" %s· %s/inbox-clear%s%s to dismiss%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+		fmt.Printf(" %s· %s/inbox-clear%s%s to dismiss%s", colorDim, colorHint, colorReset, colorDim, colorReset)
 	}
 	fmt.Println()
 	return unreadCount, notifyMsg
@@ -685,7 +685,7 @@ func renderInboxModeLine(session *db.Session) {
 			rendered += fmt.Sprintf("%s%s%s", colorDim, mode, colorReset)
 		}
 	}
-	fmt.Printf("%s/inbox-mode%s: %s\n", colorCyan, colorReset, rendered)
+	fmt.Printf("%s/inbox-mode%s: %s\n", colorHint, colorReset, rendered)
 }
 
 func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, global bool) {
