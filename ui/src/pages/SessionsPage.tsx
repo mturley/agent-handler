@@ -391,7 +391,6 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
         sessionName={inboxSession?.name ?? ""}
         cmuxAvailable={cmuxAvailable}
         onClose={() => setInboxSession(null)}
-        onRefresh={refetch}
       />
     </div>
   )

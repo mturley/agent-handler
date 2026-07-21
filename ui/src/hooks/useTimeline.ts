@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect, useRef } from "react"
-import type { TimelineEvent } from "@/api/types"
+import { useState, useCallback, useMemo } from "react"
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
 import { getEvents, type EventsParams } from "@/api/client"
+import { queryKeys } from "@/api/queryKeys"
 
 export interface TimelineFilters {
   session?: string
@@ -10,77 +11,51 @@ export interface TimelineFilters {
 }
 
 export function useTimeline() {
-  const [events, setEvents] = useState<TimelineEvent[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
+  const queryClient = useQueryClient()
   const [filters, setFilters] = useState<TimelineFilters>({})
-  const filtersRef = useRef(filters)
-  filtersRef.current = filters
 
-  const buildParams = useCallback((cursor?: string): EventsParams => {
-    const params: EventsParams = { limit: 50 }
-    if (cursor) params.before = cursor
-    if (filtersRef.current.session) params.session = filtersRef.current.session
-    if (filtersRef.current.types?.length) params.type = filtersRef.current.types.join(",")
-    if (filtersRef.current.source) params.source = filtersRef.current.source
-    if (filtersRef.current.search) params.search = filtersRef.current.search
-    return params
-  }, [])
+  const filterKey = useMemo(() => ({
+    session: filters.session,
+    types: filters.types?.join(","),
+    source: filters.source,
+    search: filters.search,
+  }), [filters])
 
-  // Initial load + filter change reload
-  const loadInitial = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getEvents(buildParams())
-      setEvents(data.events)
-      setHasMore(data.has_more)
-      setNextCursor(data.next_cursor || null)
-    } catch (err) {
-      console.error("Failed to load events:", err)
-    } finally {
-      setLoading(false)
+  const {
+    data,
+    isLoading: loading,
+    isFetchingNextPage: loadingMore,
+    hasNextPage: hasMore,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    queryKey: queryKeys.events(filterKey),
+    queryFn: async ({ pageParam }: { pageParam?: string }) => {
+      const params: EventsParams = { limit: 50 }
+      if (pageParam) params.before = pageParam
+      if (filters.session) params.session = filters.session
+      if (filters.types?.length) params.type = filters.types.join(",")
+      if (filters.source) params.source = filters.source
+      if (filters.search) params.search = filters.search
+      return getEvents(params)
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.has_more ? lastPage.next_cursor : undefined,
+  })
+
+  const events = useMemo(
+    () => data?.pages.flatMap((p) => p.events) ?? [],
+    [data]
+  )
+
+  const loadMore = useCallback(() => {
+    if (hasMore && !loadingMore) {
+      fetchNextPage()
     }
-  }, [buildParams])
-
-  useEffect(() => {
-    loadInitial()
-  }, [loadInitial, filters])
-
-  // Load more (infinite scroll)
-  const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || !nextCursor) return
-    setLoadingMore(true)
-    try {
-      const data = await getEvents(buildParams(nextCursor))
-      setEvents(prev => [...prev, ...data.events])
-      setHasMore(data.has_more)
-      setNextCursor(data.next_cursor || null)
-    } catch (err) {
-      console.error("Failed to load more events:", err)
-    } finally {
-      setLoadingMore(false)
-    }
-  }, [loadingMore, hasMore, nextCursor, buildParams])
-
-  // SSE: prepend new events
-  const handleNewEvents = useCallback(async () => {
-    const params = buildParams()
-    // Only fetch events newer than the newest we have
-    if (events.length > 0) {
-      // Fetch without cursor to get latest, then prepend any we don't have
-      const data = await getEvents({ ...params, limit: 20 })
-      const existingIds = new Set(events.map(e => e.id))
-      const newEvents = data.events.filter(e => !existingIds.has(e.id))
-      if (newEvents.length > 0) {
-        setEvents(prev => [...newEvents, ...prev])
-      }
-    }
-  }, [events, buildParams])
+  }, [hasMore, loadingMore, fetchNextPage])
 
   const updateFilters = useCallback((newFilters: Partial<TimelineFilters>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }))
+    setFilters((prev) => ({ ...prev, ...newFilters }))
   }, [])
 
   const clearFilters = useCallback(() => {
@@ -91,10 +66,8 @@ export function useTimeline() {
     events,
     loading,
     loadingMore,
-    hasMore,
+    hasMore: hasMore ?? false,
     loadMore,
-    handleNewEvents,
-    filters,
     updateFilters,
     clearFilters,
   }

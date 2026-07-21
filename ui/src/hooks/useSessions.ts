@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Session, DisplayState } from "@/api/types"
 import { getSessions } from "@/api/client"
-import { useSSE } from "./useSSE"
+import { queryKeys } from "@/api/queryKeys"
 
 export type SortField = "cmux" | "last_prompt" | "unread" | "name"
 
@@ -40,14 +41,11 @@ function matchesFilters(session: Session, filters: Set<FilterChip>): boolean {
   if (filters.has("active")) stateFilters.push("active")
   if (filters.has("idle")) stateFilters.push("idle")
 
-  // State filters are OR-ed together
   const passesState =
     stateFilters.length === 0 || stateFilters.includes(session.display_state)
 
-  // Property filters are AND-ed
   if (filters.has("needs_input") && !session.needs_input) return false
   if (filters.has("has_unread") && session.unread_count === 0) return false
-  // "blocked" — no dedicated field yet, skip for now
 
   return passesState
 }
@@ -75,34 +73,23 @@ function sortSessions(a: Session, b: Session, field: SortField, reverse: boolean
 
 function repoName(repo: string): string {
   if (!repo) return "(no repo)"
-  // Extract last path component
   const parts = repo.split("/")
   return parts[parts.length - 1] || repo
 }
 
 export function useSessions() {
-  const [sessions, setSessions] = useState<Session[]>([])
+  const queryClient = useQueryClient()
+
+  const { data: sessions = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.sessions,
+    queryFn: getSessions,
+  })
+
   const [search, setSearch] = useState("")
   const [filters, setFilters] = useState<Set<FilterChip>>(new Set())
   const [sortField, setSortField] = useState<SortField>("cmux")
   const [sortReverse, setSortReverse] = useState(false)
   const [groupByRepo, setGroupByRepo] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  const fetchSessions = useCallback(() => {
-    getSessions()
-      .then((data) => {
-        setSessions(data)
-        setLoading(false)
-      })
-      .catch(console.error)
-  }, [])
-
-  useEffect(() => {
-    fetchSessions()
-  }, [fetchSessions])
-
-  useSSE(fetchSessions)
 
   const toggleFilter = useCallback((chip: FilterChip) => {
     setFilters((prev) => {
@@ -134,7 +121,6 @@ export function useSessions() {
 
   const grouped = useMemo((): RepoGroup[] => {
     if (!groupByRepo) {
-      // Group by workspace only (no repo grouping)
       const wsMap = new Map<string, Session[]>()
       for (const s of filtered) {
         const workspace = s.cmux_workspace || ""
@@ -170,7 +156,6 @@ export function useSessions() {
       }]
     }
 
-    // First, group sessions by repo and workspace
     const repoMap = new Map<string, Map<string, Session[]>>()
     for (const s of filtered) {
       const repo = repoName(s.repo)
@@ -186,14 +171,12 @@ export function useSessions() {
       workspaceMap.get(workspace)!.push(s)
     }
 
-    // Build nested structure
     const repos: RepoGroup[] = []
     for (const [repo, workspaceMap] of repoMap) {
       const workspaces: WorkspaceGroup[] = []
 
       for (const [workspace, sessions] of workspaceMap) {
         const workspaceColor = sessions[0]?.cmux_workspace_color
-        // If all sessions share the same branch, hoist it to workspace level
         const branches = new Set(sessions.map((s) => s.branch).filter(Boolean))
         const sharedBranch = branches.size === 1 ? [...branches][0] : undefined
 
@@ -206,7 +189,6 @@ export function useSessions() {
         })
       }
 
-      // Sort workspaces by the top session in each workspace
       workspaces.sort((a, b) => {
         if (a.sessions.length === 0 || b.sessions.length === 0) return 0
         return sortSessions(a.sessions[0], b.sessions[0], sortField, sortReverse)
@@ -219,7 +201,6 @@ export function useSessions() {
       })
     }
 
-    // Sort repos by the top session in the top workspace
     repos.sort((a, b) => {
       const aTop = a.workspaces[0]?.sessions[0]
       const bTop = b.workspaces[0]?.sessions[0]
@@ -235,7 +216,6 @@ export function useSessions() {
     [sessions]
   )
 
-  // Compute counts for each filter chip
   const filterCounts = useMemo(() => {
     const counts: Record<FilterChip, number> = {
       active: 0,
@@ -269,6 +249,10 @@ export function useSessions() {
     [allNonArchived]
   )
 
+  const refetch = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+  }, [queryClient])
+
   return {
     sessions: filtered,
     grouped,
@@ -284,7 +268,7 @@ export function useSessions() {
     groupByRepo,
     setGroupByRepo,
     loading,
-    refetch: fetchSessions,
+    refetch,
     awaitingSessions,
     unreadSessions,
   }

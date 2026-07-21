@@ -1,10 +1,9 @@
-import { useEffect, useRef } from "react"
+import { useEffect } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { queryKeys } from "@/api/queryKeys"
 
-export function useSSE(onHeartbeat: () => void, onEventsNew?: () => void) {
-  const heartbeatRef = useRef(onHeartbeat)
-  heartbeatRef.current = onHeartbeat
-  const eventsNewRef = useRef(onEventsNew)
-  eventsNewRef.current = onEventsNew
+export function useSSE() {
+  const queryClient = useQueryClient()
 
   useEffect(() => {
     let es: EventSource | null = null
@@ -14,11 +13,11 @@ export function useSSE(onHeartbeat: () => void, onEventsNew?: () => void) {
       es = new EventSource("/api/stream")
 
       es.addEventListener("heartbeat", () => {
-        heartbeatRef.current()
+        queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
       })
 
       es.addEventListener("events_new", () => {
-        eventsNewRef.current?.()
+        queryClient.invalidateQueries({ queryKey: ["events"] })
       })
 
       es.onerror = () => {
@@ -34,5 +33,5 @@ export function useSSE(onHeartbeat: () => void, onEventsNew?: () => void) {
       es?.close()
       if (reconnectTimer) clearTimeout(reconnectTimer)
     }
-  }, [])
+  }, [queryClient])
 }

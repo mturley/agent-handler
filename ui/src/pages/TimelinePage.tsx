@@ -1,5 +1,4 @@
 import { useEffect, useRef, useCallback, useState } from "react"
-import { useLocation } from "wouter"
 import { TimelineEvent } from "@/components/TimelineEvent"
 import { TimelineFilters, CATEGORY_TYPES } from "@/components/TimelineFilters"
 import { useTimeline } from "@/hooks/useTimeline"
@@ -16,23 +15,19 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
     loadingMore,
     hasMore,
     loadMore,
-    handleNewEvents,
     updateFilters,
   } = useTimeline()
 
-  const [, setLocation] = useLocation()
-
-  const sessionFilter = new URLSearchParams(window.location.search).get("session") || undefined
+  const initialSession = new URLSearchParams(window.location.search).get("session") || undefined
+  const [sessionFilter, setSessionFilter] = useState<string | undefined>(initialSession)
   const [categoryFilters, setCategoryFilters] = useState<Set<string>>(new Set())
   const [searchText, setSearchText] = useState("")
 
   const handleSessionFilterChange = useCallback((session: string | undefined) => {
-    if (session) {
-      setLocation(`/timeline?session=${encodeURIComponent(session)}`)
-    } else {
-      setLocation("/timeline")
-    }
-  }, [setLocation])
+    setSessionFilter(session)
+    const url = session ? `/timeline?session=${encodeURIComponent(session)}` : "/timeline"
+    window.history.replaceState(null, "", url)
+  }, [])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -62,19 +57,6 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
     observer.observe(sentinelRef.current)
     return () => observer.disconnect()
   }, [hasMore, loadingMore, loadMore])
-
-  // SSE: handle new events (wired in App.tsx later)
-  const handleSSENewEvents = useCallback(() => {
-    handleNewEvents()
-  }, [handleNewEvents])
-
-  // Expose handleSSENewEvents for SSE integration
-  useEffect(() => {
-    ;(window as any).__timelineHandleNewEvents = handleSSENewEvents
-    return () => {
-      delete (window as any).__timelineHandleNewEvents
-    }
-  }, [handleSSENewEvents])
 
   const handleCategoryFilterToggle = useCallback((category: string) => {
     setCategoryFilters((prev) => {

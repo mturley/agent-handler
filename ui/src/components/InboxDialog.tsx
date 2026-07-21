@@ -1,4 +1,5 @@
-import { useEffect, useState, useCallback } from "react"
+import { useState, useCallback } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   Dialog,
   DialogContent,
@@ -10,8 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import type { Event } from "@/api/types"
 import { getSessionInbox, dismissInbox, switchSession } from "@/api/client"
+import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
 import { toast } from "sonner"
 
@@ -20,7 +21,6 @@ interface InboxDialogProps {
   sessionName: string
   cmuxAvailable: boolean
   onClose: () => void
-  onRefresh: () => void
 }
 
 export function InboxDialog({
@@ -28,24 +28,31 @@ export function InboxDialog({
   sessionName,
   cmuxAvailable,
   onClose,
-  onRefresh,
 }: InboxDialogProps) {
-  const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [confirmDismiss, setConfirmDismiss] = useState(false)
 
-  useEffect(() => {
-    if (!sessionId) return
-    setLoading(true)
-    getSessionInbox(sessionId)
-      .then(setEvents)
-      .catch((e) => {
-        console.error(e)
-        toast.error("Failed to load inbox")
-      })
-      .finally(() => setLoading(false))
-  }, [sessionId])
+  const { data: events = [], isLoading: loading } = useQuery({
+    queryKey: queryKeys.inbox(sessionId || ""),
+    queryFn: () => getSessionInbox(sessionId!),
+    enabled: !!sessionId,
+  })
+
+  const dismissMutation = useMutation({
+    mutationFn: () => dismissInbox(sessionId!),
+    onSuccess: () => {
+      toast.success(`Dismissed ${events.length} events`)
+      queryClient.invalidateQueries({ queryKey: queryKeys.inbox(sessionId!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+      onClose()
+    },
+    onError: (e) => {
+      console.error(e)
+      toast.error("Failed to dismiss inbox")
+    },
+    onSettled: () => setConfirmDismiss(false),
+  })
 
   const toggleExpanded = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -55,20 +62,6 @@ export function InboxDialog({
       return next
     })
   }, [])
-
-  const handleDismiss = useCallback(async () => {
-    if (!sessionId) return
-    try {
-      await dismissInbox(sessionId)
-      toast.success(`Dismissed ${events.length} events`)
-      onRefresh()
-      onClose()
-    } catch (e) {
-      console.error(e)
-      toast.error("Failed to dismiss inbox")
-    }
-    setConfirmDismiss(false)
-  }, [sessionId, events.length, onRefresh, onClose])
 
   const handleSwitch = useCallback(async () => {
     if (!sessionId) return
@@ -148,7 +141,7 @@ export function InboxDialog({
                 <span className="text-xs text-muted-foreground">
                   Dismiss {events.length} event{events.length !== 1 ? "s" : ""} from {sessionName}?
                 </span>
-                <Button variant="destructive" size="sm" onClick={handleDismiss}>
+                <Button variant="destructive" size="sm" onClick={() => dismissMutation.mutate()}>
                   Confirm
                 </Button>
                 <Button

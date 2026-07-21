@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { getSessions } from "@/api/client"
-import type { Session } from "@/api/types"
+import { queryKeys } from "@/api/queryKeys"
 import { cn } from "@/lib/utils"
 
 export interface TimelineFiltersProps {
@@ -40,11 +40,10 @@ export function TimelineFilters({
   onCategoryFilterToggle,
   onSearchChange,
 }: TimelineFiltersProps) {
-  const [sessions, setSessions] = useState<Session[]>([])
-
-  useEffect(() => {
-    getSessions().then(setSessions).catch(console.error)
-  }, [])
+  const { data: sessions = [] } = useQuery({
+    queryKey: queryKeys.sessions,
+    queryFn: getSessions,
+  })
 
   return (
     <div className="space-y-3">

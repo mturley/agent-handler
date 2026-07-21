@@ -1,13 +1,11 @@
-import { useState, useEffect } from "react"
-import type { Capabilities } from "@/api/types"
+import { useQuery } from "@tanstack/react-query"
 import { getCapabilities } from "@/api/client"
+import { queryKeys } from "@/api/queryKeys"
 
 export function useCapabilities() {
-  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
-
-  useEffect(() => {
-    getCapabilities().then(setCapabilities).catch(console.error)
-  }, [])
-
-  return capabilities
+  const { data } = useQuery({
+    queryKey: queryKeys.capabilities,
+    queryFn: getCapabilities,
+  })
+  return data ?? null
 }

@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react"
+import { useCallback } from "react"
 import { useLocation } from "wouter"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toaster } from "@/components/ui/sonner"
 import { useCapabilities } from "@/hooks/useCapabilities"
+import { useSSE } from "@/hooks/useSSE"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
 
@@ -21,6 +22,7 @@ const pathToTab: Record<string, string> = {
 export default function App() {
   const capabilities = useCapabilities()
   const cmuxAvailable = capabilities?.cmux ?? false
+  useSSE()
 
   const [location, setLocation] = useLocation()
   const activeTab = pathToTab[location.split("?")[0]] || "sessions"
