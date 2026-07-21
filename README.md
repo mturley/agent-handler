@@ -2,7 +2,7 @@
 
 Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, GitHub and Jira resource watchers, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
 
-![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-statusline.png)
+![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-inbox.png)
 
 ## Install
 
