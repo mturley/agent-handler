@@ -49,7 +49,7 @@ clean:
 dev:
 	@command -v mprocs >/dev/null 2>&1 || { echo "Error: mprocs is required for dev mode. Install it: brew install mprocs"; exit 1; }
 	@if command -v air >/dev/null 2>&1; then \
-		mprocs "air -- ui --dev" "cd ui && npm run dev"; \
+		mprocs --names "API: localhost:8420,Frontend: localhost:5173" "air -- ui --api-only" "cd ui && npm run dev"; \
 	else \
 		echo ""; \
 		echo "  air not found — Go API server will not auto-reload on changes."; \
@@ -62,6 +62,6 @@ dev:
 		fi; \
 		echo ""; \
 		go build -o bin/handler .; \
-		mprocs "bin/handler ui --dev" "cd ui && npm run dev" || true; \
+		mprocs --names "API: localhost:8420,Frontend: localhost:5173" "bin/handler ui --api-only" "cd ui && npm run dev" || true; \
 	fi
 	@-lsof -ti :8420 2>/dev/null | xargs kill 2>/dev/null || true

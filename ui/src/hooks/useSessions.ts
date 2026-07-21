@@ -206,9 +206,13 @@ export function useSessions() {
     return repos
   }, [filtered, groupByRepo, sortField, sortReverse])
 
+  const allNonArchived = useMemo(
+    () => sessions.filter((s) => s.display_state !== "archived"),
+    [sessions]
+  )
+
   // Compute counts for each filter chip
   const filterCounts = useMemo(() => {
-    const allSessions = sessions.filter((s) => s.display_state !== "archived")
     const counts: Record<FilterChip, number> = {
       active: 0,
       idle: 0,
@@ -217,7 +221,7 @@ export function useSessions() {
       blocked: 0,
     }
 
-    for (const s of allSessions) {
+    for (const s of allNonArchived) {
       if (s.display_state === "active") counts.active++
       if (s.display_state === "idle") counts.idle++
       if (s.needs_input) counts.needs_input++
@@ -225,7 +229,21 @@ export function useSessions() {
     }
 
     return counts
-  }, [sessions])
+  }, [allNonArchived])
+
+  const awaitingSessions = useMemo(
+    () => allNonArchived
+      .filter((s) => s.needs_input)
+      .sort((a, b) => (a.session_name || a.session_id).localeCompare(b.session_name || b.session_id)),
+    [allNonArchived]
+  )
+
+  const unreadSessions = useMemo(
+    () => allNonArchived
+      .filter((s) => s.unread_count > 0)
+      .sort((a, b) => (a.session_name || a.session_id).localeCompare(b.session_name || b.session_id)),
+    [allNonArchived]
+  )
 
   return {
     sessions: filtered,
@@ -243,5 +261,7 @@ export function useSessions() {
     setGroupByRepo,
     loading,
     refetch: fetchSessions,
+    awaitingSessions,
+    unreadSessions,
   }
 }

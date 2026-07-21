@@ -28,7 +28,8 @@ type enrichedSession struct {
 	NeedsInput         bool           `json:"needs_input"`
 	PID                int            `json:"pid"`
 	Status             string         `json:"status"`
-	SubscriptionCount  int            `json:"subscriptions_count"`
+	SubscriptionCount     int            `json:"subscriptions_count"`
+	SubscriptionBreakdown map[string]int `json:"subscriptions_breakdown,omitempty"`
 	CmuxOrder          int            `json:"cmux_order"`
 }
 
@@ -243,11 +244,18 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		needsInput = peekState.NeedsInput
 	}
 
-	// Fetch subscriptions count
+	// Fetch subscriptions count and breakdown by type
 	subscriptionCount := 0
+	var subscriptionBreakdown map[string]int
 	subs, _ := s.DB.ListSubscriptions(session.SessionID, false)
 	if subs != nil {
 		subscriptionCount = len(subs)
+		if subscriptionCount > 0 {
+			subscriptionBreakdown = make(map[string]int)
+			for _, sub := range subs {
+				subscriptionBreakdown[sub.ResourceType]++
+			}
+		}
 	}
 
 	return enrichedSession{
@@ -268,6 +276,7 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		NeedsInput:         needsInput,
 		PID:                session.PID,
 		Status:             session.Status,
-		SubscriptionCount:  subscriptionCount,
+		SubscriptionCount:     subscriptionCount,
+		SubscriptionBreakdown: subscriptionBreakdown,
 	}
 }

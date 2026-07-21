@@ -21,20 +21,20 @@ var uiCmd = &cobra.Command{
 
 var (
 	uiPort int
-	uiDev  bool
+	uiAPIOnly  bool
 )
 
 func init() {
 	uiCmd.GroupID = "human"
 	rootCmd.AddCommand(uiCmd)
 	uiCmd.Flags().IntVar(&uiPort, "port", 8420, "HTTP server port")
-	uiCmd.Flags().BoolVar(&uiDev, "dev", false, "development mode (skip static file serving)")
+	uiCmd.Flags().BoolVar(&uiAPIOnly, "api-only", false, "serve API only (skip static file serving, for use with a separate dev server)")
 }
 
 func runUI(cmd *cobra.Command, args []string) error {
 	// Check if web assets are built
 	var webFS fs.FS
-	if !uiDev {
+	if !uiAPIOnly {
 		var err error
 		webFS, err = fs.Sub(globalWebFS, "ui/dist")
 		if err != nil {
@@ -60,7 +60,7 @@ func runUI(cmd *cobra.Command, args []string) error {
 	backendType, _, _ := terminal.Detect()
 	cmuxAvailable := backendType == "cmux"
 
-	if !cmuxAvailable && !uiDev {
+	if !cmuxAvailable && !uiAPIOnly {
 		fmt.Println("cmux not detected. Session switching and other cmux features will not be available.")
 		fmt.Print("Continue without cmux features? [y/N] ")
 		var answer string
@@ -83,17 +83,14 @@ func runUI(cmd *cobra.Command, args []string) error {
 	server := &api.Server{
 		DB:            d,
 		CmuxAvailable: cmuxAvailable,
-		DevMode:       uiDev,
+		DevMode:       uiAPIOnly,
 		WebFS:         webFS,
 		Port:          uiPort,
 		Logger:        logger,
 	}
 
-	// Open browser (in dev mode, open the Vite dev server port)
-	if uiDev {
-		url := "http://localhost:5173"
-		logger.Printf("Dev mode: Vite dev server at %s", url)
-		openBrowser(url)
+	if uiAPIOnly {
+		logger.Printf("API-only mode (static files served by Vite on port 5173)")
 	} else {
 		url := fmt.Sprintf("http://localhost:%d", uiPort)
 		logger.Printf("Opening %s in browser...", url)

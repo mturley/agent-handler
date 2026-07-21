@@ -89,6 +89,12 @@ See [docs/worktree-resources.md](docs/worktree-resources.md) for the file format
 Full design spec: `docs/superpowers/specs/2026-06-15-agent-handler-design.md`
 Phase 1 implementation plan: `docs/superpowers/plans/2026-06-15-phase1-core-ledger.md`
 
+## Web UI Development
+
+The web UI lives in `ui/` (React + shadcn/ui + Tailwind v3). The API server is in `cmd/api/`.
+
+**Dev server:** Run `make dev` to start both the Go API server and the Vite dev server via mprocs. The Vite dev server runs on **port 5173** — use this port when accessing the UI with Playwright or a browser. Do NOT start the dev server yourself; ask the user to run `make dev` if it isn't already running.
+
 ## Key Conventions
 
 - Event IDs are UUIDs (not auto-increment)

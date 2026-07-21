@@ -24,12 +24,14 @@ import (
 
 // ANSI color constants
 const (
-	colorCyan       = "\033[36m"
-	colorYellow     = "\033[33m"
-	colorGreen      = "\033[32m"
-	colorRed        = "\033[31m"
-	colorPurple     = "\033[35m"
-	colorBlue       = "\033[34m"
+	colorCyan        = "\033[36m"
+	colorYellow      = "\033[33m"
+	colorBoldYellow  = "\033[1;33m"
+	colorGreen       = "\033[32m"
+	colorRed         = "\033[31m"
+	colorPurple      = "\033[35m"
+	colorBlue        = "\033[34m"
+	colorHint        = "\033[35m"
 	colorBoldWhite  = "\033[1;37m"
 	colorBoldGreen  = "\033[1;32m"
 	colorDim        = "\033[2m"
@@ -355,7 +357,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 		renderCmuxShortcutsLine(shortcuts)
 	}
 	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
-		colorDim, colorCyan, colorReset, colorDim, colorReset)
+		colorDim, colorHint, colorReset, colorDim, colorReset)
 
 	return nil
 }
@@ -402,7 +404,7 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 
 	// Line 1: Sessions overview
 	fmt.Printf("%s[Handler]%s %sSessions%s: %d active, %d blocked %s· %s/handler%s %sto summarize all sessions%s\n",
-		colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, colorDim, colorCyan, colorReset, colorDim, colorReset)
+		colorPurple, colorReset, "\033[1m", colorReset, activeCount, blockedCount, colorDim, colorHint, colorReset, colorDim, colorReset)
 
 	// Model line (if from hook)
 	if input != nil && input.Model.DisplayName != "" {
@@ -469,12 +471,12 @@ func renderAwaitingLine(session *db.Session, awaitingNames []string, shortcuts *
 	}
 	if shortcuts != nil && shortcuts.SwitchToAwaiting != "" {
 		fmt.Printf("%s%d other %s awaiting approval%s %s· %s%s%s to switch%s\n",
-			colorYellow, count, label, colorReset, colorDim, colorCyan, shortcuts.SwitchToAwaiting, colorReset+colorDim, colorReset)
+			colorBoldYellow, count, label, colorReset, colorDim, colorHint, shortcuts.SwitchToAwaiting, colorReset+colorDim, colorReset)
 	} else {
-		fmt.Printf("%s%d other %s awaiting approval%s\n", colorYellow, count, label, colorReset)
+		fmt.Printf("%s%d other %s awaiting approval%s\n", colorBoldYellow, count, label, colorReset)
 	}
 	nameList := formatNameList(awaitingNames, 5)
-	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorYellow, nameList, colorReset)
+	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorBoldYellow, nameList, colorReset)
 }
 
 func renderUnreadSessionsLine(session *db.Session, unreadSessionNames []string, shortcuts *CmuxShortcuts) {
@@ -488,28 +490,28 @@ func renderUnreadSessionsLine(session *db.Session, unreadSessionNames []string, 
 	}
 	if shortcuts != nil && shortcuts.SwitchToUnread != "" {
 		fmt.Printf("%s%d other %s with unread messages%s %s· %s%s%s to switch%s\n",
-			colorYellow, count, label, colorReset, colorDim, colorCyan, shortcuts.SwitchToUnread, colorReset+colorDim, colorReset)
+			colorCyan, count, label, colorReset, colorDim, colorHint, shortcuts.SwitchToUnread, colorReset+colorDim, colorReset)
 	} else {
-		fmt.Printf("%s%d other %s with unread messages%s\n", colorYellow, count, label, colorReset)
+		fmt.Printf("%s%d other %s with unread messages%s\n", colorCyan, count, label, colorReset)
 	}
 	nameList := formatNameList(unreadSessionNames, 5)
-	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorYellow, nameList, colorReset)
+	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorCyan, nameList, colorReset)
 }
 
 func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
 	if shortcuts == nil {
 		fmt.Printf("%sRun %shandler setup%s%s from within cmux to set up keyboard shortcuts%s\n",
-			colorDim, colorCyan, colorReset, colorDim, colorReset)
+			colorDim, colorHint, colorReset, colorDim, colorReset)
 		return
 	}
 	var parts []string
 	if shortcuts.SwitchToSession != "" {
-		parts = append(parts, fmt.Sprintf("%s%s%s to switch sessions", colorCyan, shortcuts.SwitchToSession, colorReset+colorDim))
+		parts = append(parts, fmt.Sprintf("%s%s%s to switch sessions", colorHint, shortcuts.SwitchToSession, colorReset+colorDim))
 	}
 	if shortcuts.FocusBack != "" && shortcuts.FocusForward != "" {
 		parts = append(parts, fmt.Sprintf("%s%s%s and %s%s%s for focus back and forward",
-			colorCyan, shortcuts.FocusBack, colorReset+colorDim,
-			colorCyan, shortcuts.FocusForward, colorReset+colorDim))
+			colorHint, shortcuts.FocusBack, colorReset+colorDim,
+			colorHint, shortcuts.FocusForward, colorReset+colorDim))
 	}
 	if len(parts) > 0 {
 		fmt.Printf("%s%s%s\n", colorDim, strings.Join(parts, " · "), colorReset)
@@ -625,7 +627,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 			noMsgLabel = "No new events"
 		}
 		fmt.Printf("%s/inbox%s: %s %s· %s%s/message%s%s to talk to other sessions%s",
-			colorCyan, colorReset, noMsgLabel, colorDim, colorDim, colorCyan, colorReset, colorDim, colorReset)
+			colorHint, colorReset, noMsgLabel, colorDim, colorDim, colorHint, colorReset, colorDim, colorReset)
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {
@@ -635,7 +637,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 		if len(breakdownParts) > 0 {
 			breakdownStr = fmt.Sprintf(" (%s)", strings.Join(breakdownParts, ", "))
 		}
-		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", colorCyan, colorReset, colorYellow, unreadCount, colorReset, breakdownStr)
+		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", colorHint, colorReset, colorYellow, unreadCount, colorReset, breakdownStr)
 		notifyMsg = fmt.Sprintf("%d unread%s", unreadCount, breakdownStr)
 	}
 
@@ -643,7 +645,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 		fmt.Printf(" %s·%s %s● %d direct%s", colorDim, colorReset, colorYellow, directCount, colorReset)
 	}
 	if unreadCount > 0 {
-		fmt.Printf(" %s· %s/inbox-clear%s%s to dismiss%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+		fmt.Printf(" %s· %s/inbox-clear%s%s to dismiss%s", colorDim, colorHint, colorReset, colorDim, colorReset)
 	}
 	fmt.Println()
 	return unreadCount, notifyMsg
@@ -668,7 +670,7 @@ func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
 		msgWord = "message"
 	}
 	fmt.Printf("%s  ● %d %s auto-delivered%s %s· %s/catchup%s %sfor a summary%s\n",
-		colorYellow, autoCount, msgWord, colorReset, colorDim, colorCyan, colorReset, colorDim, colorReset)
+		colorYellow, autoCount, msgWord, colorReset, colorDim, colorHint, colorReset, colorDim, colorReset)
 }
 
 func renderInboxModeLine(session *db.Session) {
@@ -683,7 +685,7 @@ func renderInboxModeLine(session *db.Session) {
 			rendered += fmt.Sprintf("%s%s%s", colorDim, mode, colorReset)
 		}
 	}
-	fmt.Printf("%s/inbox-mode%s: %s\n", colorCyan, colorReset, rendered)
+	fmt.Printf("%s/inbox-mode%s: %s\n", colorHint, colorReset, rendered)
 }
 
 func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, global bool) {
@@ -844,16 +846,16 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 				middleSegment = fmt.Sprintf(" %s| %s%s", colorDim, colorReset, resourceLinks)
 			} else {
 				// Will be on a separate line
-				fmt.Printf("%s/watching%s: %s%s%s%s%s\n", colorCyan, colorReset, subSummary, middleSegment, colorDim, watcherStatus, colorReset)
+				fmt.Printf("%s/watching%s: %s%s%s%s%s\n", colorHint, colorReset, subSummary, middleSegment, colorDim, watcherStatus, colorReset)
 				fmt.Printf("%s  ↳ %s%s\n", colorDim, colorReset, resourceLinks)
 				return
 			}
 		} else {
-			middleSegment = fmt.Sprintf(" %s· %s/watch%s%s to follow PRs or Jira issues%s", colorDim, colorCyan, colorReset, colorDim, colorReset)
+			middleSegment = fmt.Sprintf(" %s· %s/watch%s%s to follow PRs or Jira issues%s", colorDim, colorHint, colorReset, colorDim, colorReset)
 		}
 	}
 
-	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", colorCyan, colorReset, subSummary, middleSegment, colorDim, watcherStatus, colorReset)
+	fmt.Printf("%s/watching%s: %s%s%s%s%s\n", colorHint, colorReset, subSummary, middleSegment, colorDim, watcherStatus, colorReset)
 }
 
 // shortResourceLabel returns a compact label for a resource.

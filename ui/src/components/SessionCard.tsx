@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
+import { CircleAlert, ArrowUpRight, Mail } from "lucide-react"
+import { formatEventType } from "@/utils/formatLabel"
 
 const stateColors: Record<string, string> = {
   active: "bg-green-500",
@@ -43,7 +45,7 @@ export function SessionCard({
       className={cn(
         "transition-colors",
         session.needs_input && "border-amber-500/50",
-        session.unread_count > 0 && "border-l-4 border-l-blue-500"
+        session.unread_count > 0 && !session.needs_input && "border-blue-500/50"
       )}
     >
       <CardHeader className="pb-2 pt-3 px-4">
@@ -54,8 +56,9 @@ export function SessionCard({
             />
             <span className="font-semibold text-sm truncate">{name}</span>
             {session.needs_input && (
-              <span className="text-amber-500 shrink-0" title="Needs input">
-                &#9995;
+              <span className="inline-flex items-center gap-1 text-amber-500 shrink-0">
+                <CircleAlert className="h-4 w-4" />
+                <span className="text-xs font-medium">Awaiting approval</span>
               </span>
             )}
             <span className="text-xs text-muted-foreground">
@@ -63,15 +66,6 @@ export function SessionCard({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            {session.unread_count > 0 && (
-              <Badge
-                variant="secondary"
-                className="cursor-pointer hover:bg-accent"
-                onClick={() => onInboxOpen(session.session_id)}
-              >
-                {session.unread_count} unread
-              </Badge>
-            )}
             {cmuxAvailable && session.display_state !== "dead" && (
               <Button
                 variant="outline"
@@ -80,11 +74,28 @@ export function SessionCard({
                 onClick={() => onSwitch(session.session_id)}
               >
                 Switch
+                <ArrowUpRight className="h-3 w-3 ml-1" />
               </Button>
             )}
           </div>
         </div>
       </CardHeader>
+      {session.unread_count > 0 && (
+        <div
+          className="px-4 pb-0 -mt-1 pl-8 cursor-pointer"
+          onClick={() => onInboxOpen(session.session_id)}
+        >
+          <span className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs">
+            <Mail className="h-3.5 w-3.5" />
+            {session.unread_breakdown
+              ? Object.entries(session.unread_breakdown)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([type, count]) => `${count} ${formatEventType(type)}`)
+                  .join(", ")
+              : `${session.unread_count} unread`}
+          </span>
+        </div>
+      )}
       <CardContent className="px-4 pb-3 pt-0">
         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
           {showRepoBadge && session.repo && (
@@ -105,7 +116,15 @@ export function SessionCard({
           )}
           {session.subscriptions_count > 0 && (
             <Badge variant="outline" className="text-xs font-normal">
-              {session.subscriptions_count} resource{session.subscriptions_count !== 1 ? "s" : ""}
+              {session.subscriptions_breakdown
+                ? Object.entries(session.subscriptions_breakdown)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([type, count]) => {
+                      const label = type === "github_pr" ? "PR" : type === "jira_issue" ? "Jira" : formatEventType(type)
+                      return `${count} ${label}`
+                    })
+                    .join(", ")
+                : `${session.subscriptions_count} resource${session.subscriptions_count !== 1 ? "s" : ""}`}
             </Badge>
           )}
         </div>

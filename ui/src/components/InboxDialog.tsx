@@ -101,7 +101,7 @@ export function InboxDialog({
           {events.map((ev) => (
             <div key={ev.id} className="py-2">
               <div
-                className="flex items-center gap-2 cursor-pointer"
+                className="flex items-center gap-2 cursor-pointer select-none"
                 onClick={() => toggleExpanded(ev.id)}
               >
                 <Badge variant="outline" className="text-xs shrink-0">

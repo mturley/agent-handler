@@ -19,6 +19,7 @@ export interface Session {
   pid: number
   status: string
   subscriptions_count: number
+  subscriptions_breakdown?: Record<string, number>
   cmux_order: number
 }
 

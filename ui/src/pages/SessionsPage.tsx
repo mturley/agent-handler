@@ -16,6 +16,9 @@ import { useSessions, type FilterChip, type SortField } from "@/hooks/useSession
 import { switchSession } from "@/api/client"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { formatEventType } from "@/utils/formatLabel"
 
 const filterChips: { key: FilterChip; label: string }[] = [
   { key: "active", label: "Active" },
@@ -44,6 +47,8 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
     setGroupByRepo,
     loading,
     refetch,
+    awaitingSessions,
+    unreadSessions,
   } = useSessions()
 
   const [inboxSession, setInboxSession] = useState<{
@@ -153,31 +158,115 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
               onClick={() => setSortReverse((r) => !r)}
               title={sortReverse ? "Reversed" : "Normal order"}
             >
-              {sortReverse ? "↑" : "↓"}
+              {sortReverse ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
             </Button>
           </div>
         </div>
+
+        {/* Attention summary */}
+        {(awaitingSessions.length > 0 || unreadSessions.length > 0) && (
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="px-4 py-3 space-y-3">
+              {awaitingSessions.length > 0 && (
+                <div className="flex items-start gap-2.5">
+                  <CircleAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-base font-bold text-amber-500">
+                      {awaitingSessions.length} session{awaitingSessions.length !== 1 ? "s" : ""} awaiting approval
+                    </span>
+                    <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
+                      {awaitingSessions.map((s) => (
+                        <Button
+                          key={s.session_id}
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!cmuxAvailable}
+                          onClick={() => handleSwitch(s.session_id)}
+                        >
+                          {s.session_name || s.session_id.slice(0, 12)}
+                          <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {unreadSessions.length > 0 && (
+                <div className="flex items-start gap-2.5">
+                  <Mail className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-base font-bold text-blue-400">
+                      {unreadSessions.length} session{unreadSessions.length !== 1 ? "s" : ""} with unread messages
+                    </span>
+                    <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
+                      {unreadSessions.map((s) => {
+                        const breakdown = s.unread_breakdown
+                          ? Object.entries(s.unread_breakdown)
+                              .sort(([a], [b]) => a.localeCompare(b))
+                              .map(([type, count]) => `${count} ${formatEventType(type)}`)
+                              .join(", ")
+                          : ""
+                        return (
+                          <Button
+                            key={s.session_id}
+                            variant="outline"
+                            size="sm"
+                            className="h-auto py-1 text-xs"
+                            disabled={!cmuxAvailable}
+                            onClick={() => handleSwitch(s.session_id)}
+                          >
+                            {s.session_name || s.session_id.slice(0, 12)}
+                            {breakdown && (
+                              <span className="text-muted-foreground ml-1">({breakdown})</span>
+                            )}
+                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Filter chips */}
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           {filterChips.map((chip) => {
             const count = filterCounts[chip.key]
             const isActive = filters.has(chip.key)
-            const shouldHighlight =
-              !isActive && count > 0 && (chip.key === "needs_input" || chip.key === "has_unread")
+            const highlightAmber = count > 0 && chip.key === "needs_input"
+            const highlightBlue = count > 0 && chip.key === "has_unread"
 
             return (
               <Badge
                 key={chip.key}
                 variant={isActive ? "default" : "outline"}
                 className={cn(
-                  "cursor-pointer select-none whitespace-nowrap",
+                  "cursor-pointer select-none whitespace-nowrap gap-1.5 text-sm",
                   isActive && "bg-primary text-primary-foreground",
-                  shouldHighlight && "bg-amber-100 border-amber-400 text-amber-900 dark:bg-amber-950 dark:border-amber-700 dark:text-amber-200"
                 )}
                 onClick={() => toggleFilter(chip.key)}
               >
-                {chip.label} ({count})
+                {chip.label}
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-full text-xs font-bold leading-none min-w-[20px] h-[20px] px-1",
+                      highlightAmber
+                        ? "bg-amber-500 text-black font-extrabold"
+                        : highlightBlue
+                        ? "bg-blue-500 text-white font-extrabold"
+                        : isActive
+                          ? "bg-primary-foreground/20 text-primary-foreground"
+                          : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
               </Badge>
             )
           })}
@@ -207,9 +296,10 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
                     className="flex items-center gap-2 cursor-pointer select-none"
                     onClick={() => toggleRepoCollapse(repo.repo)}
                   >
-                    <span className="text-sm text-muted-foreground">
-                      {repoCollapsed ? "▸" : "▾"}
-                    </span>
+                    {repoCollapsed
+                      ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    }
                     <span className="font-bold text-foreground">{repo.repo}</span>
                   </div>
                 )}
@@ -222,15 +312,13 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
                     const wsCollapsed = collapsed.has(wsKey)
 
                     return (
-                      <div key={wi} className="space-y-2">
+                      <div key={wi} className="space-y-2 pl-6">
                         {/* Workspace header with color bar */}
-                        <div className="flex items-start gap-2">
-                          {workspace.workspaceColor && (
-                            <div
-                              className="w-1 h-full min-h-[20px] rounded-full shrink-0"
-                              style={{ backgroundColor: workspace.workspaceColor }}
-                            />
-                          )}
+                        <div className="flex items-stretch gap-2">
+                          <div
+                            className="w-1 rounded-full shrink-0"
+                            style={{ backgroundColor: workspace.workspaceColor || "transparent" }}
+                          />
                           <div className="flex-1 space-y-2">
                             <div
                               className="flex items-center gap-2 cursor-pointer select-none"
@@ -238,9 +326,10 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
                                 toggleWorkspaceCollapse(repo.repo, workspace.workspace)
                               }
                             >
-                              <span className="text-sm text-muted-foreground">
-                                {wsCollapsed ? "▸" : "▾"}
-                              </span>
+                              {wsCollapsed
+                                ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                                : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                              }
                               {workspace.workspace && (
                                 <span className="text-sm text-muted-foreground">
                                   {workspace.workspace}
