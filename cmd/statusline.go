@@ -19,6 +19,7 @@ import (
 	gitpkg "github.com/mturley/agent-handler/git"
 	"github.com/mturley/agent-handler/terminal"
 	"github.com/mturley/agent-handler/watcher"
+	"github.com/mturley/agent-handler/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -994,18 +995,46 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 
 	// Only initialize cursor for brand new sessions.
 	// Re-registered sessions keep their old cursor so queued inbox messages aren't lost.
-	if existingCursor == "" {
+	isNewSession := existingCursor == ""
+	if isNewSession {
 		d.AdvanceCursor(input.SessionID, now)
+
+		// Auto-subscribe from .worktree-resources (first registration only)
+		resourcesPath := filepath.Join(cwd, ".worktree-resources")
+		resources, err := worktree.ReadResources(resourcesPath)
+		if err == nil && len(resources) > 0 {
+			resCfg, _ := config.Read(config.DefaultPath())
+			for _, r := range resources {
+				resourceType, resourceID := worktree.ParseResourceID(r.ID)
+				if resourceType == "" {
+					continue
+				}
+				resURL := r.URL
+				if resURL == "" && resCfg != nil {
+					resURL = resCfg.DefaultResourceURL(resourceType, resourceID)
+				}
+				var urlPtr *string
+				if resURL != "" {
+					urlPtr = &resURL
+				}
+				d.SubscribeIfNew(db.Subscription{
+					ID:           uuid.New().String(),
+					SessionID:    input.SessionID,
+					ResourceType: resourceType,
+					ResourceID:   resourceID,
+					ResourceURL:  urlPtr,
+					CreatedAt:    now,
+				})
+			}
+		}
 	}
 
-	// Migrate subscriptions from archived session with same name (session IDs
-	// change on restart, so subscriptions get orphaned on the old ID)
+	// Migrate subscriptions and cursor from archived session with same name
+	// (session IDs change on restart, so subscriptions get orphaned on the old ID)
 	if input.SessionName != "" {
 		migrateSubscriptionsFromArchived(d, input.SessionID, input.SessionName)
 	}
-
-	// Also migrate cursor from the old session if we don't have one
-	if existingCursor == "" && input.SessionName != "" {
+	if isNewSession && input.SessionName != "" {
 		migrateOldCursor(d, input.SessionID, input.SessionName)
 	}
 
