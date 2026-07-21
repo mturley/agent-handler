@@ -1,34 +1,48 @@
 import { useState, useCallback } from "react"
+import { useLocation } from "wouter"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toaster } from "@/components/ui/sonner"
 import { useCapabilities } from "@/hooks/useCapabilities"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
 
+const tabPaths: Record<string, string> = {
+  sessions: "/",
+  timeline: "/timeline",
+  resources: "/resources",
+}
+
+const pathToTab: Record<string, string> = {
+  "/": "sessions",
+  "/timeline": "timeline",
+  "/resources": "resources",
+}
+
 export default function App() {
   const capabilities = useCapabilities()
   const cmuxAvailable = capabilities?.cmux ?? false
 
-  const [activeTab, setActiveTab] = useState("sessions")
+  const [location, setLocation] = useLocation()
+  const activeTab = pathToTab[location] || "sessions"
+
   const [timelineSessionFilter, setTimelineSessionFilter] = useState<string | undefined>()
   const [sessionsSearchQuery, setSessionsSearchQuery] = useState<string | undefined>()
 
   const navigateToTimeline = useCallback((sessionId: string) => {
     setTimelineSessionFilter(sessionId)
-    setActiveTab("timeline")
-  }, [])
+    setLocation("/timeline")
+  }, [setLocation])
 
   const navigateToSessions = useCallback((sessionName: string) => {
     setSessionsSearchQuery(sessionName)
-    setActiveTab("sessions")
-  }, [])
+    setLocation("/")
+  }, [setLocation])
 
   const handleTabChange = useCallback((value: string) => {
-    setActiveTab(value)
-    // Clear navigation state when manually switching tabs
+    setLocation(tabPaths[value] || "/")
     setTimelineSessionFilter(undefined)
     setSessionsSearchQuery(undefined)
-  }, [])
+  }, [setLocation])
 
   return (
     <div className="min-h-screen bg-background">

@@ -321,6 +321,8 @@ func scanAwaitingApproval(d *db.DB, selfSessionID string) []string {
 
 // renderWorkerStatusline outputs the complete statusline for a regular session.
 func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, gs *gitpkg.Status, awaitingNames []string, unreadSessionNames []string) error {
+	renderDuplicateNameWarning(d, session)
+
 	// Line 1: Git status
 	if gs != nil && gs.InGit {
 		fmt.Println(formatGitLine(gs))
@@ -364,6 +366,8 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 
 // renderHandlerStatusline outputs the complete statusline for a handler session.
 func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, awaitingNames []string, unreadSessionNames []string) error {
+	renderDuplicateNameWarning(d, session)
+
 	// Count active sessions
 	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
@@ -877,6 +881,20 @@ func formatNameList(names []string, max int) string {
 	return strings.Join(names[:max], ", ") + fmt.Sprintf(", +%d more", len(names)-max)
 }
 
+func renderDuplicateNameWarning(d *db.DB, session *db.Session) {
+	if session.SessionName == "" {
+		return
+	}
+	var count int
+	d.Conn().QueryRow(`
+		SELECT COUNT(*) FROM sessions WHERE session_name = ? AND status = 'active'
+	`, session.SessionName).Scan(&count)
+	if count > 1 {
+		fmt.Printf("\033[1;31m%d sessions are active with the name %q. You may have accidentally resumed twice and caused a fork.\033[0m\n", count, session.SessionName)
+		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
+	}
+}
+
 func renderDebugInfo(d *db.DB, session *db.Session, input *hookInput) {
 	dim := colorDim
 	reset := colorReset
@@ -982,29 +1000,48 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 }
 
 func migrateSubscriptionsFromArchived(d *db.DB, newSessionID, sessionName string) {
+	// Don't migrate if there's another active session with the same name (duplicate window)
+	var activeCount int
+	d.Conn().QueryRow(`
+		SELECT COUNT(*) FROM sessions WHERE session_name = ? AND status = 'active'
+	`, sessionName).Scan(&activeCount)
+	if activeCount > 1 {
+		return
+	}
+
+	// Don't migrate if this session already has subscriptions
+	existingSubs, _ := d.ListSubscriptions(newSessionID, false)
+	if len(existingSubs) > 0 {
+		return
+	}
+
+	// Find the most recently archived session with this name
+	var archivedID string
+	err := d.Conn().QueryRow(`
+		SELECT session_id FROM sessions
+		WHERE session_name = ? AND status = 'archived' AND session_id != ?
+		ORDER BY last_active DESC LIMIT 1
+	`, sessionName, newSessionID).Scan(&archivedID)
+	if err != nil || archivedID == "" {
+		return
+	}
+
 	rows, err := d.Conn().Query(`
-		SELECT sub.resource_type, sub.resource_id, sub.resource_url
-		FROM subscriptions sub
-		JOIN sessions s ON sub.session_id = s.session_id
-		WHERE s.session_name = ? AND s.status = 'archived' AND s.session_id != ?
-		ORDER BY sub.created_at DESC
-	`, sessionName, newSessionID)
+		SELECT resource_type, resource_id, resource_url
+		FROM subscriptions
+		WHERE session_id = ?
+		ORDER BY created_at DESC
+	`, archivedID)
 	if err != nil {
 		return
 	}
 	defer rows.Close()
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	seen := make(map[string]bool)
 	for rows.Next() {
 		var resType, resID string
 		var resURL *string
 		rows.Scan(&resType, &resID, &resURL)
-		key := resType + ":" + resID
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
 		d.SubscribeIfNew(db.Subscription{
 			ID:           uuid.New().String(),
 			SessionID:    newSessionID,
@@ -1017,6 +1054,15 @@ func migrateSubscriptionsFromArchived(d *db.DB, newSessionID, sessionName string
 }
 
 func migrateOldCursor(d *db.DB, newSessionID, sessionName string) {
+	// Don't migrate if there's another active session with the same name (duplicate window)
+	var activeCount int
+	d.Conn().QueryRow(`
+		SELECT COUNT(*) FROM sessions WHERE session_name = ? AND status = 'active'
+	`, sessionName).Scan(&activeCount)
+	if activeCount > 1 {
+		return
+	}
+
 	var oldCursor string
 	err := d.Conn().QueryRow(`
 		SELECT sc.last_seen_ts

@@ -34,9 +34,26 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/actions/peek", s.handleForcePeek)
 	mux.HandleFunc("POST /api/actions/dismiss-inbox", s.handleDismissInbox)
 
-	// Static files (skip in dev mode — Vite serves them)
+	// Static files with SPA fallback (skip in dev mode — Vite serves them)
 	if !s.DevMode && s.WebFS != nil {
-		mux.Handle("/", http.FileServer(http.FS(s.WebFS)))
+		fileServer := http.FileServer(http.FS(s.WebFS))
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			// Try serving the actual file first
+			if r.URL.Path != "/" {
+				if _, err := fs.Stat(s.WebFS, r.URL.Path[1:]); err == nil {
+					fileServer.ServeHTTP(w, r)
+					return
+				}
+			}
+			// SPA fallback: serve index.html for all non-file paths
+			indexData, err := fs.ReadFile(s.WebFS, "index.html")
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "text/html")
+			w.Write(indexData)
+		})
 	}
 
 	addr := fmt.Sprintf(":%d", s.Port)

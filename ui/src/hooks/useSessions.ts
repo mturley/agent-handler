@@ -86,7 +86,7 @@ export function useSessions() {
   const [filters, setFilters] = useState<Set<FilterChip>>(new Set())
   const [sortField, setSortField] = useState<SortField>("cmux")
   const [sortReverse, setSortReverse] = useState(false)
-  const [groupByRepo, setGroupByRepo] = useState(true)
+  const [groupByRepo, setGroupByRepo] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const fetchSessions = useCallback(() => {
@@ -134,15 +134,39 @@ export function useSessions() {
 
   const grouped = useMemo((): RepoGroup[] => {
     if (!groupByRepo) {
-      // Ungrouped: single repo with single workspace containing all sessions
+      // Group by workspace only (no repo grouping)
+      const wsMap = new Map<string, Session[]>()
+      for (const s of filtered) {
+        const workspace = s.cmux_workspace || ""
+        if (!wsMap.has(workspace)) {
+          wsMap.set(workspace, [])
+        }
+        wsMap.get(workspace)!.push(s)
+      }
+
+      const workspaces: WorkspaceGroup[] = []
+      for (const [workspace, sessions] of wsMap) {
+        const workspaceColor = sessions[0]?.cmux_workspace_color
+        const branches = new Set(sessions.map((s) => s.branch).filter(Boolean))
+        const sharedBranch = branches.size === 1 ? [...branches][0] : undefined
+        workspaces.push({
+          workspace,
+          workspaceColor,
+          branch: sharedBranch,
+          collapsed: false,
+          sessions,
+        })
+      }
+
+      workspaces.sort((a, b) => {
+        if (a.sessions.length === 0 || b.sessions.length === 0) return 0
+        return sortSessions(a.sessions[0], b.sessions[0], sortField, sortReverse)
+      })
+
       return [{
         repo: "",
         collapsed: false,
-        workspaces: [{
-          workspace: "",
-          collapsed: false,
-          sessions: filtered
-        }]
+        workspaces,
       }]
     }
 

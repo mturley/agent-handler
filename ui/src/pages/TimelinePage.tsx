@@ -109,10 +109,10 @@ export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }
       {!loading && events.length > 0 && (
         <div className="relative">
           {/* Timeline line */}
-          <div className="absolute left-3 top-0 bottom-0 w-0 border-l-2 border-slate-700" />
+          <div className="absolute left-[12px] top-0 bottom-0 w-0 border-l-2 border-slate-700" />
 
           {/* Events */}
-          <div className="ml-6 space-y-4">
+          <div className="ml-8 space-y-4">
             {events.map((event) => (
               <TimelineEvent key={event.id} event={event} onSessionClick={onSessionClick} />
             ))}

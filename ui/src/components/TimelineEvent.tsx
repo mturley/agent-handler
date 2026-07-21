@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 interface TimelineEventProps {
   event: TimelineEventType
-  onSessionClick?: (sessionId: string) => void
+  onSessionClick?: (sessionName: string) => void
 }
 
 export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
@@ -24,9 +24,10 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
 
   return (
     <div className="relative flex gap-4">
-      {/* Timeline dot */}
-      <div className="absolute -left-[13px] top-2">
-        <div className={cn("w-3 h-3 rounded-full", dotColor)} />
+      {/* Timeline dot and connector */}
+      <div className="absolute -left-[26px] top-1/2 -translate-y-1/2 flex items-center">
+        <div className={cn("w-3.5 h-3.5 rounded-full shrink-0", dotColor)} />
+        <div className="w-[12px] h-0 border-t border-slate-700" />
       </div>
 
       {/* Event bubble */}
@@ -55,7 +56,7 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
                   "font-mono",
                   onSessionClick && "cursor-pointer hover:text-foreground"
                 )}
-                onClick={() => onSessionClick?.(event.session_id!)}
+                onClick={() => onSessionClick?.(event.session_name!)}
               >
                 {event.session_name}
               </span>
