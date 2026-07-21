@@ -185,7 +185,7 @@ Sessions started via `handler claude` or in cmux are automatically peekable. The
 
 ## Cost Tracking
 
-Track Claude API spend across all sessions with daily rollups and reset detection.
+Track Claude API spend across all sessions with daily rollups and reset detection. Cost data is captured automatically from the statusline hook (every ~10s). This is especially useful in environments like Vertex AI where Anthropic's billing dashboard and Admin API are unavailable.
 
 ```bash
 handler cost                    # Summary header + current month breakdown
@@ -195,23 +195,24 @@ handler cost --session <id>     # Single session detail (true cost, adjustments,
 handler cost --json             # Machine-readable output
 ```
 
-Cost data is captured automatically from the statusline hook (every ~10s) — no manual action needed. This is especially useful in environments like Vertex AI where Anthropic's billing dashboard and Admin API are unavailable. The summary header shows today, this month, last month, and all time:
-
-```
-Today: $48.23 | This month: $342.17 | June: $280.44 | All time: $622.61
-```
-
 **Reset detection:** Claude Code's in-memory cost counter resets when a laptop restarts and a session resumes. handler detects this (new value lower than last snapshot) and records a cost adjustment, preserving the true lifetime total for each session.
 
-**Statusline integration:** Every session's model line shows its true session cost plus today's spend:
-```
-Opus 4.6 (1M context) ▓▓▓░░░░░░░░░░░░░░░░░ 18% ctx | $39.07 ($18.42 today)
+### Experimental: enhanced cost display
+
+> **Note:** Enhanced cost display is experimental. The accuracy of cost figures has not been fully validated — they are derived from Claude Code's own `total_cost_usd` field, which may not match your actual billing. Use `handler cost` output as a rough guide, not as a billing source of truth.
+
+To enable enhanced cost display in the statusline, add this to `~/.agent-handler/config.yaml`:
+
+```yaml
+experimental:
+  cost_display: true
 ```
 
-The handler session additionally shows aggregate cost across all sessions:
-```
-Cost (all sessions): $48.23 today · $342.17 this month · $280.44 Jun
-```
+When enabled:
+- Every session's model line shows true session cost (with reset adjustments) plus today's spend: `$39.07 ($18.42 today)`
+- The handler session shows aggregate cost across all sessions: `Cost (all sessions): $48.23 today · $342.17 this month · $280.44 Jun`
+
+When disabled (the default), the statusline shows the raw cost value from Claude Code without adjustments or daily breakdowns. The `handler cost` CLI command works regardless of this setting.
 
 ## Design
 

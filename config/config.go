@@ -10,9 +10,15 @@ import (
 
 // Config represents the agent-handler configuration
 type Config struct {
-	Services   Services         `yaml:"services"`
-	Statusline *StatuslineConfig `yaml:"statusline,omitempty"`
-	Debug      bool              `yaml:"debug,omitempty"`
+	Services     Services            `yaml:"services"`
+	Statusline   *StatuslineConfig   `yaml:"statusline,omitempty"`
+	Experimental *ExperimentalConfig `yaml:"experimental,omitempty"`
+	Debug        bool                `yaml:"debug,omitempty"`
+}
+
+// ExperimentalConfig contains flags for experimental features
+type ExperimentalConfig struct {
+	CostDisplay *bool `yaml:"cost_display,omitempty"`
 }
 
 // Services contains configuration for external services
@@ -39,6 +45,15 @@ type JiraConfig struct {
 type StatuslineConfig struct {
 	ShowContext *bool `yaml:"show_context,omitempty"`
 	ShowGit     *bool `yaml:"show_git,omitempty"`
+}
+
+// ExperimentalCostDisplay returns whether enhanced cost display is enabled (default false).
+// When enabled, the statusline shows true session cost (with reset adjustment) and today's spend,
+// and the handler session shows aggregate cost across all sessions.
+// When disabled, the statusline shows the raw cost from Claude Code's stdin.
+// Cost data is always recorded to the database regardless of this setting.
+func (c *Config) ExperimentalCostDisplay() bool {
+	return c.Experimental != nil && c.Experimental.CostDisplay != nil && *c.Experimental.CostDisplay
 }
 
 // StatuslineShowContext returns whether the model/context/cost line is shown (default true)

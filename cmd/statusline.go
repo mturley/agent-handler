@@ -197,10 +197,16 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 
 	isHandler := session.Role == "handler"
 
-	// Compute cost display values
+	// Read config early — needed for experimental cost display check
+	cfg, _ := config.Read(config.DefaultPath())
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+
+	// Compute cost display values (only when experimental cost display is enabled)
 	trueCost := input.Cost.TotalCostUSD
 	todayCost := 0.0
-	if input.Cost.TotalCostUSD > 0 {
+	if cfg.ExperimentalCostDisplay() && input.Cost.TotalCostUSD > 0 {
 		if adj, err := d.GetTotalAdjustment(input.SessionID); err == nil {
 			trueCost += adj
 		}
@@ -245,12 +251,6 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 			unreadSessionNames = append(unreadSessionNames, name)
 		}
 	}()
-
-	// While goroutines run, fetch handler data (fast SQLite queries)
-	cfg, _ := config.Read(config.DefaultPath())
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
 
 	// Wait for parallel work
 	wg.Wait()
@@ -411,24 +411,26 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 		fmt.Println(formatModelLine(input, trueCost, todayCost))
 	}
 
-	// Aggregate cost line
-	today := time.Now().UTC().Format("2006-01-02")
-	now := time.Now().UTC()
-	monthStart := fmt.Sprintf("%04d-%02d-01", now.Year(), now.Month())
-	monthEnd := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), daysInMonth(now.Year(), now.Month()))
+	// Aggregate cost line (experimental)
+	if cfg.ExperimentalCostDisplay() {
+		today := time.Now().UTC().Format("2006-01-02")
+		now := time.Now().UTC()
+		monthStart := fmt.Sprintf("%04d-%02d-01", now.Year(), now.Month())
+		monthEnd := fmt.Sprintf("%04d-%02d-%02d", now.Year(), now.Month(), daysInMonth(now.Year(), now.Month()))
 
-	lastMonth := now.AddDate(0, -1, 0)
-	lastMonthStart := fmt.Sprintf("%04d-%02d-01", lastMonth.Year(), lastMonth.Month())
-	lastMonthEnd := fmt.Sprintf("%04d-%02d-%02d", lastMonth.Year(), lastMonth.Month(), daysInMonth(lastMonth.Year(), lastMonth.Month()))
+		lastMonth := now.AddDate(0, -1, 0)
+		lastMonthStart := fmt.Sprintf("%04d-%02d-01", lastMonth.Year(), lastMonth.Month())
+		lastMonthEnd := fmt.Sprintf("%04d-%02d-%02d", lastMonth.Year(), lastMonth.Month(), daysInMonth(lastMonth.Year(), lastMonth.Month()))
 
-	todayTotal, _, _, _ := d.QueryTotalCost(today, today)
-	monthTotal, _, _, _ := d.QueryTotalCost(monthStart, monthEnd)
-	lastMonthTotal, _, _, _ := d.QueryTotalCost(lastMonthStart, lastMonthEnd)
+		todayTotal, _, _, _ := d.QueryTotalCost(today, today)
+		monthTotal, _, _, _ := d.QueryTotalCost(monthStart, monthEnd)
+		lastMonthTotal, _, _, _ := d.QueryTotalCost(lastMonthStart, lastMonthEnd)
 
-	if todayTotal > 0 || monthTotal > 0 {
-		lastMonthName := lastMonth.Month().String()[:3]
-		fmt.Printf("%sCost (all sessions)%s: $%.2f today · $%.2f this month · $%.2f %s\n",
-			colorBoldWhite, colorReset, todayTotal, monthTotal, lastMonthTotal, lastMonthName)
+		if todayTotal > 0 || monthTotal > 0 {
+			lastMonthName := lastMonth.Month().String()[:3]
+			fmt.Printf("%sCost (all sessions)%s: $%.2f today · $%.2f this month · $%.2f %s\n",
+				colorBoldWhite, colorReset, todayTotal, monthTotal, lastMonthTotal, lastMonthName)
+		}
 	}
 
 	// Inbox (global for handler)
@@ -627,7 +629,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 			noMsgLabel = "No new events"
 		}
 		fmt.Printf("%s/inbox%s: %s %s· %s%s/message%s%s to talk to other sessions%s",
-			colorCyan, colorReset, noMsgLabel, colorDim, colorDim, colorHint, colorReset, colorDim, colorReset)
+			colorHint, colorReset, noMsgLabel, colorDim, colorDim, colorHint, colorReset, colorDim, colorReset)
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {
@@ -637,7 +639,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 		if len(breakdownParts) > 0 {
 			breakdownStr = fmt.Sprintf(" (%s)", strings.Join(breakdownParts, ", "))
 		}
-		fmt.Printf("%s/inbox%s: %s● %d unread%s%s", colorCyan, colorReset, colorYellow, unreadCount, colorReset, breakdownStr)
+		fmt.Printf("📬 %s/inbox%s: %s● %d unread%s%s", colorCyan, colorReset, colorYellow, unreadCount, colorReset, breakdownStr)
 		notifyMsg = fmt.Sprintf("%d unread%s", unreadCount, breakdownStr)
 	}
 
