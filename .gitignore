@@ -2,7 +2,7 @@
 .vscode/
 .worktree-resources
 bin/
-web/dist/*
-!web/dist/.gitkeep
-web/node_modules/
-web/*.tsbuildinfo
+ui/dist/*
+!ui/dist/.gitkeep
+ui/node_modules/
+ui/*.tsbuildinfo

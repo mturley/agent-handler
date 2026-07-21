@@ -12,16 +12,16 @@ build-cli:
 	@echo "Run 'make install' to install."
 
 build-web:
-	@if [ ! -f web/package.json ]; then echo "Error: web/package.json not found. Run from the repo root." && exit 1; fi
-	@cd web && npm install --silent && npm run build
-	@echo "Built web/dist/"
+	@if [ ! -f ui/package.json ]; then echo "Error: ui/package.json not found. Run from the repo root." && exit 1; fi
+	@cd ui && npm install --silent && npm run build
+	@echo "Built ui/dist/"
 
 build: build-web build-cli
 
 install:
 	@test -f $(BIN_DIR)/$(BINARY_NAME) || (echo "Error: $(BIN_DIR)/$(BINARY_NAME) not found. Run 'make build' or 'make build-cli' first." && exit 1)
 ifndef NONINTERACTIVE
-	@if [ ! -d web/dist ] || [ -z "$$(ls -A web/dist 2>/dev/null)" ]; then \
+	@if [ ! -d ui/dist ] || [ -z "$$(ls -A ui/dist 2>/dev/null)" ]; then \
 		echo "Warning: Web UI not built — handler ui will not work."; \
 		echo "Run 'make build' for a full build, or 'make build-cli' for CLI-only."; \
 		printf "Continue? [y/N] "; \
@@ -44,8 +44,13 @@ test:
 	go test ./... -v
 
 clean:
-	rm -rf $(BIN_DIR) web/dist web/node_modules
+	rm -rf $(BIN_DIR) ui/dist ui/node_modules
 
 dev:
 	@command -v mprocs >/dev/null 2>&1 || { echo "Error: mprocs is required for dev mode. Install it: brew install mprocs"; exit 1; }
-	mprocs "go run . ui --dev" "cd web && npm run dev"
+	@if command -v air >/dev/null 2>&1; then \
+		mprocs "air -- ui --dev" "cd ui && npm run dev"; \
+	else \
+		echo "Tip: install 'air' for Go auto-reload: go install github.com/air-verse/air@latest"; \
+		mprocs "go run . ui --dev" "cd ui && npm run dev"; \
+	fi

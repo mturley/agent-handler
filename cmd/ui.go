@@ -36,13 +36,13 @@ func runUI(cmd *cobra.Command, args []string) error {
 	var webFS fs.FS
 	if !uiDev {
 		var err error
-		webFS, err = fs.Sub(globalWebFS, "web/dist")
+		webFS, err = fs.Sub(globalWebFS, "ui/dist")
 		if err != nil {
 			fmt.Println("Web UI not built. Run 'make build-web' first.")
 			return nil
 		}
 		// Check if dist has any real files
-		entries, _ := fs.ReadDir(globalWebFS, "web/dist")
+		entries, _ := fs.ReadDir(globalWebFS, "ui/dist")
 		hasContent := false
 		for _, e := range entries {
 			if e.Name() != ".gitkeep" {
