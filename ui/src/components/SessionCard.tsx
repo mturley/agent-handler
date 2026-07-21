@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
-import { CircleAlert, ArrowUpRight, Mail } from "lucide-react"
+import { CircleAlert, ArrowUpRight, Mail, Clock } from "lucide-react"
 import { formatEventType } from "@/utils/formatLabel"
 
 const stateColors: Record<string, string> = {
@@ -23,20 +23,20 @@ const stateLabels: Record<string, string> = {
 
 interface SessionCardProps {
   session: Session
-  showRepoBadge?: boolean
   showBranch?: boolean
   cmuxAvailable: boolean
   onSwitch: (id: string) => void
   onInboxOpen: (id: string) => void
+  onTimelineClick: (id: string) => void
 }
 
 export function SessionCard({
   session,
-  showRepoBadge,
   showBranch = true,
   cmuxAvailable,
   onSwitch,
   onInboxOpen,
+  onTimelineClick,
 }: SessionCardProps) {
   const name = session.session_name || session.session_id.slice(0, 12)
 
@@ -66,6 +66,15 @@ export function SessionCard({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => onTimelineClick(session.session_id)}
+              title="View timeline"
+            >
+              <Clock className="h-4 w-4" />
+            </Button>
             {cmuxAvailable && session.display_state !== "dead" && (
               <Button
                 variant="outline"
@@ -82,32 +91,25 @@ export function SessionCard({
       </CardHeader>
       {session.unread_count > 0 && (
         <div
-          className="px-4 pb-0 -mt-1 pl-8 cursor-pointer"
+          className="px-4 pb-1 -mt-1 pl-8 cursor-pointer"
           onClick={() => onInboxOpen(session.session_id)}
         >
-          <span className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs">
-            <Mail className="h-3.5 w-3.5" />
-            {session.unread_breakdown
-              ? Object.entries(session.unread_breakdown)
+          <span className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm">
+            <Mail className="h-4 w-4" />
+            {session.unread_count} unread
+            {session.unread_breakdown && (
+              <span className="text-blue-400/70">
+                ({Object.entries(session.unread_breakdown)
                   .sort(([a], [b]) => a.localeCompare(b))
                   .map(([type, count]) => `${count} ${formatEventType(type)}`)
-                  .join(", ")
-              : `${session.unread_count} unread`}
+                  .join(", ")})
+              </span>
+            )}
           </span>
         </div>
       )}
       <CardContent className="px-4 pb-3 pt-0">
         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-          {showRepoBadge && session.repo && (
-            <Badge variant="outline" className="text-xs font-normal">
-              {session.repo.split("/").pop()}
-            </Badge>
-          )}
-          {showRepoBadge && session.cmux_workspace && (
-            <Badge variant="outline" className="text-xs font-normal">
-              {session.cmux_workspace}
-            </Badge>
-          )}
           {showBranch && session.branch && (
             <span className="font-mono text-xs">{session.branch}</span>
           )}

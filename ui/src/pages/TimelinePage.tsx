@@ -4,7 +4,12 @@ import { TimelineFilters } from "@/components/TimelineFilters"
 import { useTimeline } from "@/hooks/useTimeline"
 import { Loader2 } from "lucide-react"
 
-export function TimelinePage() {
+interface TimelinePageProps {
+  onSessionClick: (sessionName: string) => void
+  sessionFilter?: string
+}
+
+export function TimelinePage({ onSessionClick, sessionFilter: navSessionFilter }: TimelinePageProps) {
   const {
     events,
     loading,
@@ -18,6 +23,13 @@ export function TimelinePage() {
   const [sessionFilter, setSessionFilter] = useState<string | undefined>()
   const [sourceFilters, setSourceFilters] = useState<Set<string>>(new Set())
   const [searchText, setSearchText] = useState("")
+
+  // Apply session filter from navigation
+  useEffect(() => {
+    if (navSessionFilter !== undefined) {
+      setSessionFilter(navSessionFilter)
+    }
+  }, [navSessionFilter])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -102,7 +114,7 @@ export function TimelinePage() {
           {/* Events */}
           <div className="ml-6 space-y-4">
             {events.map((event) => (
-              <TimelineEvent key={event.id} event={event} />
+              <TimelineEvent key={event.id} event={event} onSessionClick={onSessionClick} />
             ))}
           </div>
 

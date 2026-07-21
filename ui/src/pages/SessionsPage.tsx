@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
@@ -29,9 +29,11 @@ const filterChips: { key: FilterChip; label: string }[] = [
 
 interface SessionsPageProps {
   cmuxAvailable: boolean
+  onTimelineClick: (sessionId: string) => void
+  searchQuery?: string
 }
 
-export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
+export function SessionsPage({ cmuxAvailable, onTimelineClick, searchQuery }: SessionsPageProps) {
   const {
     grouped,
     search,
@@ -50,6 +52,13 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
     awaitingSessions,
     unreadSessions,
   } = useSessions()
+
+  // Apply search query from navigation
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setSearch(searchQuery)
+    }
+  }, [searchQuery, setSearch])
 
   const [inboxSession, setInboxSession] = useState<{
     id: string
@@ -282,103 +291,95 @@ export function SessionsPage({ cmuxAvailable }: SessionsPageProps) {
         <p className="text-sm text-muted-foreground">No sessions match your filters.</p>
       )}
 
-      {groupByRepo
-        ? grouped.map((repo, ri) => {
-            const repoKey = `repo:${repo.repo}`
-            const repoCollapsed = collapsed.has(repoKey)
-            const hasWorkspaces = repo.workspaces.length > 0
+      {grouped.map((repo, ri) => {
+        const repoKey = `repo:${repo.repo}`
+        const repoCollapsed = collapsed.has(repoKey)
+        const hasWorkspaces = repo.workspaces.length > 0
 
-            return (
-              <div key={ri} className="space-y-2">
-                {/* Repo header */}
-                {repo.repo && (
-                  <div
-                    className="flex items-center gap-2 cursor-pointer select-none"
-                    onClick={() => toggleRepoCollapse(repo.repo)}
-                  >
-                    {repoCollapsed
-                      ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                      : <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                    }
-                    <span className="font-bold text-foreground">{repo.repo}</span>
-                  </div>
-                )}
-
-                {/* Workspaces */}
-                {!repoCollapsed &&
-                  hasWorkspaces &&
-                  repo.workspaces.map((workspace, wi) => {
-                    const wsKey = `ws:${repo.repo}:${workspace.workspace}`
-                    const wsCollapsed = collapsed.has(wsKey)
-
-                    return (
-                      <div key={wi} className="space-y-2 pl-6">
-                        {/* Workspace header with color bar */}
-                        <div className="flex items-stretch gap-2">
-                          <div
-                            className="w-1 rounded-full shrink-0"
-                            style={{ backgroundColor: workspace.workspaceColor || "transparent" }}
-                          />
-                          <div className="flex-1 space-y-2">
-                            <div
-                              className="flex items-center gap-2 cursor-pointer select-none"
-                              onClick={() =>
-                                toggleWorkspaceCollapse(repo.repo, workspace.workspace)
-                              }
-                            >
-                              {wsCollapsed
-                                ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                                : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                              }
-                              {workspace.workspace && (
-                                <span className="text-sm text-muted-foreground">
-                                  {workspace.workspace}
-                                </span>
-                              )}
-                              {workspace.branch && (
-                                <span className="font-mono text-xs text-muted-foreground">
-                                  ({workspace.branch})
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Session cards */}
-                            {!wsCollapsed && (
-                              <div className="space-y-1.5 pl-3">
-                                {workspace.sessions.map((session) => (
-                                  <SessionCard
-                                    key={session.session_id}
-                                    session={session}
-                                    showBranch={!workspace.branch}
-                                    cmuxAvailable={cmuxAvailable}
-                                    onSwitch={handleSwitch}
-                                    onInboxOpen={handleInboxOpen}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+        return (
+          <div key={ri} className="space-y-2">
+            {/* Repo header (only when grouping by repo) */}
+            {repo.repo && (
+              <div
+                className="flex items-center gap-2 cursor-pointer select-none"
+                onClick={() => toggleRepoCollapse(repo.repo)}
+              >
+                {repoCollapsed
+                  ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                }
+                <span className="font-bold text-foreground">{repo.repo}</span>
               </div>
-            )
-          })
-        : grouped.flatMap((g) =>
-            g.workspaces.flatMap((w) =>
-              w.sessions.map((session) => (
-                <SessionCard
-                  key={session.session_id}
-                  session={session}
-                  showRepoBadge
-                  cmuxAvailable={cmuxAvailable}
-                  onSwitch={handleSwitch}
-                  onInboxOpen={handleInboxOpen}
-                />
-              ))
-            )
-          )}
+            )}
+
+            {/* Workspaces */}
+            {!repoCollapsed &&
+              hasWorkspaces &&
+              repo.workspaces.map((workspace, wi) => {
+                const wsKey = `ws:${repo.repo}:${workspace.workspace}`
+                const wsCollapsed = collapsed.has(wsKey)
+
+                return (
+                  <div key={wi} className={cn("space-y-2", repo.repo && "pl-6")}>
+                    {/* Workspace header with color bar */}
+                    <div className="flex items-stretch gap-2">
+                      <div
+                        className="w-1 rounded-full shrink-0"
+                        style={{ backgroundColor: workspace.workspaceColor || "transparent" }}
+                      />
+                      <div className="flex-1 space-y-2">
+                        <div
+                          className="flex items-center gap-2 cursor-pointer select-none"
+                          onClick={() =>
+                            toggleWorkspaceCollapse(repo.repo, workspace.workspace)
+                          }
+                        >
+                          {wsCollapsed
+                            ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                            : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                          }
+                          {workspace.workspace && (
+                            <span className="text-sm text-muted-foreground">
+                              {workspace.workspace}
+                            </span>
+                          )}
+                          <span className="flex-1" />
+                          {!groupByRepo && workspace.sessions[0]?.repo && (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {workspace.sessions[0].repo.split("/").pop()}
+                            </span>
+                          )}
+                          {workspace.branch && (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              ({workspace.branch})
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Session cards */}
+                        {!wsCollapsed && (
+                          <div className="space-y-1.5 pl-3">
+                            {workspace.sessions.map((session) => (
+                              <SessionCard
+                                key={session.session_id}
+                                session={session}
+                                showBranch={!workspace.branch}
+                                cmuxAvailable={cmuxAvailable}
+                                onSwitch={handleSwitch}
+                                onInboxOpen={handleInboxOpen}
+                                onTimelineClick={onTimelineClick}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        )
+      })}
 
       {/* Inbox dialog */}
       <InboxDialog
