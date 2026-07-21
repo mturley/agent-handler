@@ -11,18 +11,18 @@ const inboxExcludedTypesSQL = "AND e.type NOT IN ('watch_started', 'watcher_erro
 
 // Event represents an event in the system.
 type Event struct {
-	ID         string
-	TS         string
-	ExternalTS *string
-	Source     string
-	SessionID  *string
-	Type       string
-	Title      string
-	Body       *string
-	Author     *string
-	AuthorType *string
-	Broadcast  bool
-	Tags       *string
+	ID         string  `json:"id"`
+	TS         string  `json:"ts"`
+	ExternalTS *string `json:"external_ts,omitempty"`
+	Source     string  `json:"source"`
+	SessionID  *string `json:"session_id,omitempty"`
+	Type       string  `json:"type"`
+	Title      string  `json:"title"`
+	Body       *string `json:"body,omitempty"`
+	Author     *string `json:"author,omitempty"`
+	AuthorType *string `json:"author_type,omitempty"`
+	Broadcast  bool    `json:"broadcast"`
+	Tags       *string `json:"tags,omitempty"`
 }
 
 // EventRecipient represents a recipient of an event.
