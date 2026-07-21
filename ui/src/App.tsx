@@ -2,6 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toaster } from "@/components/ui/sonner"
 import { useCapabilities } from "@/hooks/useCapabilities"
 import { SessionsPage } from "@/pages/SessionsPage"
+import { TimelinePage } from "@/pages/TimelinePage"
 
 export default function App() {
   const capabilities = useCapabilities()
@@ -26,9 +27,7 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="timeline">
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Timeline view coming soon.
-            </p>
+            <TimelinePage />
           </TabsContent>
 
           <TabsContent value="resources">
