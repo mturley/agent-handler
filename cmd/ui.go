@@ -60,7 +60,7 @@ func runUI(cmd *cobra.Command, args []string) error {
 	backendType, _, _ := terminal.Detect()
 	cmuxAvailable := backendType == "cmux"
 
-	if !cmuxAvailable {
+	if !cmuxAvailable && !uiDev {
 		fmt.Println("cmux not detected. Session switching and other cmux features will not be available.")
 		fmt.Print("Continue without cmux features? [y/N] ")
 		var answer string
@@ -89,10 +89,16 @@ func runUI(cmd *cobra.Command, args []string) error {
 		Logger:        logger,
 	}
 
-	// Open browser
-	url := fmt.Sprintf("http://localhost:%d", uiPort)
-	logger.Printf("Opening %s in browser...", url)
-	openBrowser(url)
+	// Open browser (in dev mode, open the Vite dev server port)
+	if uiDev {
+		url := "http://localhost:5173"
+		logger.Printf("Dev mode: Vite dev server at %s", url)
+		openBrowser(url)
+	} else {
+		url := fmt.Sprintf("http://localhost:%d", uiPort)
+		logger.Printf("Opening %s in browser...", url)
+		openBrowser(url)
+	}
 
 	return server.Start()
 }
