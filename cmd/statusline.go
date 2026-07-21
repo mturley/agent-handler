@@ -898,11 +898,11 @@ func renderDuplicateNameWarning(d *db.DB, session *db.Session) {
 			}
 		}
 		if s.SessionID == session.SessionID {
-			fmt.Printf("%s  ↳ This session: %s, %s, pid %d%s\n",
-				colorDim, promptInfo, s.SessionID, s.PID, colorReset)
+			fmt.Printf("%s  ↳ This session: %s (%s, pid %d)%s\n",
+				colorDim, s.SessionID, promptInfo, s.PID, colorReset)
 		} else {
-			fmt.Printf("%s  ↳ %s, %s, pid %d%s\n",
-				colorDim, promptInfo, s.SessionID, s.PID, colorReset)
+			fmt.Printf("%s  ↳ %s (%s, pid %d)%s\n",
+				colorDim, s.SessionID, promptInfo, s.PID, colorReset)
 		}
 	}
 	fmt.Printf("%s⠀%s\n", colorDim, colorReset)
