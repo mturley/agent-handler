@@ -46,13 +46,16 @@ test:
 clean:
 	rm -rf $(BIN_DIR) ui/dist ui/node_modules
 
-AIR := $(or $(shell which air 2>/dev/null),$(wildcard $(shell go env GOPATH 2>/dev/null)/bin/air))
-
 dev:
 	@command -v mprocs >/dev/null 2>&1 || { echo "Error: mprocs is required for dev mode. Install it: brew install mprocs"; exit 1; }
-ifneq ($(AIR),)
-	mprocs "$(AIR) -- ui --dev" "cd ui && npm run dev"
-else
-	@echo "Tip: install 'air' for Go auto-reload: go install github.com/air-verse/air@latest"
-	mprocs "go run . ui --dev" "cd ui && npm run dev"
-endif
+	@if command -v air >/dev/null 2>&1; then \
+		mprocs "air -- ui --dev" "cd ui && npm run dev"; \
+	else \
+		if [ -x "$$(go env GOPATH)/bin/air" ]; then \
+			echo "air found at $$(go env GOPATH)/bin/air but not on PATH."; \
+			echo "Add to your shell rc: export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""; \
+		else \
+			echo "Tip: install air for Go auto-reload: go install github.com/air-verse/air@latest"; \
+		fi; \
+		mprocs "go run . ui --dev" "cd ui && npm run dev"; \
+	fi
