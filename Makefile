@@ -51,11 +51,15 @@ dev:
 	@if command -v air >/dev/null 2>&1; then \
 		mprocs "air -- ui --dev" "cd ui && npm run dev"; \
 	else \
+		echo ""; \
+		echo "  air not found — Go API server will not auto-reload on changes."; \
 		if [ -x "$$(go env GOPATH)/bin/air" ]; then \
-			echo "air found at $$(go env GOPATH)/bin/air but not on PATH."; \
-			echo "Add to your shell rc: export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""; \
+			echo "  air is installed at $$(go env GOPATH)/bin/air but not on PATH."; \
+			echo "  Add to your shell rc: export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""; \
 		else \
-			echo "Tip: install air for Go auto-reload: go install github.com/air-verse/air@latest"; \
+			echo "  Install it: go install github.com/air-verse/air@latest"; \
+			echo "  Then add GOPATH/bin to PATH: export PATH=\"\$$PATH:\$$(go env GOPATH)/bin\""; \
 		fi; \
+		echo ""; \
 		mprocs "go run . ui --dev" "cd ui && npm run dev"; \
 	fi
