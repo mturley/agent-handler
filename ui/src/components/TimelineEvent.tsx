@@ -6,8 +6,17 @@ import type { TimelineEvent as TimelineEventType } from "@/api/types"
 import { formatEventType } from "@/utils/formatLabel"
 import { timeAgo } from "@/utils/timeAgo"
 import { eventDotColor, eventBadgeVariant } from "@/utils/eventColors"
-import { ChevronRight, ChevronDown, ExternalLink } from "lucide-react"
+import { ChevronRight, ChevronDown, ExternalLink, OctagonAlert, ArrowUp, ArrowDown, Minus, Equal } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+const priorityConfig: Record<string, { icon: typeof ArrowUp; color: string }> = {
+  Blocker: { icon: OctagonAlert, color: "text-red-500" },
+  Critical: { icon: ArrowUp, color: "text-red-400" },
+  Major: { icon: ArrowUp, color: "text-orange-400" },
+  Normal: { icon: Equal, color: "text-blue-400" },
+  Minor: { icon: ArrowDown, color: "text-green-400" },
+  Trivial: { icon: ArrowDown, color: "text-gray-400" },
+}
 
 interface TimelineEventProps {
   event: TimelineEventType
@@ -68,28 +77,53 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
             )}
           </div>
 
-          {/* Resource links */}
+          {/* Resource links with metadata */}
           {hasResources && (
-            <div className="flex gap-2 flex-wrap">
-              {event.resources.map((resource, i) => (
-                <a
-                  key={i}
-                  href={resource.resource_url || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 hover:underline"
-                >
-                  <span>
-                    {resource.resource_type === "pr" && "PR"}
-                    {resource.resource_type === "jira" && resource.resource_id}
-                    {resource.resource_type !== "pr" && resource.resource_type !== "jira" && resource.resource_id}
-                  </span>
-                  {resource.resource_type === "pr" && (
-                    <span>#{resource.resource_id}</span>
-                  )}
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              ))}
+            <div className="space-y-1">
+              {event.resources.map((resource, i) => {
+                const meta = resource.metadata
+                const label = resource.resource_type === "pr"
+                  ? `PR #${resource.resource_id}`
+                  : resource.resource_id
+                return (
+                  <div key={i} className="text-xs">
+                    <a
+                      href={resource.resource_url || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 hover:underline"
+                    >
+                      {label}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                    {meta?.title && (
+                      <span className="text-muted-foreground ml-1.5">{meta.title}</span>
+                    )}
+                    {resource.resource_type === "pr" && meta?.author && (
+                      <span className="text-muted-foreground/60 ml-1.5">by {meta.author}</span>
+                    )}
+                    {resource.resource_type === "jira" && meta && (
+                      <span className="inline-flex items-center gap-1 text-muted-foreground/60 ml-1.5">
+                        {meta.priority && (() => {
+                          const config = priorityConfig[meta.priority]
+                          const Icon = config?.icon || Minus
+                          const color = config?.color || "text-muted-foreground"
+                          return (
+                            <span className={cn("inline-flex items-center gap-0.5", color)}>
+                              <Icon className="h-3 w-3" />
+                              {meta.priority}
+                            </span>
+                          )
+                        })()}
+                        {meta.priority && meta.status && " · "}
+                        {meta.status}
+                        {meta.status && meta.assignee && " · "}
+                        {meta.assignee}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
 

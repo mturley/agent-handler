@@ -81,15 +81,20 @@ export function SessionCard({
               <TooltipContent>View session timeline</TooltipContent>
             </Tooltip>
             {cmuxAvailable && session.display_state !== "dead" && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => onSwitch(session.session_id)}
-              >
-                Switch
-                <ArrowUpRight className="h-3 w-3 ml-1" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => onSwitch(session.session_id)}
+                  >
+                    Switch
+                    <ArrowUpRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Switch to this session in cmux</TooltipContent>
+              </Tooltip>
             )}
           </div>
         </div>

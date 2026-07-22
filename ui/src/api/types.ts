@@ -59,6 +59,7 @@ export interface EventResource {
   resource_type: string
   resource_id: string
   resource_url?: string
+  metadata?: Record<string, string>
 }
 
 export interface TimelineEvent extends Event {

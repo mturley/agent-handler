@@ -20,6 +20,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight, Skull } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
 
 const filterChips: { key: FilterChip; label: string }[] = [
@@ -197,17 +198,21 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
                     </span>
                     <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
                       {awaitingSessions.map((s) => (
-                        <Button
-                          key={s.session_id}
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={!cmuxAvailable}
-                          onClick={() => handleSwitch(s.session_id)}
-                        >
-                          {s.session_name || s.session_id.slice(0, 12)}
-                          <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                        </Button>
+                        <Tooltip key={s.session_id}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={!cmuxAvailable}
+                              onClick={() => handleSwitch(s.session_id)}
+                            >
+                              {s.session_name || s.session_id.slice(0, 12)}
+                              <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Switch to this session in cmux</TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   </div>
@@ -229,20 +234,24 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
                               .join(", ")
                           : ""
                         return (
-                          <Button
-                            key={s.session_id}
-                            variant="outline"
-                            size="sm"
-                            className="h-auto py-1 text-xs whitespace-normal text-left"
-                            disabled={!cmuxAvailable}
-                            onClick={() => handleSwitch(s.session_id)}
-                          >
-                            <span className="shrink-0">{s.session_name || s.session_id.slice(0, 12)}</span>
-                            {breakdown && (
-                              <span className="text-muted-foreground ml-1">({breakdown})</span>
-                            )}
-                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                          </Button>
+                          <Tooltip key={s.session_id}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-auto py-1 text-xs whitespace-normal text-left"
+                                disabled={!cmuxAvailable}
+                                onClick={() => handleSwitch(s.session_id)}
+                              >
+                                <span className="shrink-0">{s.session_name || s.session_id.slice(0, 12)}</span>
+                                {breakdown && (
+                                  <span className="text-muted-foreground ml-1">({breakdown})</span>
+                                )}
+                                <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Switch to this session in cmux</TooltipContent>
+                          </Tooltip>
                         )
                       })}
                     </div>

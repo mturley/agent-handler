@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,9 +24,10 @@ type timelineEvent struct {
 }
 
 type eventResourceInfo struct {
-	ResourceType string  `json:"resource_type"`
-	ResourceID   string  `json:"resource_id"`
-	ResourceURL  *string `json:"resource_url"`
+	ResourceType string            `json:"resource_type"`
+	ResourceID   string            `json:"resource_id"`
+	ResourceURL  *string           `json:"resource_url"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
 type eventsResponse struct {
@@ -153,7 +155,10 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 // Returns an empty slice if no resources found (never nil).
 func (s *Server) fetchEventResources(eventID string) ([]eventResourceInfo, error) {
 	rows, err := s.DB.Query(
-		`SELECT resource_type, resource_id, resource_url FROM event_resources WHERE event_id = ?`,
+		`SELECT er.resource_type, er.resource_id, er.resource_url, rs.state_json
+		 FROM event_resources er
+		 LEFT JOIN resource_state rs ON er.resource_type = rs.resource_type AND er.resource_id = rs.resource_id
+		 WHERE er.event_id = ?`,
 		eventID)
 	if err != nil {
 		return []eventResourceInfo{}, err
@@ -163,8 +168,12 @@ func (s *Server) fetchEventResources(eventID string) ([]eventResourceInfo, error
 	var resources []eventResourceInfo
 	for rows.Next() {
 		var res eventResourceInfo
-		if err := rows.Scan(&res.ResourceType, &res.ResourceID, &res.ResourceURL); err != nil {
+		var stateJSON *string
+		if err := rows.Scan(&res.ResourceType, &res.ResourceID, &res.ResourceURL, &stateJSON); err != nil {
 			return resources, err
+		}
+		if stateJSON != nil {
+			res.Metadata = extractResourceMetadata(res.ResourceType, *stateJSON)
 		}
 		resources = append(resources, res)
 	}
@@ -179,4 +188,53 @@ func (s *Server) fetchEventResources(eventID string) ([]eventResourceInfo, error
 	}
 
 	return resources, nil
+}
+
+func extractResourceMetadata(resourceType, stateJSON string) map[string]string {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(stateJSON), &raw); err != nil {
+		return nil
+	}
+
+	str := func(key string) string {
+		if v, ok := raw[key]; ok {
+			if s, ok := v.(string); ok {
+				return s
+			}
+		}
+		return ""
+	}
+
+	meta := map[string]string{}
+
+	switch resourceType {
+	case "pr":
+		if t := str("title"); t != "" {
+			meta["title"] = t
+		}
+		if a := str("author"); a != "" {
+			meta["author"] = a
+		}
+		if s := str("state"); s != "" {
+			meta["state"] = s
+		}
+	case "jira":
+		if t := str("summary"); t != "" {
+			meta["title"] = t
+		}
+		if a := str("assignee"); a != "" {
+			meta["assignee"] = a
+		}
+		if p := str("priority"); p != "" {
+			meta["priority"] = p
+		}
+		if s := str("status"); s != "" {
+			meta["status"] = s
+		}
+	}
+
+	if len(meta) == 0 {
+		return nil
+	}
+	return meta
 }
