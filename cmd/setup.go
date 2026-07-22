@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
@@ -101,6 +103,12 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		for _, id := range handlerCmuxActionIDs {
 			action := handlerCmuxActions[id]
 			fmt.Printf("    - %s (%s)\n", id, action["shortcut"])
+		}
+	}
+	completionShell, completionPath := detectCompletion()
+	if completionPath != "" {
+		if _, err := os.Stat(completionPath); err == nil {
+			fmt.Printf("  Update shell completion: %s\n", completionPath)
 		}
 	}
 	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")
@@ -221,18 +229,31 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuring status line: %w", err)
 	}
 
-	// 9. Configure cmux actions (if cmux is available)
+	// 9. Update or suggest shell completion
+	if completionPath != "" {
+		if _, err := os.Stat(completionPath); err == nil {
+			if err := writeCompletion(completionShell, completionPath); err != nil {
+				return fmt.Errorf("updating shell completion: %w", err)
+			}
+			fmt.Printf("  ✓ Updated shell completion: %s\n", completionPath)
+		} else {
+			fmt.Printf("\n  \033[2mtip:\033[0m Shell completion is not installed.\n")
+			fmt.Printf("       Run \033[1mhandler completion --help\033[0m for setup instructions.\n")
+		}
+	}
+
+	// 10. Configure cmux actions (if cmux is available)
 	if cmuxAvailable {
 		configureCmuxActions()
 	} else {
 		fmt.Printf("\n  %scmux not detected. Optional cmux features (session switching shortcuts)\n  are available — run 'handler setup' again after installing cmux.%s\n", "\033[2m", "\033[0m")
 	}
 
-	// 10. Offer to auto-allow handler commands
+	// 11. Offer to auto-allow handler commands
 	fmt.Println("")
 	configurePermissions(home)
 
-	// 11. Set up external service watchers (auth + install)
+	// 12. Set up external service watchers (auth + install)
 	if setupYes {
 		fmt.Println("\n  Skipping watcher setup (non-interactive mode). Run 'handler watcher install' to configure.")
 	} else {
@@ -391,4 +412,64 @@ func configurePermissions(home string) {
 	out = append(out, '\n')
 	os.WriteFile(settingsPath, out, 0644)
 	fmt.Printf("  ✓ Added permission: %s\n", permission)
+}
+
+func detectCompletion() (shell, path string) {
+	shell = detectShell()
+	path = completionPath(shell)
+	return
+}
+
+func detectShell() string {
+	if s := os.Getenv("SHELL"); s != "" {
+		return filepath.Base(s)
+	}
+	return ""
+}
+
+func completionPath(shell string) string {
+	switch shell {
+	case "zsh":
+		if prefix, err := exec.Command("brew", "--prefix").Output(); err == nil {
+			p := filepath.Join(strings.TrimSpace(string(prefix)), "share", "zsh", "site-functions", "_handler")
+			if dir := filepath.Dir(p); dirExists(dir) {
+				return p
+			}
+		}
+		home, _ := os.UserHomeDir()
+		p := filepath.Join(home, ".zsh", "completions", "_handler")
+		if dir := filepath.Dir(p); dirExists(dir) {
+			return p
+		}
+	case "bash":
+		for _, dir := range []string{"/etc/bash_completion.d", "/usr/local/etc/bash_completion.d"} {
+			if dirExists(dir) {
+				return filepath.Join(dir, "handler")
+			}
+		}
+	case "fish":
+		home, _ := os.UserHomeDir()
+		dir := filepath.Join(home, ".config", "fish", "completions")
+		if dirExists(dir) {
+			return filepath.Join(dir, "handler.fish")
+		}
+	}
+	return ""
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func writeCompletion(shell, path string) error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	out, err := exec.Command(exe, "completion", shell).Output()
+	if err != nil {
+		return fmt.Errorf("generating completion script: %w", err)
+	}
+	return os.WriteFile(path, bytes.TrimSpace(out), 0644)
 }
