@@ -6,6 +6,7 @@ import { useCapabilities } from "@/hooks/useCapabilities"
 import { useSSE } from "@/hooks/useSSE"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
+import { ResourcesPage } from "@/pages/ResourcesPage"
 
 const tabPaths: Record<string, string> = {
   sessions: "/",
@@ -30,6 +31,13 @@ export default function App() {
   const navigateToTimeline = useCallback((sessionId: string) => {
     setLocation(`/timeline?session=${encodeURIComponent(sessionId)}`)
   }, [setLocation])
+
+  const navigateToTimelineByResource = useCallback(
+    (resourceType: string, resourceId: string) => {
+      setLocation(`/timeline?resource=${encodeURIComponent(`${resourceType}:${resourceId}`)}`)
+    },
+    [setLocation]
+  )
 
   const navigateToSessions = useCallback((sessionName: string) => {
     setLocation(`/?search=${encodeURIComponent(sessionName)}`)
@@ -67,9 +75,11 @@ export default function App() {
           </TabsContent>
 
           <TabsContent value="resources">
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Resources view coming soon.
-            </p>
+            <ResourcesPage
+              cmuxAvailable={cmuxAvailable}
+              onTimelineClick={navigateToTimelineByResource}
+              onSessionClick={navigateToSessions}
+            />
           </TabsContent>
         </Tabs>
       </div>
