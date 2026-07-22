@@ -35,6 +35,26 @@ handler uninstall
 
 The binary and skill/hook configuration will be cleaned up, but your database and configuration will remain in `~/.agent-handler`. To fully clean up your installation you can delete that directory.
 
+## Usage
+
+Most features work immediately in new and existing Claude Code sessions — the hooks and rules file are loaded automatically after `handler setup`, so sessions will start registering, emitting events, and showing the statusline right away.
+
+The optional [web UI](#web-ui) provides a visual dashboard and needs to be started separately:
+
+```bash
+handler ui
+```
+
+Run this from within [cmux](https://cmux.dev) if you want cmux-specific features like session switching. The UI is available at http://localhost:8420.
+
+For development with hot reload:
+
+```bash
+make dev    # requires mprocs; uses air for Go auto-reload if installed
+```
+
+This starts both the Go API server and the Vite dev server. Use the UI at http://localhost:5173.
+
 ## Key Commands
 
 These are the commands you can use directly from your terminal:
@@ -213,6 +233,35 @@ When enabled:
 - The handler session shows aggregate cost across all sessions: `Cost (all sessions): $48.23 today · $342.17 this month · $280.44 Jun`
 
 When disabled (the default), the statusline shows the raw cost value from Claude Code without adjustments or daily breakdowns. The `handler cost` CLI command works regardless of this setting.
+
+## Web UI
+
+A dark-mode web dashboard served by `handler ui`. Built with React, TypeScript, Tailwind CSS, and shadcn/ui. Responsive down to 400px for use in narrow cmux browser panes.
+
+### Sessions Tab
+
+View all active and idle sessions grouped by repo and cmux workspace. Features:
+- **Fuzzy search** across session names and branches
+- **Filter chips** — Active, Idle, Awaiting approval, Has unread — each showing a count
+- **Sort options** — Match cmux tab order (default), Last prompt, Unread count, Name
+- **Collapsible grouping** by repo and workspace, with colored workspace bars matching cmux
+- **Session cards** with state badges, unread event counts with type breakdowns, resource subscription counts, and cmux Switch buttons
+- **Inbox dialog** — view unread events for a session, dismiss them, or switch to the session
+- **Attention summary** — highlights sessions awaiting approval and sessions with unread messages
+
+### Timeline Tab
+
+A chronological event feed in a chat-style layout with a vertical timeline, colored type dots, and expandable event bubbles. Features:
+- **Infinite scroll** — loads older events as you scroll down
+- **Live updates** — new events appear at the top via SSE
+- **Full filtering** — by session, event type, source, and free-text search
+- **Expandable details** — click events to see full body content
+- **External resource links** — PR and Jira events link directly to their URLs
+- **Cross-tab navigation** — click a session card's Timeline button to jump to its events, or click a session name on an event to jump back to the Sessions tab
+
+### cmux Integration
+
+When `handler ui` is started from within cmux, session Switch buttons are enabled — clicking one navigates cmux to that session's workspace and surface tab. Outside cmux, Switch buttons are hidden and a warning is shown at startup.
 
 ## Design
 
