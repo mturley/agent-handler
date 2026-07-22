@@ -179,7 +179,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		}
 
 		termType, termID, workspaceID := terminal.Detect()
-		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID)
+		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD)
 		recordCostSnapshot(wd, &input)
 		wd.Close()
 	}
@@ -982,6 +982,7 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 		Status:          "active",
 		InboxMode:       "manual",
 		LastActive:      now,
+		CWD:             cwd,
 		RegisteredAt:    now,
 		JSONLPath:       input.TranscriptPath,
 		TerminalType:    termType,

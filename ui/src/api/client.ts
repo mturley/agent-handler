@@ -51,6 +51,14 @@ export async function dismissInbox(sessionId: string): Promise<ActionResponse> {
   })
 }
 
+export async function archiveSessions(sessionIds: string[]): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/archive-sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_ids: sessionIds }),
+  })
+}
+
 export interface EventsParams {
   before?: string
   limit?: number

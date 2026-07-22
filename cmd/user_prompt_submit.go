@@ -97,7 +97,7 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 
 	// Sync session metadata (name, terminal)
 	termType, termID, workspaceID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID)
+	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID, input.CWD)
 
 	// On-submit mode: notify about unread events
 	if session.InboxMode == "on-submit" {

@@ -30,6 +30,7 @@ type enrichedSession struct {
 	Status             string         `json:"status"`
 	SubscriptionCount     int            `json:"subscriptions_count"`
 	SubscriptionBreakdown map[string]int `json:"subscriptions_breakdown,omitempty"`
+	CWD                string         `json:"cwd,omitempty"`
 	CmuxOrder          int            `json:"cmux_order"`
 }
 
@@ -276,6 +277,7 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		NeedsInput:         needsInput,
 		PID:                session.PID,
 		Status:             session.Status,
+		CWD:                  session.CWD,
 		SubscriptionCount:     subscriptionCount,
 		SubscriptionBreakdown: subscriptionBreakdown,
 	}

@@ -113,3 +113,40 @@ func (s *Server) handleDismissInbox(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 	})
 }
+
+type archiveSessionsRequest struct {
+	SessionIDs []string `json:"session_ids"`
+}
+
+func (s *Server) handleArchiveSessions(w http.ResponseWriter, r *http.Request) {
+	var req archiveSessionsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "session_ids is required")
+		return
+	}
+
+	writableDB, err := db.Open(db.DefaultPath())
+	if err != nil {
+		s.Logger.Printf("Error opening writable DB: %v", err)
+		writeError(w, http.StatusInternalServerError, "Failed to open database")
+		return
+	}
+	defer writableDB.Close()
+
+	count, err := writableDB.ArchiveSessions(req.SessionIDs)
+	if err != nil {
+		s.Logger.Printf("Error archiving sessions: %v", err)
+		writeError(w, http.StatusInternalServerError, "Failed to archive sessions")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success":  true,
+		"archived": count,
+	})
+}

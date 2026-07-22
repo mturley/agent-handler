@@ -25,6 +25,7 @@ type Session struct {
 	CmuxWorkspaceColor string
 	LastActive         string
 	LastPrompt         string
+	CWD                string
 	RegisteredAt     string
 	JSONLPath        string
 }
@@ -37,8 +38,8 @@ func (db *DB) UpsertSession(s Session) error {
 		INSERT INTO sessions (
 			session_id, harness, repo, branch, session_name, pid, status,
 			inbox_mode, auto_poll_interval, role, terminal_type, terminal_id,
-			cmux_workspace_id, cmux_workspace_name, cmux_workspace_color, last_active, last_prompt, registered_at, jsonl_path
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			cmux_workspace_id, cmux_workspace_name, cmux_workspace_color, last_active, last_prompt, cwd, registered_at, jsonl_path
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(session_id) DO UPDATE SET
 			harness = excluded.harness,
 			repo = excluded.repo,
@@ -56,6 +57,7 @@ func (db *DB) UpsertSession(s Session) error {
 			cmux_workspace_color = excluded.cmux_workspace_color,
 			last_active = excluded.last_active,
 			last_prompt = COALESCE(sessions.last_prompt, excluded.last_prompt),
+			cwd = excluded.cwd,
 			registered_at = excluded.registered_at,
 			jsonl_path = excluded.jsonl_path
 	`
@@ -63,7 +65,7 @@ func (db *DB) UpsertSession(s Session) error {
 	_, err := db.conn.Exec(query,
 		s.SessionID, s.Harness, s.Repo, s.Branch, s.SessionName, s.PID, s.Status,
 		s.InboxMode, s.AutoPollInterval, s.Role, s.TerminalType, s.TerminalID,
-		s.CmuxWorkspaceID, s.CmuxWorkspaceName, s.CmuxWorkspaceColor, s.LastActive, s.LastPrompt, s.RegisteredAt, s.JSONLPath,
+		s.CmuxWorkspaceID, s.CmuxWorkspaceName, s.CmuxWorkspaceColor, s.LastActive, s.LastPrompt, s.CWD, s.RegisteredAt, s.JSONLPath,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to upsert session: %w", err)
@@ -91,6 +93,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
 			last_active,
 			COALESCE(last_prompt, '') as last_prompt,
+			COALESCE(cwd, '') as cwd,
 			registered_at, jsonl_path
 		FROM sessions
 		WHERE session_id = ?
@@ -102,7 +105,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 		&s.SessionName, &s.PID, &s.Status,
 		&s.InboxMode, &s.AutoPollInterval, &s.Role,
 		&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-		&s.LastActive, &s.LastPrompt, &s.RegisteredAt, &s.JSONLPath,
+		&s.LastActive, &s.LastPrompt, &s.CWD, &s.RegisteredAt, &s.JSONLPath,
 	)
 
 	if err == sql.ErrNoRows {
@@ -144,6 +147,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
 			last_active,
 			COALESCE(last_prompt, '') as last_prompt,
+			COALESCE(cwd, '') as cwd,
 			registered_at, jsonl_path
 		FROM sessions
 		%s
@@ -165,7 +169,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
 			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-			&s.LastActive, &s.LastPrompt, &s.RegisteredAt, &s.JSONLPath,
+			&s.LastActive, &s.LastPrompt, &s.CWD, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)
@@ -198,6 +202,7 @@ func (db *DB) ListSessionsByName(name string) ([]Session, error) {
 			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
 			last_active,
 			COALESCE(last_prompt, '') as last_prompt,
+			COALESCE(cwd, '') as cwd,
 			registered_at, jsonl_path
 		FROM sessions
 		WHERE session_name = ? AND status = 'active'
@@ -217,7 +222,7 @@ func (db *DB) ListSessionsByName(name string) ([]Session, error) {
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
 			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-			&s.LastActive, &s.LastPrompt, &s.RegisteredAt, &s.JSONLPath,
+			&s.LastActive, &s.LastPrompt, &s.CWD, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)

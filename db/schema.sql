@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     cmux_workspace_color TEXT,
     last_active TEXT NOT NULL,
     last_prompt TEXT,
+    cwd TEXT,
     registered_at TEXT NOT NULL,
     jsonl_path TEXT NOT NULL
 );

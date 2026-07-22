@@ -154,7 +154,7 @@ func findSessionsWithUnreads(d *db.DB, selfSessionID string) []db.Session {
 }
 
 // syncSessionMetadata updates session name, PID, and terminal info only if changed.
-func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID string) {
+func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID, cwd string) {
 	session, err := d.GetSession(sessionID)
 	if err != nil || session == nil {
 		return
@@ -186,6 +186,10 @@ func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, te
 		if wsColor != "" && session.CmuxWorkspaceColor != wsColor {
 			updates["cmux_workspace_color"] = wsColor
 		}
+	}
+
+	if cwd != "" && session.CWD != cwd {
+		updates["cwd"] = cwd
 	}
 
 	if len(updates) == 0 {

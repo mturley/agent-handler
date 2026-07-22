@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
-import { CircleAlert, ArrowUpRight, Mail, Clock } from "lucide-react"
+import { CircleAlert, ArrowUpRight, Mail, List } from "lucide-react"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
 
 const stateColors: Record<string, string> = {
@@ -66,15 +67,19 @@ export function SessionCard({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => onTimelineClick(session.session_id)}
-              title="View timeline"
-            >
-              <Clock className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => onTimelineClick(session.session_id)}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View session timeline</TooltipContent>
+            </Tooltip>
             {cmuxAvailable && session.display_state !== "dead" && (
               <Button
                 variant="outline"
@@ -94,9 +99,11 @@ export function SessionCard({
           className="px-4 pb-1 -mt-1 pl-8 cursor-pointer"
           onClick={() => onInboxOpen(session.session_id)}
         >
-          <span className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-sm">
-            <Mail className="h-4 w-4" />
-            {session.unread_count} unread
+          <span className="inline-flex items-start gap-1 text-blue-400 hover:text-blue-300 text-sm flex-wrap">
+            <span className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
+              <Mail className="h-4 w-4" />
+              {session.unread_count} unread
+            </span>
             {session.unread_breakdown && (
               <span className="text-blue-400/70">
                 ({Object.entries(session.unread_breakdown)
@@ -127,6 +134,11 @@ export function SessionCard({
                     })
                     .join(", ")
                 : `${session.subscriptions_count} resource${session.subscriptions_count !== 1 ? "s" : ""}`}
+            </Badge>
+          )}
+          {session.inbox_mode !== "manual" && (
+            <Badge variant="outline" className="text-xs font-normal">
+              inbox: {session.inbox_mode}
             </Badge>
           )}
         </div>

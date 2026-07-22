@@ -104,7 +104,7 @@ export function useSessions() {
   }, [])
 
   const filtered = useMemo(() => {
-    let result = sessions.filter((s) => s.display_state !== "archived")
+    let result = sessions.filter((s) => s.display_state !== "archived" && s.display_state !== "dead")
 
     if (search) {
       result = result.filter((s) => fuzzyMatch(search, s))
@@ -249,6 +249,13 @@ export function useSessions() {
     [allNonArchived]
   )
 
+  const deadSessions = useMemo(
+    () => allNonArchived
+      .filter((s) => s.display_state === "dead")
+      .sort((a, b) => (a.session_name || a.session_id).localeCompare(b.session_name || b.session_id)),
+    [allNonArchived]
+  )
+
   const refetch = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
   }, [queryClient])
@@ -271,5 +278,6 @@ export function useSessions() {
     refetch,
     awaitingSessions,
     unreadSessions,
+    deadSessions,
   }
 }

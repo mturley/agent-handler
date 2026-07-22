@@ -13,10 +13,12 @@ import {
 import { SessionCard } from "@/components/SessionCard"
 import { InboxDialog } from "@/components/InboxDialog"
 import { useSessions, type FilterChip, type SortField } from "@/hooks/useSessions"
-import { switchSession } from "@/api/client"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { switchSession, archiveSessions } from "@/api/client"
+import { queryKeys } from "@/api/queryKeys"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight } from "lucide-react"
+import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight, Skull } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEventType } from "@/utils/formatLabel"
 
@@ -49,6 +51,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
     loading,
     awaitingSessions,
     unreadSessions,
+    deadSessions,
   } = useSessions()
 
   // Apply search query from URL
@@ -58,6 +61,16 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
       setSearch(urlSearch)
     }
   }, [setSearch])
+
+  const queryClient = useQueryClient()
+  const archiveMutation = useMutation({
+    mutationFn: (ids: string[]) => archiveSessions(ids),
+    onSuccess: (_, ids) => {
+      toast.success(`Archived ${ids.length} dead session${ids.length !== 1 ? "s" : ""}`)
+      queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+    },
+    onError: () => toast.error("Failed to archive sessions"),
+  })
 
   const [inboxSession, setInboxSession] = useState<{
     id: string
@@ -220,11 +233,11 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
                             key={s.session_id}
                             variant="outline"
                             size="sm"
-                            className="h-auto py-1 text-xs"
+                            className="h-auto py-1 text-xs whitespace-normal text-left"
                             disabled={!cmuxAvailable}
                             onClick={() => handleSwitch(s.session_id)}
                           >
-                            {s.session_name || s.session_id.slice(0, 12)}
+                            <span className="shrink-0">{s.session_name || s.session_id.slice(0, 12)}</span>
                             {breakdown && (
                               <span className="text-muted-foreground ml-1">({breakdown})</span>
                             )}
@@ -236,6 +249,56 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Dead sessions alert */}
+        {deadSessions.length > 0 && (
+          <Card className="border-red-500/30 bg-red-500/5">
+            <CardContent className="px-4 py-3 space-y-2">
+              <div className="flex items-start gap-2.5">
+                <Skull className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <span className="text-base font-bold text-red-400">
+                    {deadSessions.length} dead session{deadSessions.length !== 1 ? "s" : ""}
+                  </span>
+                  <p className="text-xs text-muted-foreground">
+                    {deadSessions.length === 1 ? "This session was" : "These sessions were"} killed
+                    without running {deadSessions.length === 1 ? "its" : "their"} SessionEnd hook.
+                    If this was unintentional you may want to find and resume {deadSessions.length === 1 ? "it" : "them"}.
+                    Close sessions with Ctrl+C before closing their terminal to archive properly.
+                  </p>
+                  <ul className="list-disc list-inside space-y-2 mt-2">
+                    {deadSessions.map((s) => {
+                      const dir = s.cwd || s.repo || ""
+                      const displayDir = dir.replace(/^\/Users\/[^/]+/, "~")
+                      return (
+                        <li key={s.session_id} className="text-xs text-muted-foreground">
+                          <span className="font-semibold text-foreground">
+                            {s.session_name || s.session_id.slice(0, 12)}
+                          </span>
+                          {displayDir && (
+                            <div className="ml-5 font-mono text-muted-foreground/70">{displayDir}</div>
+                          )}
+                          <div className="ml-5 font-mono text-muted-foreground/50">{s.session_id}</div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-xs"
+                    disabled={archiveMutation.isPending}
+                    onClick={() => archiveMutation.mutate(deadSessions.map((s) => s.session_id))}
+                  >
+                    {archiveMutation.isPending
+                      ? "Archiving..."
+                      : `Archive dead session${deadSessions.length !== 1 ? "s" : ""}`}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}

@@ -57,54 +57,7 @@ func Open(path string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
-// runMigrations applies schema migrations to existing databases.
-// Uses addColumnIfMissing to safely add columns without failing on existing DBs.
 func runMigrations(conn *sql.DB) error {
-	// Add human_seen_ts column to session_cursors if it doesn't exist
-	if err := addColumnIfMissing(conn, "session_cursors", "human_seen_ts", "TEXT"); err != nil {
-		return err
-	}
-	// Add terminal_type column to sessions if it doesn't exist
-	if err := addColumnIfMissing(conn, "sessions", "terminal_type", "TEXT"); err != nil {
-		return err
-	}
-	// Add terminal_id column to sessions if it doesn't exist
-	if err := addColumnIfMissing(conn, "sessions", "terminal_id", "TEXT"); err != nil {
-		return err
-	}
-	// Add cmux_workspace_id column to sessions if it doesn't exist
-	if err := addColumnIfMissing(conn, "sessions", "cmux_workspace_id", "TEXT"); err != nil {
-		return err
-	}
-	// Add cmux_workspace_name column to sessions if it doesn't exist
-	if err := addColumnIfMissing(conn, "sessions", "cmux_workspace_name", "TEXT"); err != nil {
-		return err
-	}
-	// Add cmux_workspace_color column to sessions if it doesn't exist
-	if err := addColumnIfMissing(conn, "sessions", "cmux_workspace_color", "TEXT"); err != nil {
-		return err
-	}
-	// Add last_prompt column to sessions if it doesn't exist
-	if err := addColumnIfMissing(conn, "sessions", "last_prompt", "TEXT"); err != nil {
-		return err
-	}
-	return nil
-}
-
-// addColumnIfMissing adds a column to a table if it doesn't already exist.
-func addColumnIfMissing(conn *sql.DB, table, column, colType string) error {
-	var count int
-	err := conn.QueryRow(
-		fmt.Sprintf(`SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name = '%s'`, table, column),
-	).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check for %s.%s column: %w", table, column, err)
-	}
-	if count == 0 {
-		if _, err := conn.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, colType)); err != nil {
-			return fmt.Errorf("failed to add %s.%s column: %w", table, column, err)
-		}
-	}
 	return nil
 }
 

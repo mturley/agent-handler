@@ -33,6 +33,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/actions/switch", s.handleSwitch)
 	mux.HandleFunc("POST /api/actions/peek", s.handleForcePeek)
 	mux.HandleFunc("POST /api/actions/dismiss-inbox", s.handleDismissInbox)
+	mux.HandleFunc("POST /api/actions/archive-sessions", s.handleArchiveSessions)
 
 	// Static files with SPA fallback (skip in dev mode — Vite serves them)
 	if !s.DevMode && s.WebFS != nil {

@@ -20,6 +20,7 @@ export interface Session {
   status: string
   subscriptions_count: number
   subscriptions_breakdown?: Record<string, number>
+  cwd?: string
   cmux_order: number
 }
 
