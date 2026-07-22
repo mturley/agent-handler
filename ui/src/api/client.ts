@@ -1,4 +1,4 @@
-import type { Session, PeekState, Event, Capabilities, ActionResponse, EventsResponse } from "./types"
+import type { Session, PeekState, Event, Capabilities, ActionResponse, EventsResponse, ResourcesResponse } from "./types"
 
 const BASE = ""
 
@@ -78,4 +78,8 @@ export async function getEvents(params: EventsParams = {}): Promise<EventsRespon
   if (params.search) searchParams.set("search", params.search)
   const qs = searchParams.toString()
   return fetchJSON<EventsResponse>(`/api/events${qs ? `?${qs}` : ""}`)
+}
+
+export async function getResources(): Promise<ResourcesResponse> {
+  return fetchJSON<ResourcesResponse>("/api/resources")
 }

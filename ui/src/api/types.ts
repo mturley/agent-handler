@@ -72,3 +72,32 @@ export interface EventsResponse {
   has_more: boolean
   next_cursor: string
 }
+
+export interface ResourceSession {
+  session_id: string
+  session_name: string
+  display_state: string
+}
+
+export interface ResourceEntry {
+  resource_type: string
+  resource_id: string
+  resource_url?: string
+  state?: Record<string, unknown>
+  resource_updated_at?: string
+  watcher_updated_at?: string
+  sessions: ResourceSession[]
+}
+
+export interface WatcherStatusInfo {
+  configured: boolean
+  installed: boolean
+  last_success?: string
+  last_error?: string
+  has_error: boolean
+}
+
+export interface ResourcesResponse {
+  resources: ResourceEntry[]
+  watcher_status: Record<string, WatcherStatusInfo>
+}
