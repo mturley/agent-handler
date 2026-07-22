@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react"
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query"
+import { useInfiniteQuery } from "@tanstack/react-query"
 import { getEvents, type EventsParams } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
@@ -11,7 +11,6 @@ export interface TimelineFilters {
 }
 
 export function useTimeline() {
-  const queryClient = useQueryClient()
   const [filters, setFilters] = useState<TimelineFilters>({})
 
   const filterKey = useMemo(() => ({

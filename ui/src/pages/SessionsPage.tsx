@@ -47,7 +47,6 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
     groupByRepo,
     setGroupByRepo,
     loading,
-    refetch,
     awaitingSessions,
     unreadSessions,
   } = useSessions()
