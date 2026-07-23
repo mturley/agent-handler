@@ -1,6 +1,5 @@
 import { useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { queryKeys } from "@/api/queryKeys"
 
 export function useSSE() {
   const queryClient = useQueryClient()
@@ -13,7 +12,7 @@ export function useSSE() {
       es = new EventSource("/api/stream")
 
       es.addEventListener("heartbeat", () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+        queryClient.invalidateQueries({ queryKey: ["sessions"] })
       })
 
       es.addEventListener("events_new", () => {

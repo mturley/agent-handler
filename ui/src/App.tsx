@@ -28,8 +28,11 @@ export default function App() {
   const [location, setLocation] = useLocation()
   const activeTab = pathToTab[location.split("?")[0]] || "sessions"
 
-  const navigateToTimeline = useCallback((sessionId: string) => {
-    setLocation(`/timeline?session=${encodeURIComponent(sessionId)}`)
+  const navigateToTimeline = useCallback((sessionId: string, archived?: boolean) => {
+    const params = new URLSearchParams()
+    params.set("session", sessionId)
+    if (archived) params.set("archived", "true")
+    setLocation(`/timeline?${params.toString()}`)
   }, [setLocation])
 
   const navigateToTimelineByResource = useCallback(

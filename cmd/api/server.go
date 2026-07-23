@@ -25,6 +25,7 @@ func (s *Server) Start() error {
 	// API routes
 	mux.HandleFunc("GET /api/capabilities", s.handleCapabilities)
 	mux.HandleFunc("GET /api/sessions", s.handleSessions)
+	mux.HandleFunc("GET /api/sessions/archived", s.handleArchivedSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", s.handleSession)
 	mux.HandleFunc("GET /api/sessions/{id}/peek", s.handleSessionPeek)
 	mux.HandleFunc("GET /api/sessions/{id}/inbox", s.handleSessionInbox)

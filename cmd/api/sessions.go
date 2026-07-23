@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/mturley/agent-handler/db"
@@ -56,6 +57,49 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, enriched)
+}
+
+type archivedSessionsResponse struct {
+	Sessions []enrichedSession `json:"sessions"`
+	Total    int               `json:"total"`
+	HasMore  bool              `json:"has_more"`
+}
+
+func (s *Server) handleArchivedSessions(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+	search := r.URL.Query().Get("search")
+
+	limit := 50
+	if limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 && parsed <= 200 {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if offsetStr != "" {
+		if parsed, err := strconv.Atoi(offsetStr); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	sessions, total, err := s.DB.ListArchivedSessions(search, limit, offset)
+	if err != nil {
+		s.Logger.Printf("Error listing archived sessions: %v", err)
+		writeError(w, http.StatusInternalServerError, "Failed to list archived sessions")
+		return
+	}
+
+	enriched := make([]enrichedSession, len(sessions))
+	for i, session := range sessions {
+		enriched[i] = s.enrichSession(session)
+	}
+
+	writeJSON(w, http.StatusOK, archivedSessionsResponse{
+		Sessions: enriched,
+		Total:    total,
+		HasMore:  offset+len(sessions) < total,
+	})
 }
 
 func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {

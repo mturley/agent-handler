@@ -15,6 +15,27 @@ export async function getSessions(): Promise<Session[]> {
   return fetchJSON<Session[]>("/api/sessions")
 }
 
+export interface ArchivedSessionsParams {
+  limit?: number
+  offset?: number
+  search?: string
+}
+
+export interface ArchivedSessionsResponse {
+  sessions: Session[]
+  total: number
+  has_more: boolean
+}
+
+export async function getArchivedSessions(params: ArchivedSessionsParams = {}): Promise<ArchivedSessionsResponse> {
+  const searchParams = new URLSearchParams()
+  if (params.limit) searchParams.set("limit", String(params.limit))
+  if (params.offset) searchParams.set("offset", String(params.offset))
+  if (params.search) searchParams.set("search", params.search)
+  const qs = searchParams.toString()
+  return fetchJSON<ArchivedSessionsResponse>(`/api/sessions/archived${qs ? `?${qs}` : ""}`)
+}
+
 export async function getSessionPeek(id: string): Promise<PeekState> {
   return fetchJSON<PeekState>(`/api/sessions/${encodeURIComponent(id)}/peek`)
 }

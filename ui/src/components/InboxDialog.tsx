@@ -44,7 +44,7 @@ export function InboxDialog({
     onSuccess: () => {
       toast.success(`Dismissed ${events.length} events`)
       queryClient.invalidateQueries({ queryKey: queryKeys.inbox(sessionId!) })
-      queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+      queryClient.invalidateQueries({ queryKey: ["sessions"] })
       onClose()
     },
     onError: (e) => {

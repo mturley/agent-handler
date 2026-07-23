@@ -1,5 +1,7 @@
+import { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -8,15 +10,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getSessions } from "@/api/client"
+import { getSessions, getArchivedSessions } from "@/api/client"
+import type { Session } from "@/api/types"
 import { queryKeys } from "@/api/queryKeys"
 import { cn } from "@/lib/utils"
 
 export interface TimelineFiltersProps {
   sessionFilter: string | undefined
+  includeArchived: boolean
   categoryFilters: Set<string>
   searchText: string
   onSessionFilterChange: (session: string | undefined) => void
+  onIncludeArchivedChange: (include: boolean) => void
   onCategoryFilterToggle: (category: string) => void
   onSearchChange: (text: string) => void
 }
@@ -34,21 +39,37 @@ const CATEGORY_OPTIONS = Object.keys(CATEGORY_TYPES)
 
 export function TimelineFilters({
   sessionFilter,
+  includeArchived,
   categoryFilters,
   searchText,
   onSessionFilterChange,
+  onIncludeArchivedChange,
   onCategoryFilterToggle,
   onSearchChange,
 }: TimelineFiltersProps) {
-  const { data: sessions = [] } = useQuery({
+  const { data: activeSessions = [] } = useQuery<Session[]>({
     queryKey: queryKeys.sessions,
     queryFn: getSessions,
   })
 
+  const { data: archivedData } = useQuery({
+    queryKey: queryKeys.archivedSessions(),
+    queryFn: () => getArchivedSessions({ limit: 200 }),
+    enabled: includeArchived,
+  })
+
+  const allSessions = useMemo(() => {
+    const active = activeSessions.map((s) => ({ ...s, _archived: false }))
+    const archived = includeArchived && archivedData
+      ? archivedData.sessions.map((s) => ({ ...s, _archived: true }))
+      : []
+    return [...active, ...archived]
+  }, [activeSessions, archivedData, includeArchived])
+
   return (
     <div className="space-y-3">
-      {/* Session and search */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Session dropdown, include archived toggle, and search */}
+      <div className="flex gap-2 flex-wrap items-center">
         <Select
           value={sessionFilter || "all"}
           onValueChange={(v) => onSessionFilterChange(v === "all" ? undefined : v)}
@@ -58,13 +79,32 @@ export function TimelineFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All sessions</SelectItem>
-            {sessions.map((s) => (
-              <SelectItem key={s.session_id} value={s.session_id}>
+            {allSessions.map((s) => (
+              <SelectItem
+                key={s.session_id}
+                value={s.session_id}
+                className={s._archived ? "text-muted-foreground" : ""}
+              >
                 {s.session_name || s.session_id.slice(0, 12)}
+                {s._archived && " (archived)"}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Switch
+            checked={includeArchived}
+            onCheckedChange={onIncludeArchivedChange}
+            className="cursor-pointer"
+          />
+          <label
+            className="text-sm cursor-pointer select-none text-muted-foreground"
+            onClick={() => onIncludeArchivedChange(!includeArchived)}
+          >
+            Include archived
+          </label>
+        </div>
 
         <Input
           placeholder="Search events..."

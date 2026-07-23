@@ -79,7 +79,6 @@ function repoName(repo: string): string {
 
 export function useSessions() {
   const queryClient = useQueryClient()
-
   const { data: sessions = [], isLoading: loading } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: getSessions,
@@ -257,7 +256,7 @@ export function useSessions() {
   )
 
   const refetch = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+    queryClient.invalidateQueries({ queryKey: ["sessions"] })
   }, [queryClient])
 
   return {

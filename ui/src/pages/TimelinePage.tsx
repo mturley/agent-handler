@@ -8,6 +8,22 @@ interface TimelinePageProps {
   onSessionClick: (sessionName: string) => void
 }
 
+function getUrlParams() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    session: params.get("session") || undefined,
+    archived: params.get("archived") === "true",
+  }
+}
+
+function updateUrlParams(session?: string, archived?: boolean) {
+  const params = new URLSearchParams()
+  if (session) params.set("session", session)
+  if (archived) params.set("archived", "true")
+  const qs = params.toString()
+  window.history.replaceState(null, "", qs ? `/timeline?${qs}` : "/timeline")
+}
+
 export function TimelinePage({ onSessionClick }: TimelinePageProps) {
   const {
     events,
@@ -18,20 +34,24 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
     updateFilters,
   } = useTimeline()
 
-  const initialSession = new URLSearchParams(window.location.search).get("session") || undefined
-  const [sessionFilter, setSessionFilter] = useState<string | undefined>(initialSession)
+  const initial = getUrlParams()
+  const [sessionFilter, setSessionFilter] = useState<string | undefined>(initial.session)
+  const [includeArchived, setIncludeArchived] = useState(initial.archived)
   const [categoryFilters, setCategoryFilters] = useState<Set<string>>(new Set())
   const [searchText, setSearchText] = useState("")
 
   const handleSessionFilterChange = useCallback((session: string | undefined) => {
     setSessionFilter(session)
-    const url = session ? `/timeline?session=${encodeURIComponent(session)}` : "/timeline"
-    window.history.replaceState(null, "", url)
-  }, [])
+    updateUrlParams(session, includeArchived)
+  }, [includeArchived])
+
+  const handleIncludeArchivedChange = useCallback((include: boolean) => {
+    setIncludeArchived(include)
+    updateUrlParams(sessionFilter, include)
+  }, [sessionFilter])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  // Update filters in the hook when local state changes
   useEffect(() => {
     const selectedTypes = categoryFilters.size > 0
       ? Array.from(categoryFilters).flatMap((cat) => CATEGORY_TYPES[cat] || [])
@@ -43,7 +63,6 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
     })
   }, [sessionFilter, categoryFilters, searchText, updateFilters])
 
-  // Infinite scroll observer
   useEffect(() => {
     if (!sentinelRef.current) return
     const observer = new IntersectionObserver(
@@ -74,9 +93,11 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
     <div className="space-y-4">
       <TimelineFilters
         sessionFilter={sessionFilter}
+        includeArchived={includeArchived}
         categoryFilters={categoryFilters}
         searchText={searchText}
         onSessionFilterChange={handleSessionFilterChange}
+        onIncludeArchivedChange={handleIncludeArchivedChange}
         onCategoryFilterToggle={handleCategoryFilterToggle}
         onSearchChange={setSearchText}
       />
@@ -95,7 +116,6 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
 
       {!loading && events.length > 0 && (
         <div>
-          {/* Events with timeline line */}
           <div className="relative ml-8 space-y-4">
             <div className="absolute -left-[20px] top-0 bottom-0 w-0 border-l-2 border-slate-700" />
             {events.map((event) => (
@@ -103,21 +123,18 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
             ))}
           </div>
 
-          {/* Loading more spinner */}
           {loadingMore && (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           )}
 
-          {/* End marker */}
           {!hasMore && events.length > 0 && (
             <p className="text-sm text-muted-foreground text-center py-4">
               No more events
             </p>
           )}
 
-          {/* Sentinel for infinite scroll */}
           <div ref={sentinelRef} className="h-4" />
         </div>
       )}

@@ -184,6 +184,74 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 	return sessions, nil
 }
 
+// ListArchivedSessions returns archived sessions with optional search, ordered by last_active DESC.
+func (db *DB) ListArchivedSessions(search string, limit, offset int) ([]Session, int, error) {
+	whereSQL := "WHERE status = 'archived'"
+	args := []interface{}{}
+	if search != "" {
+		whereSQL += " AND (COALESCE(session_name, '') LIKE ? OR repo LIKE ?)"
+		searchTerm := "%" + search + "%"
+		args = append(args, searchTerm, searchTerm)
+	}
+
+	// Count total
+	var total int
+	countArgs := make([]interface{}, len(args))
+	copy(countArgs, args)
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM sessions "+whereSQL, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count archived sessions: %w", err)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			session_id, harness, repo, branch,
+			COALESCE(session_name, '') as session_name,
+			COALESCE(pid, 0) as pid,
+			status,
+			inbox_mode,
+			auto_poll_interval,
+			COALESCE(role, '') as role,
+			COALESCE(terminal_type, '') as terminal_type,
+			COALESCE(terminal_id, '') as terminal_id,
+			COALESCE(cmux_workspace_id, '') as cmux_workspace_id,
+			COALESCE(cmux_workspace_name, '') as cmux_workspace_name,
+			COALESCE(cmux_workspace_color, '') as cmux_workspace_color,
+			last_active,
+			COALESCE(last_prompt, '') as last_prompt,
+			COALESCE(cwd, '') as cwd,
+			registered_at, jsonl_path
+		FROM sessions
+		%s
+		ORDER BY last_active DESC
+		LIMIT ? OFFSET ?
+	`, whereSQL)
+
+	args = append(args, limit, offset)
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list archived sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []Session
+	for rows.Next() {
+		var s Session
+		err := rows.Scan(
+			&s.SessionID, &s.Harness, &s.Repo, &s.Branch,
+			&s.SessionName, &s.PID, &s.Status,
+			&s.InboxMode, &s.AutoPollInterval, &s.Role,
+			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
+			&s.LastActive, &s.LastPrompt, &s.CWD, &s.RegisteredAt, &s.JSONLPath,
+		)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan archived session row: %w", err)
+		}
+		sessions = append(sessions, s)
+	}
+
+	return sessions, total, nil
+}
+
 // ListSessionsByName returns all active sessions with the given name.
 func (db *DB) ListSessionsByName(name string) ([]Session, error) {
 	query := `
