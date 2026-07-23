@@ -19,6 +19,7 @@ export interface ArchivedSessionsParams {
   limit?: number
   offset?: number
   search?: string
+  sort?: string
 }
 
 export interface ArchivedSessionsResponse {
@@ -32,6 +33,7 @@ export async function getArchivedSessions(params: ArchivedSessionsParams = {}): 
   if (params.limit) searchParams.set("limit", String(params.limit))
   if (params.offset) searchParams.set("offset", String(params.offset))
   if (params.search) searchParams.set("search", params.search)
+  if (params.sort) searchParams.set("sort", params.sort)
   const qs = searchParams.toString()
   return fetchJSON<ArchivedSessionsResponse>(`/api/sessions/archived${qs ? `?${qs}` : ""}`)
 }

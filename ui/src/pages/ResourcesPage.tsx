@@ -25,6 +25,7 @@ export function ResourcesPage({
   onSessionClick,
 }: ResourcesPageProps) {
   const {
+    loading,
     watcherStatus,
     prResources,
     jiraResources,
@@ -139,7 +140,7 @@ export function ResourcesPage({
       )}
 
       {/* Empty state */}
-      {prResources.length === 0 && jiraResources.length === 0 && (
+      {!loading && prResources.length === 0 && jiraResources.length === 0 && (
         <p className="text-sm text-muted-foreground py-8 text-center">
           No watched resources. Use <code className="text-xs">/watch</code> to subscribe to PRs or Jira issues.
         </p>

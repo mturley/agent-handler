@@ -185,7 +185,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 }
 
 // ListArchivedSessions returns archived sessions with optional search, ordered by last_active DESC.
-func (db *DB) ListArchivedSessions(search string, limit, offset int) ([]Session, int, error) {
+func (db *DB) ListArchivedSessions(search, sort string, limit, offset int) ([]Session, int, error) {
 	whereSQL := "WHERE status = 'archived'"
 	args := []interface{}{}
 	if search != "" {
@@ -222,9 +222,9 @@ func (db *DB) ListArchivedSessions(search string, limit, offset int) ([]Session,
 			registered_at, jsonl_path
 		FROM sessions
 		%s
-		ORDER BY last_active DESC
+		ORDER BY %s
 		LIMIT ? OFFSET ?
-	`, whereSQL)
+	`, whereSQL, archivedSortClause(sort))
 
 	args = append(args, limit, offset)
 	rows, err := db.conn.Query(query, args...)
@@ -250,6 +250,21 @@ func (db *DB) ListArchivedSessions(search string, limit, offset int) ([]Session,
 	}
 
 	return sessions, total, nil
+}
+
+func archivedSortClause(sort string) string {
+	switch sort {
+	case "name":
+		return "COALESCE(session_name, session_id) ASC"
+	case "-name":
+		return "COALESCE(session_name, session_id) DESC"
+	case "last_prompt":
+		return "COALESCE(last_prompt, '') DESC"
+	case "-last_prompt":
+		return "COALESCE(last_prompt, '') ASC"
+	default:
+		return "COALESCE(last_prompt, '') DESC"
+	}
 }
 
 // ListSessionsByName returns all active sessions with the given name.

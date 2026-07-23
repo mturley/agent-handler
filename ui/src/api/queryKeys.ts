@@ -1,7 +1,7 @@
 export const queryKeys = {
   sessions: ["sessions"] as const,
-  archivedSessions: (search?: string) =>
-    ["sessions", "archived", { search }] as const,
+  archivedSessions: (search?: string, sort?: string) =>
+    ["sessions", "archived", { search, sort }] as const,
   capabilities: ["capabilities"] as const,
   events: (filters?: Record<string, string | undefined>) =>
     ["events", filters] as const,

@@ -483,12 +483,37 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
 
         {/* Archived tab */}
         <TabsContent value="archived" className="space-y-4 mt-4">
-          <Input
-            placeholder="Search archived sessions..."
-            value={archived.search}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => archived.setSearch(e.target.value)}
-            className="max-w-md"
-          />
+          <div className="flex gap-2 flex-wrap">
+            <Input
+              placeholder="Search archived sessions..."
+              value={archived.search}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => archived.setSearch(e.target.value)}
+              className="flex-1 min-w-[200px]"
+            />
+            <div className="flex items-center gap-1">
+              <Select
+                value={archived.sortField}
+                onValueChange={(v: string) => archived.setSortField(v as "last_prompt" | "name")}
+              >
+                <SelectTrigger className="w-[140px] h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="last_prompt">Last prompt</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-9 p-0"
+                onClick={() => archived.setSortReverse((r) => !r)}
+                title={archived.sortReverse ? "Reversed" : "Normal order"}
+              >
+                {archived.sortReverse ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
 
           {archived.loading && (
             <div className="flex items-center justify-center py-8">

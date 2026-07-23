@@ -62,7 +62,7 @@ function sortByRecent(a: ResourceEntry, b: ResourceEntry): number {
 export function useResources() {
   const [sortField, setSortField] = useState<ResourceSortField>("urgency")
 
-  const { data } = useQuery({
+  const { data, isLoading: loading } = useQuery({
     queryKey: queryKeys.resources,
     queryFn: getResources,
     refetchInterval: 10000,
@@ -90,6 +90,7 @@ export function useResources() {
     watcherStatus: watcherStatus as Record<string, WatcherStatusInfo>,
     prResources,
     jiraResources,
+    loading,
     sortField,
     setSortField,
   }

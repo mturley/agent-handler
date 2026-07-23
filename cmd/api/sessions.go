@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/mturley/agent-handler/db"
@@ -47,14 +48,20 @@ func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	cmuxOrder := buildCmuxOrderMap()
 
 	enriched := make([]enrichedSession, len(sessions))
+	var wg sync.WaitGroup
 	for i, session := range sessions {
-		enriched[i] = s.enrichSession(session)
-		if order, ok := cmuxOrder[session.TerminalID]; ok {
-			enriched[i].CmuxOrder = order
-		} else {
-			enriched[i].CmuxOrder = 999999
-		}
+		wg.Add(1)
+		go func(i int, session db.Session) {
+			defer wg.Done()
+			enriched[i] = s.enrichSession(session)
+			if order, ok := cmuxOrder[session.TerminalID]; ok {
+				enriched[i].CmuxOrder = order
+			} else {
+				enriched[i].CmuxOrder = 999999
+			}
+		}(i, session)
 	}
+	wg.Wait()
 
 	writeJSON(w, http.StatusOK, enriched)
 }
@@ -69,6 +76,7 @@ func (s *Server) handleArchivedSessions(w http.ResponseWriter, r *http.Request) 
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
 	search := r.URL.Query().Get("search")
+	sort := r.URL.Query().Get("sort")
 
 	limit := 50
 	if limitStr != "" {
@@ -83,7 +91,7 @@ func (s *Server) handleArchivedSessions(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	sessions, total, err := s.DB.ListArchivedSessions(search, limit, offset)
+	sessions, total, err := s.DB.ListArchivedSessions(search, sort, limit, offset)
 	if err != nil {
 		s.Logger.Printf("Error listing archived sessions: %v", err)
 		writeError(w, http.StatusInternalServerError, "Failed to list archived sessions")

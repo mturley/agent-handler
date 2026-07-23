@@ -3,8 +3,14 @@ import { useInfiniteQuery } from "@tanstack/react-query"
 import { getArchivedSessions } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
+export type ArchivedSortField = "last_prompt" | "name"
+
 export function useArchivedSessions() {
   const [search, setSearch] = useState("")
+  const [sortField, setSortField] = useState<ArchivedSortField>("last_prompt")
+  const [sortReverse, setSortReverse] = useState(false)
+
+  const sortParam = sortReverse ? `-${sortField}` : sortField
 
   const {
     data,
@@ -13,12 +19,13 @@ export function useArchivedSessions() {
     hasNextPage: hasMore,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: queryKeys.archivedSessions(search || undefined),
+    queryKey: queryKeys.archivedSessions(search || undefined, sortParam),
     queryFn: async ({ pageParam = 0 }: { pageParam?: number }) => {
       return getArchivedSessions({
         limit: 50,
         offset: pageParam,
         search: search || undefined,
+        sort: sortParam,
       })
     },
     initialPageParam: 0,
@@ -50,5 +57,9 @@ export function useArchivedSessions() {
     loadMore,
     search,
     setSearch,
+    sortField,
+    setSortField,
+    sortReverse,
+    setSortReverse,
   }
 }

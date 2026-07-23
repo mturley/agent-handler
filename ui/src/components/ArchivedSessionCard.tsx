@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
@@ -13,7 +12,7 @@ interface ArchivedSessionCardProps {
 
 export function ArchivedSessionCard({ session, onTimelineClick }: ArchivedSessionCardProps) {
   const name = session.session_name || session.session_id.slice(0, 12)
-  const cwd = session.cwd || session.repo || ""
+  const cwd = session.cwd || ""
   const displayDir = cwd.replace(/^\/Users\/[^/]+/, "~")
 
   return (
@@ -24,6 +23,9 @@ export function ArchivedSessionCard({ session, onTimelineClick }: ArchivedSessio
             <div className="w-2 h-2 rounded-full shrink-0 bg-slate-500" />
             <span className="font-semibold text-sm truncate">{name}</span>
             <span className="text-xs text-muted-foreground">Archived</span>
+            {session.last_prompt && (
+              <span className="text-xs text-muted-foreground">{timeAgo(session.last_prompt)}</span>
+            )}
           </div>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -40,29 +42,20 @@ export function ArchivedSessionCard({ session, onTimelineClick }: ArchivedSessio
           </Tooltip>
         </div>
       </CardHeader>
-      <CardContent className="px-4 pb-3 pt-0 space-y-1">
-        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-          {session.repo && (
-            <Badge variant="outline" className="text-xs font-normal">
-              {session.repo.split("/").pop()}
-            </Badge>
-          )}
-          {session.branch && (
-            <span className="font-mono">{session.branch}</span>
-          )}
-          {session.cmux_workspace && (
-            <Badge variant="outline" className="text-xs font-normal">
-              {session.cmux_workspace}
-            </Badge>
-          )}
-          {session.last_prompt && (
-            <span>{timeAgo(session.last_prompt)}</span>
-          )}
-        </div>
-        {displayDir && (
-          <div className="text-xs font-mono text-muted-foreground/70">{displayDir}</div>
+      <CardContent className="px-4 pb-3 pt-0 space-y-0.5 text-xs text-muted-foreground">
+        {session.repo && (
+          <div><span className="text-muted-foreground/60">Repo:</span> <span className="font-mono">{session.repo}</span></div>
         )}
-        <div className="text-xs font-mono text-muted-foreground/50">{session.session_id}</div>
+        {session.branch && (
+          <div><span className="text-muted-foreground/60">Branch:</span> <span className="font-mono">{session.branch}</span></div>
+        )}
+        {session.cmux_workspace && (
+          <div><span className="text-muted-foreground/60">Workspace:</span> {session.cmux_workspace}</div>
+        )}
+        {displayDir && (
+          <div><span className="text-muted-foreground/60">Path:</span> <span className="font-mono">{displayDir}</span></div>
+        )}
+        <div className="text-muted-foreground/40 font-mono">{session.session_id}</div>
       </CardContent>
     </Card>
   )

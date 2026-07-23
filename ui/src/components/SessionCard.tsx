@@ -104,19 +104,9 @@ export function SessionCard({
           className="px-4 pb-1 -mt-1 pl-8 cursor-pointer"
           onClick={() => onInboxOpen(session.session_id)}
         >
-          <span className="inline-flex items-start gap-1 text-blue-400 hover:text-blue-300 text-sm flex-wrap">
-            <span className="inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
-              <Mail className="h-4 w-4" />
-              {session.unread_count} unread
-            </span>
-            {session.unread_breakdown && (
-              <span className="text-blue-400/70">
-                ({Object.entries(session.unread_breakdown)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([type, count]) => `${count} ${formatEventType(type)}`)
-                  .join(", ")})
-              </span>
-            )}
+          <span className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs">
+            <Mail className="h-3.5 w-3.5" />
+            {session.unread_count} unread
           </span>
         </div>
       )}
