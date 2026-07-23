@@ -217,3 +217,22 @@ func (db *DB) SoftDeleteSubscriptionsForSession(sessionID string) (int, error) {
 
 	return int(rows), nil
 }
+
+// RestoreSubscriptionsForSession un-soft-deletes all subscriptions for a session.
+func (db *DB) RestoreSubscriptionsForSession(sessionID string) (int, error) {
+	res, err := db.conn.Exec(`
+		UPDATE subscriptions
+		SET deleted_at = NULL
+		WHERE session_id = ? AND deleted_at IS NOT NULL
+	`, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to restore subscriptions for session %q: %w", sessionID, err)
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	return int(rows), nil
+}

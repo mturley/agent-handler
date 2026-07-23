@@ -170,10 +170,12 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	if wd, err := openDB(); err == nil {
 		now := time.Now().UTC().Format(time.RFC3339)
 
-		// Register if not yet registered
+		// Register if not yet registered, or reactivate if archived
 		existing, _ := wd.GetSession(input.SessionID)
-		if existing == nil || existing.Status == "archived" {
+		if existing == nil {
 			registerSessionFromHook(wd, &input)
+		} else if existing.Status == "archived" {
+			reactivateSession(wd, &input, existing)
 		} else {
 			wd.BumpLastActive(input.SessionID, now)
 		}
@@ -1040,6 +1042,46 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 	}
 
 	go discover.CleanStalePIDCaches(sessionsDir)
+}
+
+func reactivateSession(d *db.DB, input *hookInput, existing *db.Session) {
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Reactivate the session with updated metadata
+	termType, termID, workspaceID := terminal.Detect()
+	cwd := input.CWD
+	if cwd == "" {
+		cwd, _ = os.Getwd()
+	}
+	branch := existing.Branch
+	if out, err := exec.Command("git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD").Output(); err == nil {
+		branch = strings.TrimSpace(string(out))
+	}
+
+	d.UpsertSession(db.Session{
+		SessionID:       input.SessionID,
+		Harness:         "claude-code",
+		Repo:            existing.Repo,
+		Branch:          branch,
+		SessionName:     input.SessionName,
+		PID:             claudePID(),
+		Status:          "active",
+		InboxMode:       existing.InboxMode,
+		LastActive:      now,
+		RegisteredAt:    existing.RegisteredAt,
+		JSONLPath:       input.TranscriptPath,
+		TerminalType:    termType,
+		TerminalID:      termID,
+		CmuxWorkspaceID: workspaceID,
+	})
+
+	// Restore soft-deleted subscriptions
+	d.RestoreSubscriptionsForSession(input.SessionID)
+
+	// Update PID cache
+	sessionsDir := filepath.Join(filepath.Dir(db.DefaultPath()), "sessions")
+	os.MkdirAll(sessionsDir, 0755)
+	discover.WritePIDCache(sessionsDir, claudePID(), input.SessionID)
 }
 
 func migrateSubscriptionsFromArchived(d *db.DB, newSessionID, sessionName string) {
