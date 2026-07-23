@@ -218,6 +218,29 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 		// unsubscribe explicitly, or let the subscription go idle.
 	}
 
+	// Detect new commits by comparing latest SHA against previous state
+	if prData.Commits.LatestSHA != "" {
+		prevState, _ := d.GetResourceState("pr", resource.ResourceID)
+		if prevState != nil {
+			var prev map[string]interface{}
+			if json.Unmarshal([]byte(prevState.StateJSON), &prev) == nil {
+				prevSHA, _ := prev["latest_commit_sha"].(string)
+				if prevSHA != "" && prevSHA != prData.Commits.LatestSHA {
+					if !watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, watcher.EventTypePRNewCommits, prData.Commits.LatestDate) {
+						title := fmt.Sprintf("New commits pushed to PR #%d", prData.Number)
+						body := fmt.Sprintf("Latest commit: %s", prData.Commits.LatestSHA[:7])
+						if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRNewCommits, title, &body, prData.Commits.LatestDate, nil, nil, resource); err != nil {
+							logger.Printf("WARNING: failed to emit new commits event: %v", err)
+						} else {
+							eventCount++
+							logger.Printf("Emitted pr_new_commits for %s", resource.ResourceID)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Write resource state
 	stateJSON := buildPRStateJSON(prData)
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -328,6 +351,7 @@ func buildPRStateJSON(prData PRData) string {
 		"review_decision":              derivePRReviewDecision(prData.Reviews),
 		"has_new_commits_since_review": hasNewCommitsSinceReview(prData),
 		"ci_status":                    deriveCIStatus(prData.CheckRuns),
+		"latest_commit_sha":            prData.Commits.LatestSHA,
 	}
 	data, _ := json.Marshal(state)
 	return string(data)
