@@ -6,3 +6,8 @@ ui/dist/*
 !ui/dist/.gitkeep
 ui/node_modules/
 ui/*.tsbuildinfo
+dist-newstyle/
+*.hi
+*.o
+.ghc.environment.*
+cabal.project.local*

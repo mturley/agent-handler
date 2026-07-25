@@ -1,0 +1,151 @@
+cabal-version:      3.0
+name:               handler
+version:            0.1.0
+synopsis:           agent-handler: event ledger and command center for Claude Code sessions
+description:        Haskell port of agent-handler. An event ledger, session registry,
+                    and external-resource watcher for coordinating Claude Code sessions.
+license:            MIT
+author:             mturley
+build-type:         Simple
+extra-source-files: db/schema.sql
+
+common shared
+    default-language:   GHC2021
+    default-extensions: OverloadedStrings
+                        OverloadedRecordDot
+                        DuplicateRecordFields
+                        NoFieldSelectors
+                        RecordWildCards
+                        LambdaCase
+                        MultiWayIf
+    ghc-options:        -Wall -Wno-name-shadowing -Wno-unused-do-bind
+    build-depends:      base >=4.16 && <5
+                      , aeson
+                      , aeson-pretty
+                      , async
+                      , base64-bytestring
+                      , bytestring
+                      , containers
+                      , directory
+                      , file-embed
+                      , filepath
+                      , http-conduit
+                      , http-types
+                      , optparse-applicative
+                      , process
+                      , random
+                      , scotty
+                      , sqlite-simple
+                      , text
+                      , time
+                      , unix
+                      , unordered-containers
+                      , uuid
+                      , vector
+                      , wai
+                      , warp
+                      , yaml
+
+executable handler
+    import:           shared
+    main-is:          Main.hs
+    ghc-options:      -threaded -rtsopts "-with-rtsopts=-N"
+    hs-source-dirs:   app, src
+    other-modules:    Handler.Util
+                      Handler.Db
+                      Handler.Db.Events
+                      Handler.Db.Sessions
+                      Handler.Db.Cursors
+                      Handler.Db.Subscriptions
+                      Handler.Db.Resources
+                      Handler.Db.ResourceState
+                      Handler.Db.Cost
+                      Handler.Db.Peek
+                      Handler.Db.WatcherStatus
+                      Handler.Config
+                      Handler.Discover
+                      Handler.Worktree
+                      Handler.Git
+                      Handler.Terminal
+                      Handler.Watcher.Framework
+                      Handler.Watcher.GitHub
+                      Handler.Watcher.Jira
+                      Handler.Watcher.Scheduler
+                      Handler.Cli.Common
+                      Handler.Cmd.Emit
+                      Handler.Cmd.Log
+                      Handler.Cmd.Ack
+                      Handler.Cmd.Unread
+                      Handler.Cmd.Whoami
+                      Handler.Cmd.Subscribe
+                      Handler.Cmd.Tail
+                      Handler.Cmd.Query
+                      Handler.Cmd.Notify
+                      Handler.Cmd.Cost
+                      Handler.Cmd.Health
+                      Handler.Cmd.Cleanup
+                      Handler.Cmd.Debug
+                      Handler.Cmd.WatcherCli
+                      Handler.Cmd.Resource
+                      Handler.WebEmbed
+                      Handler.Api
+                      Handler.Embedded
+                      Handler.CmuxConfig
+                      Handler.Cmd.Setup
+                      Handler.Cmd.Uninstall
+                      Handler.Cmd.Claude
+                      Handler.Cmd.Configure
+                      Handler.Cmd.Ui
+                      Handler.Cmd.Peek
+                      Handler.Cmd.Statusline
+                      Handler.Cmd.Register
+                      Handler.Cmd.Unregister
+                      Handler.Cmd.Switch
+                      Handler.Cmd.Status
+                      Handler.Cmd.Triage
+                      Handler.Cmd.Watching
+                      Handler.Cmd.SessionName
+                      Handler.Cmd.UserPromptSubmit
+                      Handler.Cmd.CatchUpCursor
+                      Handler.Root
+
+test-suite handler-test
+    import:           shared
+    type:             exitcode-stdio-1.0
+    main-is:          Spec.hs
+    ghc-options:      -threaded -rtsopts "-with-rtsopts=-N"
+    hs-source-dirs:   test, src
+    build-depends:    hspec
+                    , temporary
+    other-modules:    TestUtil
+                      Db.DbSpec
+                      Db.EventsSpec
+                      Db.SessionsSpec
+                      Db.CursorsSpec
+                      Db.SubscriptionsSpec
+                      Db.ResourcesSpec
+                      Db.ResourceStateSpec
+                      Db.CostSpec
+                      Db.PeekSpec
+                      ConfigSpec
+                      ValidateSpec
+                      WorktreeSpec
+                      FrameworkSpec
+                      TerminalSpec
+                      Handler.Util
+                      Handler.Db
+                      Handler.Db.Events
+                      Handler.Db.Sessions
+                      Handler.Db.Cursors
+                      Handler.Db.Subscriptions
+                      Handler.Db.Resources
+                      Handler.Db.ResourceState
+                      Handler.Db.Cost
+                      Handler.Db.Peek
+                      Handler.Db.WatcherStatus
+                      Handler.Config
+                      Handler.Discover
+                      Handler.Worktree
+                      Handler.Git
+                      Handler.Terminal
+                      Handler.Watcher.Framework

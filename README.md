@@ -6,7 +6,7 @@ Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inbox
 
 ## Install
 
-Requires Go 1.22+ and Claude Code to already be installed.
+Requires GHC 9.6+ with cabal (`brew install ghc cabal-install`) and Claude Code to already be installed.
 
 ```bash
 git clone https://github.com/mturley/agent-handler.git
@@ -50,10 +50,10 @@ Run this from within [cmux](https://cmux.dev) if you want cmux-specific features
 For development with hot reload:
 
 ```bash
-make dev    # requires mprocs; uses air for Go auto-reload if installed
+make dev    # requires mprocs
 ```
 
-This starts both the Go API server and the Vite dev server. Use the UI at http://localhost:5173.
+This starts both the API server and the Vite dev server. Use the UI at http://localhost:5173.
 
 ## Key Commands
 
