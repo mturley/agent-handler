@@ -100,6 +100,7 @@ These are available as `/slash-commands` in any Claude session:
 - `/watch` / `/unwatch` — subscribe to PRs and Jira issues
 - `/watching` — show watched resources and watcher status
 - `/message` — send messages to other sessions
+- `/block` / `/unblock` — mark session as blocked or unblocked (shown in statusline)
 - `/done` — log a completion summary before closing a session
 - `/handler` — turn a session into a command center for all sessions
 - `/handler-debug` — debug session identity and inbox state

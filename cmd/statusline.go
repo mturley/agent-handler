@@ -336,6 +336,9 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 		fmt.Println(formatModelLine(input, trueCost, todayCost))
 	}
 
+	// Blocked status
+	renderBlockedLine(d, session)
+
 	// Handler lines (inbox, inbox-mode, watching)
 	unreadCount, unreadMsg := renderInboxLine(d, session, false)
 	renderAutoDeliveredLine(d, session)
@@ -882,6 +885,25 @@ func formatNameList(names []string, max int) string {
 		return strings.Join(names, ", ")
 	}
 	return strings.Join(names[:max], ", ") + fmt.Sprintf(", +%d more", len(names)-max)
+}
+
+func renderBlockedLine(d *db.DB, session *db.Session) {
+	// Check if the session's latest blocked event has no subsequent unblocked event
+	var title string
+	err := d.Conn().QueryRow(`
+		SELECT e.title FROM events e
+		WHERE e.session_id = ? AND e.type = 'blocked'
+		  AND NOT EXISTS (
+		    SELECT 1 FROM events e2
+		    WHERE e2.session_id = ? AND e2.type = 'unblocked' AND e2.ts > e.ts
+		  )
+		ORDER BY e.ts DESC LIMIT 1
+	`, session.SessionID, session.SessionID).Scan(&title)
+	if err != nil || title == "" {
+		return
+	}
+	fmt.Printf("\033[1;31mBLOCKED: %s\033[0m %s— %s/unblock%s %swhen resolved%s\n",
+		title, colorDim, colorCyan, colorReset, colorDim, colorReset)
 }
 
 func renderDuplicateNameWarning(d *db.DB, session *db.Session) {

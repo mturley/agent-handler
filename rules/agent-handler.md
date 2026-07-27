@@ -13,6 +13,7 @@ At the start of each session, tell the user exactly:
 > - `/watch` / `/unwatch` — subscribe to PRs or Jira issues
 > - `/watching` — show watched resources
 > - `/message` — message another session
+> - `/block` / `/unblock` — mark session as blocked or unblocked
 > - `/done` — log completion summary
 > - `/handler` — become the command center
 >
