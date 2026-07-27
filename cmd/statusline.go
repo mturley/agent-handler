@@ -902,7 +902,7 @@ func renderBlockedLine(d *db.DB, session *db.Session) {
 	if err != nil || title == "" {
 		return
 	}
-	fmt.Printf("\033[1;31mBLOCKED: %s\033[0m %s— %s/unblock%s %swhen resolved%s\n",
+	fmt.Printf("\033[1;31mBLOCKED: %s\033[0m %s· %s/unblock%s %swhen resolved%s\n",
 		title, colorDim, colorCyan, colorReset, colorDim, colorReset)
 }
 
