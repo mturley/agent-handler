@@ -26,6 +26,7 @@ interface SessionCardProps {
   session: Session
   showBranch?: boolean
   cmuxAvailable: boolean
+  isTimelineActive?: boolean
   onSwitch: (id: string) => void
   onInboxOpen: (id: string) => void
   onTimelineClick: (id: string) => void
@@ -35,6 +36,7 @@ export function SessionCard({
   session,
   showBranch = true,
   cmuxAvailable,
+  isTimelineActive,
   onSwitch,
   onInboxOpen,
   onTimelineClick,
@@ -70,7 +72,7 @@ export function SessionCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant="ghost"
+                  variant={isTimelineActive ? "default" : "ghost"}
                   size="sm"
                   className="h-7 w-7 p-0"
                   onClick={() => onTimelineClick(session.session_id)}

@@ -1,9 +1,10 @@
-import { useCallback } from "react"
+import { useCallback, useState, useEffect } from "react"
 import { useLocation } from "wouter"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toaster } from "@/components/ui/sonner"
 import { useCapabilities } from "@/hooks/useCapabilities"
 import { useSSE } from "@/hooks/useSSE"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
 import { ResourcesPage } from "@/pages/ResourcesPage"
@@ -25,21 +26,61 @@ export default function App() {
   const cmuxAvailable = capabilities?.cmux ?? false
   useSSE()
 
+  const isWide = useMediaQuery("(min-width: 1024px)")
+
   const [location, setLocation] = useLocation()
-  const activeTab = pathToTab[location.split("?")[0]] || "sessions"
+  const basePath = location.split("?")[0]
+  const activeTab = pathToTab[basePath] || "sessions"
+
+  // Right pane tab for wide mode (from URL param, defaults to "timeline")
+  const [rightTab, setRightTab] = useState<string>(() => {
+    return new URLSearchParams(window.location.search).get("right") || "timeline"
+  })
+  const [timelineSessionFilter, setTimelineSessionFilter] = useState<string | undefined>()
+  const [timelineIncludeArchived, setTimelineIncludeArchived] = useState(false)
+
+  // When switching to wide mode, if we're on timeline/resources, redirect to sessions with right pane
+  useEffect(() => {
+    if (isWide && (activeTab === "timeline" || activeTab === "resources")) {
+      setRightTab(activeTab)
+      setLocation(`/?right=${activeTab}`)
+    }
+  }, [isWide]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When switching to narrow mode, if right pane was active, keep sessions selected
+  // (user can navigate to timeline/resources via tabs)
+
+  const handleRightTabChange = useCallback((value: string) => {
+    setRightTab(value)
+    const params = new URLSearchParams(window.location.search)
+    params.set("right", value)
+    window.history.replaceState(null, "", `/?${params.toString()}`)
+  }, [])
 
   const navigateToTimeline = useCallback((sessionId: string, archived?: boolean) => {
     const params = new URLSearchParams()
     params.set("session", sessionId)
     if (archived) params.set("archived", "true")
-    setLocation(`/timeline?${params.toString()}`)
-  }, [setLocation])
+    if (isWide) {
+      setRightTab("timeline")
+      setTimelineSessionFilter((prev) => prev === sessionId ? undefined : sessionId)
+      setTimelineIncludeArchived(archived ?? false)
+    } else {
+      setLocation(`/timeline?${params.toString()}`)
+    }
+  }, [setLocation, isWide])
 
   const navigateToTimelineByResource = useCallback(
     (resourceType: string, resourceId: string) => {
-      setLocation(`/timeline?resource=${encodeURIComponent(`${resourceType}:${resourceId}`)}`)
+      const param = encodeURIComponent(`${resourceType}:${resourceId}`)
+      if (isWide) {
+        setRightTab("timeline")
+        setLocation(`/?right=timeline&resource=${param}`)
+      } else {
+        setLocation(`/timeline?resource=${param}`)
+      }
     },
-    [setLocation]
+    [setLocation, isWide]
   )
 
   const navigateToSessions = useCallback((sessionName: string) => {
@@ -50,6 +91,58 @@ export default function App() {
     setLocation(tabPaths[value] || "/")
   }, [setLocation])
 
+  // Wide layout: sessions on left, timeline/resources tabs on right
+  if (isWide) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <header className="mb-6">
+            <h1 className="text-lg font-semibold tracking-tight">agent-handler</h1>
+          </header>
+
+          <div className="flex gap-10">
+            {/* Left pane: Sessions */}
+            <div className="flex-1 min-w-0">
+              <SessionsPage
+                cmuxAvailable={cmuxAvailable}
+                onTimelineClick={navigateToTimeline}
+                activeTimelineSessionId={rightTab === "timeline" ? timelineSessionFilter : undefined}
+              />
+            </div>
+
+            {/* Right pane: Timeline / Resources */}
+            <div className="flex-1 min-w-0">
+              <Tabs value={rightTab} onValueChange={handleRightTabChange}>
+                <TabsList className="mb-4">
+                  <TabsTrigger value="timeline">Timeline</TabsTrigger>
+                  <TabsTrigger value="resources">Resources</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="timeline">
+                  <TimelinePage
+                    onSessionClick={navigateToSessions}
+                    sessionFilter={timelineSessionFilter}
+                    includeArchived={timelineIncludeArchived}
+                  />
+                </TabsContent>
+
+                <TabsContent value="resources">
+                  <ResourcesPage
+                    cmuxAvailable={cmuxAvailable}
+                    onTimelineClick={navigateToTimelineByResource}
+                    onSessionClick={navigateToSessions}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+          </div>
+        </div>
+        <Toaster />
+      </div>
+    )
+  }
+
+  // Narrow layout: 3 tabs
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 py-6">

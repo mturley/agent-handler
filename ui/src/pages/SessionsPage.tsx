@@ -35,9 +35,10 @@ const filterChips: { key: FilterChip; label: string }[] = [
 interface SessionsPageProps {
   cmuxAvailable: boolean
   onTimelineClick: (sessionId: string, archived?: boolean) => void
+  activeTimelineSessionId?: string
 }
 
-export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPageProps) {
+export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSessionId }: SessionsPageProps) {
   const {
     grouped,
     search,
@@ -467,6 +468,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick }: SessionsPagePro
                                     onSwitch={handleSwitch}
                                     onInboxOpen={handleInboxOpen}
                                     onTimelineClick={onTimelineClick}
+                                    isTimelineActive={activeTimelineSessionId === session.session_id}
                                   />
                                 ))}
                               </div>

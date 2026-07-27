@@ -6,6 +6,8 @@ import { Loader2 } from "lucide-react"
 
 interface TimelinePageProps {
   onSessionClick: (sessionName: string) => void
+  sessionFilter?: string
+  includeArchived?: boolean
 }
 
 function getUrlParams() {
@@ -24,7 +26,7 @@ function updateUrlParams(session?: string, archived?: boolean) {
   window.history.replaceState(null, "", qs ? `/timeline?${qs}` : "/timeline")
 }
 
-export function TimelinePage({ onSessionClick }: TimelinePageProps) {
+export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter, includeArchived: propIncludeArchived }: TimelinePageProps) {
   const {
     events,
     loading,
@@ -35,8 +37,24 @@ export function TimelinePage({ onSessionClick }: TimelinePageProps) {
   } = useTimeline()
 
   const initial = getUrlParams()
-  const [sessionFilter, setSessionFilter] = useState<string | undefined>(initial.session)
-  const [includeArchived, setIncludeArchived] = useState(initial.archived)
+  const [sessionFilter, setSessionFilter] = useState<string | undefined>(propSessionFilter ?? initial.session)
+  const [includeArchived, setIncludeArchived] = useState(propIncludeArchived ?? initial.archived)
+
+  const prevPropSession = useRef(propSessionFilter)
+  useEffect(() => {
+    if (propSessionFilter !== prevPropSession.current) {
+      setSessionFilter(propSessionFilter)
+      prevPropSession.current = propSessionFilter
+    }
+  }, [propSessionFilter])
+
+  const prevPropArchived = useRef(propIncludeArchived)
+  useEffect(() => {
+    if (propIncludeArchived !== prevPropArchived.current) {
+      setIncludeArchived(propIncludeArchived ?? false)
+      prevPropArchived.current = propIncludeArchived
+    }
+  }, [propIncludeArchived])
   const [categoryFilters, setCategoryFilters] = useState<Set<string>>(new Set())
   const [searchText, setSearchText] = useState("")
 

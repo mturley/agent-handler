@@ -195,30 +195,31 @@ export function ResourceCard({
         {resource.sessions.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-2">
             {resource.sessions.map((session) => (
-              <div key={session.session_id} className="flex items-center gap-1">
+              cmuxAvailable && session.display_state !== "dead" ? (
+                <Tooltip key={session.session_id}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => onSwitch(session.session_id)}
+                    >
+                      {session.session_name}
+                      <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Switch to this session in cmux</TooltipContent>
+                </Tooltip>
+              ) : (
                 <Badge
+                  key={session.session_id}
                   variant="outline"
                   className="text-xs font-normal cursor-pointer hover:bg-muted"
                   onClick={() => onSessionClick(session.session_name)}
                 >
                   {session.session_name}
                 </Badge>
-                {cmuxAvailable && session.display_state !== "dead" && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 w-5 p-0"
-                        onClick={() => onSwitch(session.session_id)}
-                      >
-                        <ArrowUpRight className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Switch to session</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+              )
             ))}
           </div>
         )}
