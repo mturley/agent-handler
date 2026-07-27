@@ -65,7 +65,7 @@ func GetStatus(cwd string) *Status {
 	wg.Add(4)
 	go func() { defer wg.Done(); branch = gitCmd(cwd, "rev-parse", "--abbrev-ref", "HEAD") }()
 	go func() { defer wg.Done(); defaultRaw = gitCmd(cwd, "symbolic-ref", "refs/remotes/origin/HEAD") }()
-	go func() { defer wg.Done(); porcelain = gitCmd(cwd, "status", "--porcelain") }()
+	go func() { defer wg.Done(); porcelain = gitCmd(cwd, "status", "--porcelain", "--no-lock-index") }()
 	go func() { defer wg.Done(); uncommittedStat = gitCmd(cwd, "diff", "HEAD", "--shortstat") }()
 	wg.Wait()
 
