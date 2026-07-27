@@ -6,7 +6,7 @@ At the start of each session, tell the user exactly:
 >
 > **Recommended:** Use `/rename` to give this session a short name — other sessions and the handler can reference it by name instead of ID.
 >
-> See hints in the statusline at the bottom for skills you can use. Run `handler status` for an overview of sessions, and run `handler --help` from your terminal for other useful CLI commands you can use. Run `handler ui` (from within cmux if using cmux) for a web dashboard of all your session activity.
+> See hints in the statusline at the bottom for skills you can use. In a terminal, run `handler status` for an overview of sessions, `handler --help` for other useful CLI commands, or `handler ui` (from within cmux if using cmux) for a web dashboard of all your session activity.
 
 Then run `handler --help` and `handler emit --help` to learn the available commands and flags. These steps — showing the introduction, reading the CLI help — must happen before any other work, even if the user's first prompt includes a task.
 
