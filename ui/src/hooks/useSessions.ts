@@ -37,18 +37,13 @@ function fuzzyMatch(query: string, session: Session): boolean {
 function matchesFilters(session: Session, filters: Set<FilterChip>): boolean {
   if (filters.size === 0) return true
 
-  const stateFilters: DisplayState[] = []
-  if (filters.has("active")) stateFilters.push("active")
-  if (filters.has("idle")) stateFilters.push("idle")
+  if (filters.has("active") && session.display_state === "active") return true
+  if (filters.has("idle") && session.display_state === "idle") return true
+  if (filters.has("needs_input") && session.needs_input) return true
+  if (filters.has("has_unread") && session.unread_count > 0) return true
+  if (filters.has("blocked") && session.blocked) return true
 
-  const passesState =
-    stateFilters.length === 0 || stateFilters.includes(session.display_state)
-
-  if (filters.has("needs_input") && !session.needs_input) return false
-  if (filters.has("has_unread") && session.unread_count === 0) return false
-  if (filters.has("blocked") && !session.blocked) return false
-
-  return passesState
+  return false
 }
 
 function sortSessions(a: Session, b: Session, field: SortField, reverse: boolean): number {
