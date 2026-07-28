@@ -15,6 +15,19 @@ export async function getSessions(): Promise<Session[]> {
   return fetchJSON<Session[]>("/api/sessions")
 }
 
+export interface SessionResource {
+  resource_type: string
+  resource_id: string
+  resource_url?: string
+  metadata?: Record<string, string>
+  unread_count: number
+  unread_types?: Record<string, number>
+}
+
+export async function getSessionResources(sessionId: string): Promise<SessionResource[]> {
+  return fetchJSON<SessionResource[]>(`/api/sessions/${encodeURIComponent(sessionId)}/resources`)
+}
+
 export interface ArchivedSessionsParams {
   limit?: number
   offset?: number

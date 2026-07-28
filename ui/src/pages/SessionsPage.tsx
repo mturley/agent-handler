@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SessionCard } from "@/components/SessionCard"
 import { ArchivedSessionCard } from "@/components/ArchivedSessionCard"
 import { InboxDialog } from "@/components/InboxDialog"
+import { ResourcesDialog } from "@/components/ResourcesDialog"
 import { useSessions, type FilterChip, type SortField } from "@/hooks/useSessions"
 import { useArchivedSessions } from "@/hooks/useArchivedSessions"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
@@ -84,6 +85,11 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
     name: string
   } | null>(null)
 
+  const [resourcesSession, setResourcesSession] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const handleSwitch = useCallback(
@@ -104,6 +110,18 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
       const all = grouped.flatMap((g) => g.workspaces.flatMap((w) => w.sessions))
       const s = all.find((s) => s.session_id === id)
       setInboxSession({
+        id,
+        name: s?.session_name || id.slice(0, 12),
+      })
+    },
+    [grouped]
+  )
+
+  const handleResourcesOpen = useCallback(
+    (id: string) => {
+      const all = grouped.flatMap((g) => g.workspaces.flatMap((w) => w.sessions))
+      const s = all.find((s) => s.session_id === id)
+      setResourcesSession({
         id,
         name: s?.session_name || id.slice(0, 12),
       })
@@ -471,6 +489,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                                     cmuxAvailable={cmuxAvailable}
                                     onSwitch={handleSwitch}
                                     onInboxOpen={handleInboxOpen}
+                                    onResourcesOpen={handleResourcesOpen}
                                     onTimelineClick={onTimelineClick}
                                     isTimelineActive={activeTimelineSessionId === session.session_id}
                                   />
@@ -572,6 +591,14 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
         sessionName={inboxSession?.name ?? ""}
         cmuxAvailable={cmuxAvailable}
         onClose={() => setInboxSession(null)}
+      />
+
+      {/* Resources dialog */}
+      <ResourcesDialog
+        sessionId={resourcesSession?.id ?? null}
+        sessionName={resourcesSession?.name ?? ""}
+        cmuxAvailable={cmuxAvailable}
+        onClose={() => setResourcesSession(null)}
       />
     </div>
   )

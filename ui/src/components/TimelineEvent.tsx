@@ -7,6 +7,7 @@ import { formatEventType } from "@/utils/formatLabel"
 import { timeAgo } from "@/utils/timeAgo"
 import { eventDotColor, eventBadgeVariant } from "@/utils/eventColors"
 import { ChevronRight, ChevronDown, ExternalLink, OctagonAlert, ArrowUp, ArrowDown, Minus, Equal } from "lucide-react"
+import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
 import { cn } from "@/lib/utils"
 
 const priorityConfig: Record<string, { icon: typeof ArrowUp; color: string }> = {
@@ -86,7 +87,14 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
                   ? `PR #${resource.resource_id}`
                   : resource.resource_id
                 return (
-                  <div key={i} className="text-xs">
+                  <div key={i} className="text-xs flex items-start gap-1">
+                    {resource.resource_type === "jira" && (
+                      <JiraIssueTypeIcon issueType={meta?.issue_type} className="mt-0.5 text-muted-foreground" />
+                    )}
+                    {resource.resource_type === "pr" && (
+                      <PRStateIcon state={meta?.state} className="mt-0.5" />
+                    )}
+                    <div>
                     <a
                       href={resource.resource_url || "#"}
                       target="_blank"
@@ -121,6 +129,7 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
                         {meta.assignee}
                       </span>
                     )}
+                    </div>
                   </div>
                 )
               })}

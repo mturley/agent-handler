@@ -174,6 +174,82 @@ func (s *Server) handleSessionInbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, events)
 }
 
+type sessionResourceInfo struct {
+	ResourceType string            `json:"resource_type"`
+	ResourceID   string            `json:"resource_id"`
+	ResourceURL  *string           `json:"resource_url"`
+	Metadata     map[string]string `json:"metadata,omitempty"`
+	UnreadCount  int               `json:"unread_count"`
+	UnreadTypes  map[string]int    `json:"unread_types,omitempty"`
+}
+
+func (s *Server) handleSessionResources(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	if sessionID == "" {
+		writeError(w, http.StatusBadRequest, "session_id is required")
+		return
+	}
+
+	subs, err := s.DB.ListSubscriptions(sessionID, false)
+	if err != nil {
+		s.Logger.Printf("Error listing subscriptions for %s: %v", sessionID, err)
+		writeError(w, http.StatusInternalServerError, "Failed to list subscriptions")
+		return
+	}
+
+	cursor, _ := s.DB.GetCursor(sessionID)
+
+	resources := make([]sessionResourceInfo, 0, len(subs))
+	for _, sub := range subs {
+		res := sessionResourceInfo{
+			ResourceType: sub.ResourceType,
+			ResourceID:   sub.ResourceID,
+			ResourceURL:  sub.ResourceURL,
+		}
+
+		// Get resource state metadata
+		var stateJSON string
+		err := s.DB.QueryRow(
+			`SELECT state_json FROM resource_state WHERE resource_type = ? AND resource_id = ?`,
+			sub.ResourceType, sub.ResourceID,
+		).Scan(&stateJSON)
+		if err == nil {
+			res.Metadata = extractResourceMetadata(sub.ResourceType, stateJSON)
+		}
+
+		// Count unreads for this resource since cursor
+		if cursor != "" {
+			rows, err := s.DB.Query(`
+				SELECT e.type, COUNT(*) FROM events e
+				JOIN event_resources er ON e.id = er.event_id
+				WHERE er.resource_type = ? AND er.resource_id = ? AND e.ts > ?
+				  AND e.type NOT IN ('watch_started', 'watcher_error')
+				GROUP BY e.type
+			`, sub.ResourceType, sub.ResourceID, cursor)
+			if err == nil {
+				defer rows.Close()
+				types := make(map[string]int)
+				total := 0
+				for rows.Next() {
+					var t string
+					var c int
+					rows.Scan(&t, &c)
+					types[t] = c
+					total += c
+				}
+				res.UnreadCount = total
+				if len(types) > 0 {
+					res.UnreadTypes = types
+				}
+			}
+		}
+
+		resources = append(resources, res)
+	}
+
+	writeJSON(w, http.StatusOK, resources)
+}
+
 // buildCmuxOrderMap queries cmux for workspace and surface ordering,
 // returning a map of surface UUID → ordinal position.
 func buildCmuxOrderMap() map[string]int {

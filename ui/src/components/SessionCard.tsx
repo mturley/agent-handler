@@ -22,6 +22,15 @@ const stateLabels: Record<string, string> = {
   archived: "Archived",
 }
 
+const PR_EVENT_TYPES = new Set(["pr_comment", "pr_review_comment", "pr_approved", "pr_merged", "pr_closed", "ci_check_passed", "ci_check_failed"])
+const JIRA_EVENT_TYPES = new Set(["jira_comment", "jira_status_change", "jira_assigned", "jira_labels_changed", "jira_description_changed"])
+
+function hasUnreadsForResourceType(resourceType: string, breakdown: Record<string, number>): boolean {
+  const eventTypes = resourceType === "pr" ? PR_EVENT_TYPES : resourceType === "jira" ? JIRA_EVENT_TYPES : null
+  if (!eventTypes) return false
+  return Object.keys(breakdown).some((t) => eventTypes.has(t))
+}
+
 interface SessionCardProps {
   session: Session
   showBranch?: boolean
@@ -29,6 +38,7 @@ interface SessionCardProps {
   isTimelineActive?: boolean
   onSwitch: (id: string) => void
   onInboxOpen: (id: string) => void
+  onResourcesOpen: (id: string) => void
   onTimelineClick: (id: string) => void
 }
 
@@ -39,6 +49,7 @@ export function SessionCard({
   isTimelineActive,
   onSwitch,
   onInboxOpen,
+  onResourcesOpen,
   onTimelineClick,
 }: SessionCardProps) {
   const name = session.session_name || session.session_id.slice(0, 12)
@@ -130,15 +141,24 @@ export function SessionCard({
             <span>{timeAgo(session.last_prompt)}</span>
           )}
           {session.subscriptions_count > 0 && (
-            <Badge variant="outline" className="text-xs font-normal">
+            <Badge
+              variant="outline"
+              className="text-xs font-normal cursor-pointer hover:bg-accent gap-1"
+              onClick={() => onResourcesOpen(session.session_id)}
+            >
               {session.subscriptions_breakdown
                 ? Object.entries(session.subscriptions_breakdown)
                     .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([type, count]) => {
-                      const label = type === "github_pr" ? "PR" : type === "jira_issue" ? "Jira" : formatEventType(type)
-                      return `${count} ${label}`
+                    .map(([type, count], i, arr) => {
+                      const label = type === "pr" ? "PR" : type === "jira" ? "Jira" : formatEventType(type)
+                      const hasUnreads = session.unread_breakdown && hasUnreadsForResourceType(type, session.unread_breakdown)
+                      return (
+                        <span key={type} className={hasUnreads ? "text-blue-400" : ""}>
+                          {hasUnreads && <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 mr-0.5 align-middle" />}
+                          {count} {label}{i < arr.length - 1 ? "," : ""}
+                        </span>
+                      )
                     })
-                    .join(", ")
                 : `${session.subscriptions_count} resource${session.subscriptions_count !== 1 ? "s" : ""}`}
             </Badge>
           )}

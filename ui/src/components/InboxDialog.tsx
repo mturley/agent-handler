@@ -76,7 +76,7 @@ export function InboxDialog({
 
   return (
     <Dialog open={!!sessionId} onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Inbox: {sessionName}</DialogTitle>
           <DialogDescription>
