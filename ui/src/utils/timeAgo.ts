@@ -1,7 +1,8 @@
 export function timeAgo(iso: string): string {
   if (!iso) return ""
   const now = Date.now()
-  const then = new Date(iso).getTime()
+  const normalized = iso.includes("T") ? iso : iso.replace(" ", "T") + "Z"
+  const then = new Date(normalized).getTime()
   const diffMs = now - then
   if (diffMs < 0) return "just now"
 
