@@ -1,6 +1,6 @@
 # agent-handler
 
-Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, GitHub and Jira resource watchers, statusline enhancements, terminal peeking, cmux integrations and (WIP) web dashboard.
+Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, [GitHub and Jira resource watchers](#external-watchers), statusline enhancements, [terminal peeking](#session-inspection-peek), [cmux integrations](#cmux-integration) and [web dashboard](#web-ui).
 
 ![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-inbox.png)
 
@@ -182,15 +182,15 @@ handler watcher uninstall    # Remove all watchers (or: handler watcher uninstal
 
 When running inside [cmux](https://cmux.dev), agent-handler integrates deeply with the terminal environment:
 
-- **Session switching** — `handler switch` navigates to any session's cmux workspace and surface tab, with an interactive mode featuring readline tab completion
+- **Session switching** — `handler switch` navigates to any session's cmux workspace and surface tab, with an interactive mode featuring readline tab completion. Also enhances the [web UI](#web-ui) with session switch buttons.
 - **Keyboard shortcuts** — `handler setup` configures cmux actions for quick session switching:
   - `cmd+shift+a` — jump to the first session awaiting approval
   - `cmd+shift+s` — interactive session switcher
 - **Workspace tracking** — sessions store their cmux workspace ID, name, and color; `handler status` groups sessions by repo and workspace with colored indicators
-- **Awaiting approval detection** — the statusline scans other sessions for approval prompts and shows the keyboard shortcut to jump to them
+- **Awaiting approval detection** — the statusline scans other sessions for approval prompts and shows the keyboard shortcut to jump to them. This is also surfaced in the [web UI](#web-ui).
 - **Terminal notifications** — flash and notify via cmux's native notification system when new events arrive
 
-All cmux features degrade gracefully outside cmux — the statusline adapts, keyboard shortcuts don't render, and `handler switch` exits with a clear error.
+All cmux features degrade gracefully outside cmux — the statusline adapts, keyboard shortcuts don't render, `handler switch` exits with a clear error, and the web UI hides its session switch buttons.
 
 ## Session Inspection (Peek)
 
@@ -237,7 +237,9 @@ When disabled (the default), the statusline shows the raw cost value from Claude
 
 ## Web UI
 
-A dark-mode web dashboard served by `handler ui`. Built with React, TypeScript, Tailwind CSS, and shadcn/ui. Responsive down to 400px for use in narrow cmux browser panes.
+A web dashboard served by `handler ui`. Built with React, TypeScript, Tailwind CSS, and shadcn/ui. Responsive down to 400px for use in narrow cmux browser panes.
+
+![Screenshot of web UI with a lot of session activity](docs/images/handler-ui.png)
 
 ### Sessions Tab
 
