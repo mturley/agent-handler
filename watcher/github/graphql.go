@@ -59,11 +59,19 @@ type ReviewComment struct {
 	Body       string
 }
 
-// CommitInfo contains commit count and latest SHA.
+// CommitEntry represents a single commit.
+type CommitEntry struct {
+	SHA             string
+	Date            string
+	MessageHeadline string
+}
+
+// CommitInfo contains commit count, latest SHA, and recent commits.
 type CommitInfo struct {
 	TotalCount int
 	LatestSHA  string
 	LatestDate string
+	Recent     []CommitEntry
 }
 
 // CheckRun represents a check run status.
@@ -213,12 +221,13 @@ func buildBatchedPRQuery(prs []PRRef) string {
             }
           }
         }
-        commits(last: 1) {
+        commits(last: 5) {
           totalCount
           nodes {
             commit {
               oid
               committedDate
+              messageHeadline
               checkSuites(last: 10) {
                 nodes {
                   checkRuns(last: 20) {
@@ -372,9 +381,10 @@ type commitsConnection struct {
 
 type commitNode struct {
 	Commit struct {
-		OID           string                `json:"oid"`
-		CommittedDate string                `json:"committedDate"`
-		CheckSuites   checkSuitesConnection `json:"checkSuites"`
+		OID             string                `json:"oid"`
+		CommittedDate   string                `json:"committedDate"`
+		MessageHeadline string                `json:"messageHeadline"`
+		CheckSuites     checkSuitesConnection `json:"checkSuites"`
 	} `json:"commit"`
 }
 
@@ -446,16 +456,25 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 		}
 	}
 
-	// Parse commits
+	// Parse commits (nodes are in chronological order; last element is most recent)
 	data.Commits.TotalCount = node.Commits.TotalCount
+	for _, cn := range node.Commits.Nodes {
+		data.Commits.Recent = append(data.Commits.Recent, CommitEntry{
+			SHA:             cn.Commit.OID,
+			Date:            cn.Commit.CommittedDate,
+			MessageHeadline: cn.Commit.MessageHeadline,
+		})
+	}
 	if len(node.Commits.Nodes) > 0 {
-		data.Commits.LatestSHA = node.Commits.Nodes[0].Commit.OID
-		data.Commits.LatestDate = node.Commits.Nodes[0].Commit.CommittedDate
+		latest := node.Commits.Nodes[len(node.Commits.Nodes)-1]
+		data.Commits.LatestSHA = latest.Commit.OID
+		data.Commits.LatestDate = latest.Commit.CommittedDate
 	}
 
-	// Parse check runs (nested under commits → commit → checkSuites)
+	// Parse check runs (nested under commits → commit → checkSuites — use latest commit)
 	if len(node.Commits.Nodes) > 0 {
-		for _, suite := range node.Commits.Nodes[0].Commit.CheckSuites.Nodes {
+		latestNode := node.Commits.Nodes[len(node.Commits.Nodes)-1]
+		for _, suite := range latestNode.Commit.CheckSuites.Nodes {
 			for _, run := range suite.CheckRuns.Nodes {
 				if run.CompletedAt != nil && *run.CompletedAt != "" {
 					conclusion := ""

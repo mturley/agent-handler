@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/mturley/agent-handler/config"
@@ -228,7 +229,7 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 				if prevSHA != "" && prevSHA != prData.Commits.LatestSHA {
 					if !watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, watcher.EventTypePRNewCommits, prData.Commits.LatestDate) {
 						title := fmt.Sprintf("New commits pushed to PR #%d", prData.Number)
-						body := fmt.Sprintf("Latest commit: %s", prData.Commits.LatestSHA[:7])
+						body := formatNewCommitsBody(prData, prevSHA)
 						if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRNewCommits, title, &body, prData.Commits.LatestDate, nil, nil, resource); err != nil {
 							logger.Printf("WARNING: failed to emit new commits event: %v", err)
 						} else {
@@ -344,6 +345,39 @@ func hasNewCommitsSinceReview(prData PRData) bool {
 }
 
 // buildPRStateJSON constructs the state JSON for a PR.
+func formatNewCommitsBody(prData PRData, prevSHA string) string {
+	// Find commits newer than prevSHA
+	var newCommits []CommitEntry
+	foundPrev := false
+	for _, c := range prData.Commits.Recent {
+		if c.SHA == prevSHA {
+			foundPrev = true
+			continue
+		}
+		if foundPrev {
+			newCommits = append(newCommits, c)
+		}
+	}
+	// If we didn't find prevSHA in the recent list, show all recent commits
+	if !foundPrev {
+		newCommits = prData.Commits.Recent
+	}
+
+	if len(newCommits) == 0 {
+		return fmt.Sprintf("Latest commit: %s", prData.Commits.LatestSHA[:7])
+	}
+
+	var lines []string
+	for _, c := range newCommits {
+		msg := c.MessageHeadline
+		if len(msg) > 72 {
+			msg = msg[:69] + "..."
+		}
+		lines = append(lines, fmt.Sprintf("• %s %s", c.SHA[:7], msg))
+	}
+	return fmt.Sprintf("%s", strings.Join(lines, "\n"))
+}
+
 func buildPRStateJSON(prData PRData) string {
 	state := map[string]interface{}{
 		"title":                        prData.Title,
