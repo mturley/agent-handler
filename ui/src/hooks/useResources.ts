@@ -69,7 +69,7 @@ export function useResources() {
   })
 
   const resources = data?.resources || []
-  const watcherStatus = data?.watcher_status || {}
+  const watcherStatus = data?.watchers || {}
 
   const prResources = useMemo(() => {
     const prs = resources.filter((r) => r.resource_type === "pr")

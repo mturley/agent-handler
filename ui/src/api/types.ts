@@ -101,5 +101,5 @@ export interface WatcherStatusInfo {
 
 export interface ResourcesResponse {
   resources: ResourceEntry[]
-  watcher_status: Record<string, WatcherStatusInfo>
+  watchers: Record<string, WatcherStatusInfo>
 }
