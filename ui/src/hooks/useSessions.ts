@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import type { Session, DisplayState } from "@/api/types"
+import type { Session } from "@/api/types"
 import { getSessions } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 

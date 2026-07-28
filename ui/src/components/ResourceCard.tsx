@@ -43,8 +43,7 @@ interface JiraState extends Record<string, unknown> {
   assignee?: string
   status?: string
   priority?: string
-  blocked?: boolean
-  blocked_reason?: string
+  blocked?: string | boolean
   epic_key?: string
   story_points?: number
   labels?: string[]
@@ -263,16 +262,13 @@ export function ResourceCard({
               {!isPR && jiraState && (
                 <>
                   {jiraState.blocked !== undefined && (
-                    <div>Blocked: {jiraState.blocked ? "yes" : "no"}</div>
-                  )}
-                  {jiraState.blocked_reason && (
-                    <div className="text-red-400">Blocked reason: {jiraState.blocked_reason}</div>
+                    <div>Blocked: {String(jiraState.blocked) === "True" ? "yes" : "no"}</div>
                   )}
                   {jiraState.epic_key && <div>Epic: {jiraState.epic_key}</div>}
                   {jiraState.story_points !== undefined && (
                     <div>Story points: {jiraState.story_points}</div>
                   )}
-                  {jiraState.labels && jiraState.labels.length > 0 && (
+                  {Array.isArray(jiraState.labels) && jiraState.labels.length > 0 && (
                     <div>Labels: {jiraState.labels.join(", ")}</div>
                   )}
                 </>
