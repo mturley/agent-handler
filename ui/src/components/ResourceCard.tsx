@@ -39,6 +39,7 @@ interface PRState extends Record<string, unknown> {
 interface JiraState extends Record<string, unknown> {
   summary?: string
   issue_type?: string
+  issue_type_icon?: string
   assignee?: string
   status?: string
   priority?: string
@@ -78,7 +79,7 @@ export function ResourceCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               {isPR && <PRStateIcon state={prState?.state} />}
-              {!isPR && <JiraIssueTypeIcon issueType={jiraState?.issue_type} />}
+              {!isPR && <JiraIssueTypeIcon issueType={jiraState?.issue_type} iconUrl={jiraState?.issue_type_icon} />}
               <a
                 href={resource.resource_url}
                 target="_blank"

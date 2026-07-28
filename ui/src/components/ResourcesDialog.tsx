@@ -15,7 +15,6 @@ import { getSessionResources, switchSession, type SessionResource } from "@/api/
 import { formatEventType } from "@/utils/formatLabel"
 import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
 import { ExternalLink, ArrowUpRight, Mail } from "lucide-react"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { toast } from "sonner"
 
 interface ResourcesDialogProps {
@@ -36,7 +35,7 @@ function ResourceItem({ resource }: { resource: SessionResource }) {
     <div className={cn("py-2 space-y-1 px-2 rounded", hasUnreads && "bg-blue-500/5")}>
       <div className="flex items-start gap-2">
         {resource.resource_type === "jira" && (
-          <JiraIssueTypeIcon issueType={meta?.issue_type} className="mt-1 text-muted-foreground" />
+          <JiraIssueTypeIcon issueType={meta?.issue_type} iconUrl={meta?.issue_type_icon} className="mt-1" />
         )}
         {resource.resource_type === "pr" && (
           <PRStateIcon state={meta?.state} className="mt-1" />
@@ -181,15 +180,10 @@ export function ResourcesDialog({
 
         <div className="flex items-center justify-between pt-2">
           {cmuxAvailable && (
-            <Tooltip delayDuration={300}>
-              <TooltipTrigger asChild>
-                <Button variant="link" size="sm" onClick={handleSwitch}>
-                  Go to session
-                  <ArrowUpRight className="h-3 w-3 ml-1" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Switch to this session in cmux</TooltipContent>
-            </Tooltip>
+            <Button variant="link" size="sm" onClick={handleSwitch}>
+              Go to session
+              <ArrowUpRight className="h-3 w-3 ml-1" />
+            </Button>
           )}
         </div>
       </DialogContent>

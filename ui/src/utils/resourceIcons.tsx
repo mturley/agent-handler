@@ -1,7 +1,7 @@
 import { Bug, BookOpen, Layers, CheckSquare, ListTree, GitPullRequest, GitMerge, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const jiraIssueTypeIcons: Record<string, typeof Bug> = {
+const jiraFallbackIcons: Record<string, typeof Bug> = {
   Bug: Bug,
   Story: BookOpen,
   Epic: Layers,
@@ -15,9 +15,12 @@ const prStateIcons: Record<string, { icon: typeof GitPullRequest; color: string 
   CLOSED: { icon: XCircle, color: "text-red-500" },
 }
 
-export function JiraIssueTypeIcon({ issueType, className }: { issueType?: string; className?: string }) {
+export function JiraIssueTypeIcon({ issueType, iconUrl, className }: { issueType?: string; iconUrl?: string; className?: string }) {
+  if (iconUrl) {
+    return <img src={iconUrl} alt={issueType || ""} className={cn("h-4 w-4 shrink-0", className)} />
+  }
   if (!issueType) return null
-  const Icon = jiraIssueTypeIcons[issueType]
+  const Icon = jiraFallbackIcons[issueType]
   if (!Icon) return null
   return <Icon className={cn("h-3.5 w-3.5 shrink-0", className)} />
 }
