@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Clock,
 } from "lucide-react"
+import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
 
 interface ResourceCardProps {
   resource: ResourceEntry
@@ -37,6 +38,7 @@ interface PRState extends Record<string, unknown> {
 // Jira state interface
 interface JiraState extends Record<string, unknown> {
   summary?: string
+  issue_type?: string
   assignee?: string
   status?: string
   priority?: string
@@ -74,16 +76,19 @@ export function ResourceCard({
       <CardHeader className="pb-2 pt-3 px-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              {isPR && <PRStateIcon state={prState?.state} />}
+              {!isPR && <JiraIssueTypeIcon issueType={jiraState?.issue_type} />}
               <a
                 href={resource.resource_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-sm hover:underline truncate"
+                className="inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 hover:underline font-medium shrink-0"
               >
-                {title}
+                {isPR ? `PR #${resource.resource_id}` : resource.resource_id}
+                <ExternalLink className="h-3 w-3" />
               </a>
-              <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-sm text-muted-foreground truncate">{title}</span>
             </div>
 
             {/* Badges row */}

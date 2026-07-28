@@ -181,7 +181,7 @@ export function ResourcesDialog({
 
         <div className="flex items-center justify-between pt-2">
           {cmuxAvailable && (
-            <Tooltip>
+            <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <Button variant="link" size="sm" onClick={handleSwitch}>
                   Go to session
