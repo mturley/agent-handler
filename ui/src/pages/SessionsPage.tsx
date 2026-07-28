@@ -29,8 +29,8 @@ import { formatEventType } from "@/utils/formatLabel"
 const filterChips: { key: FilterChip; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "idle", label: "Idle" },
-  { key: "needs_input", label: "Awaiting approval" },
   { key: "blocked", label: "Blocked" },
+  { key: "needs_input", label: "Awaiting approval" },
   { key: "has_unread", label: "Has unread" },
 ]
 
