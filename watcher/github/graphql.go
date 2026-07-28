@@ -221,7 +221,7 @@ func buildBatchedPRQuery(prs []PRRef) string {
             }
           }
         }
-        commits(last: 5) {
+        commits(last: 100) {
           totalCount
           nodes {
             commit {
