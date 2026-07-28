@@ -16,6 +16,8 @@ export interface Session {
   cmux_workspace?: string
   cmux_workspace_color?: string
   needs_input: boolean
+  blocked: boolean
+  blocked_reason?: string
   pid: number
   status: string
   subscriptions_count: number

@@ -46,6 +46,7 @@ function matchesFilters(session: Session, filters: Set<FilterChip>): boolean {
 
   if (filters.has("needs_input") && !session.needs_input) return false
   if (filters.has("has_unread") && session.unread_count === 0) return false
+  if (filters.has("blocked") && !session.blocked) return false
 
   return passesState
 }
@@ -228,6 +229,7 @@ export function useSessions() {
       if (s.display_state === "active") counts.active++
       if (s.display_state === "idle") counts.idle++
       if (s.needs_input) counts.needs_input++
+      if (s.blocked) counts.blocked++
       if (s.unread_count > 0) counts.has_unread++
     }
 

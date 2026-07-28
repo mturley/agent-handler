@@ -28,6 +28,8 @@ type enrichedSession struct {
 	CmuxWorkspace      string         `json:"cmux_workspace,omitempty"`
 	CmuxWorkspaceColor string         `json:"cmux_workspace_color,omitempty"`
 	NeedsInput         bool           `json:"needs_input"`
+	Blocked            bool           `json:"blocked"`
+	BlockedReason      string         `json:"blocked_reason,omitempty"`
 	PID                int            `json:"pid"`
 	Status             string         `json:"status"`
 	SubscriptionCount     int            `json:"subscriptions_count"`
@@ -297,6 +299,9 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		needsInput = peekState.NeedsInput
 	}
 
+	// Check blocked status
+	blocked, blockedReason := s.DB.GetBlockedStatus(session.SessionID)
+
 	// Fetch subscriptions count and breakdown by type
 	subscriptionCount := 0
 	var subscriptionBreakdown map[string]int
@@ -327,6 +332,8 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		CmuxWorkspace:      session.CmuxWorkspaceName,
 		CmuxWorkspaceColor: session.CmuxWorkspaceColor,
 		NeedsInput:         needsInput,
+		Blocked:            blocked,
+		BlockedReason:      blockedReason,
 		PID:                session.PID,
 		Status:             session.Status,
 		CWD:                  session.CWD,

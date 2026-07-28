@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
-import { CircleAlert, ArrowUpRight, Mail, List } from "lucide-react"
+import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert } from "lucide-react"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
 
@@ -48,7 +48,8 @@ export function SessionCard({
       className={cn(
         "transition-colors",
         session.needs_input && "border-amber-500/50",
-        session.unread_count > 0 && !session.needs_input && "border-blue-500/50"
+        session.blocked && !session.needs_input && "border-red-500/50",
+        session.unread_count > 0 && !session.needs_input && !session.blocked && "border-blue-500/50"
       )}
     >
       <CardHeader className="pb-2 pt-3 px-4">
@@ -101,6 +102,14 @@ export function SessionCard({
           </div>
         </div>
       </CardHeader>
+      {session.blocked && (
+        <div className="px-4 pb-1 -mt-1 pl-8">
+          <span className="inline-flex items-center gap-1 text-red-400 text-xs">
+            <OctagonAlert className="h-3.5 w-3.5 shrink-0" />
+            Blocked{session.blocked_reason ? `: ${session.blocked_reason}` : ""}
+          </span>
+        </div>
+      )}
       {session.unread_count > 0 && (
         <div
           className="px-4 pb-1 -mt-1 pl-8 cursor-pointer"

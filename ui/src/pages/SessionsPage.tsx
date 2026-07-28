@@ -29,6 +29,7 @@ const filterChips: { key: FilterChip; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "idle", label: "Idle" },
   { key: "needs_input", label: "Awaiting approval" },
+  { key: "blocked", label: "Blocked" },
   { key: "has_unread", label: "Has unread" },
 ]
 
@@ -347,6 +348,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                 const count = filterCounts[chip.key]
                 const isActive = filters.has(chip.key)
                 const highlightAmber = count > 0 && chip.key === "needs_input"
+                const highlightRed = count > 0 && chip.key === "blocked"
                 const highlightBlue = count > 0 && chip.key === "has_unread"
 
                 return (
@@ -366,6 +368,8 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                           "inline-flex items-center justify-center rounded-full text-xs font-bold leading-none min-w-[20px] h-[20px] px-1",
                           highlightAmber
                             ? "bg-amber-500 text-black font-extrabold"
+                            : highlightRed
+                            ? "bg-red-500 text-white font-extrabold"
                             : highlightBlue
                             ? "bg-blue-500 text-white font-extrabold"
                             : isActive
