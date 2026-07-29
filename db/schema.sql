@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS event_resources (
     resource_url TEXT
 );
 
+CREATE INDEX IF NOT EXISTS idx_event_resources_event ON event_resources(event_id);
 CREATE INDEX IF NOT EXISTS idx_event_resources_resource ON event_resources(resource_type, resource_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
