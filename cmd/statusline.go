@@ -181,7 +181,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		}
 
 		termType, termID, workspaceID := terminal.Detect()
-		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD)
+		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)
 		wd.Close()
 	}

@@ -154,7 +154,7 @@ func findSessionsWithUnreads(d *db.DB, selfSessionID string) []db.Session {
 }
 
 // syncSessionMetadata updates session name, PID, and terminal info only if changed.
-func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID, cwd string) {
+func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID, cwd, model string, contextPercent int) {
 	session, err := d.GetSession(sessionID)
 	if err != nil || session == nil {
 		return
@@ -190,6 +190,12 @@ func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, te
 
 	if cwd != "" && session.CWD != cwd {
 		updates["cwd"] = cwd
+	}
+	if model != "" && session.Model != model {
+		updates["model"] = model
+	}
+	if contextPercent >= 0 && session.ContextPercent != contextPercent {
+		updates["context_percent"] = contextPercent
 	}
 
 	if len(updates) == 0 {

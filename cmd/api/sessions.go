@@ -35,6 +35,10 @@ type enrichedSession struct {
 	SubscriptionCount     int            `json:"subscriptions_count"`
 	SubscriptionBreakdown map[string]int `json:"subscriptions_breakdown,omitempty"`
 	CWD                string         `json:"cwd,omitempty"`
+	Model              string         `json:"model,omitempty"`
+	ContextPercent     int            `json:"context_percent"`
+	TrueCostUSD        *float64       `json:"true_cost_usd,omitempty"`
+	TodayCostUSD       *float64       `json:"today_cost_usd,omitempty"`
 	CmuxOrder          int            `json:"cmux_order"`
 }
 
@@ -392,6 +396,22 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		}
 	}
 
+	// Compute cost if available
+	var trueCostPtr, todayCostPtr *float64
+	if displayState == "active" || displayState == "idle" {
+		if snap, err := s.DB.GetCostSnapshot(session.SessionID); err == nil && snap != nil && snap.ReportedCostUSD > 0 {
+			trueCost := snap.ReportedCostUSD
+			if adj, err := s.DB.GetTotalAdjustment(session.SessionID); err == nil {
+				trueCost += adj
+			}
+			trueCostPtr = &trueCost
+			today := time.Now().UTC().Format("2006-01-02")
+			if dc, err := s.DB.GetDailyCostForSession(session.SessionID, today); err == nil && dc != nil {
+				todayCostPtr = &dc.CostUSD
+			}
+		}
+	}
+
 	return enrichedSession{
 		SessionID:          session.SessionID,
 		SessionName:        session.SessionName,
@@ -413,6 +433,10 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		PID:                session.PID,
 		Status:             session.Status,
 		CWD:                  session.CWD,
+		Model:                session.Model,
+		ContextPercent:       session.ContextPercent,
+		TrueCostUSD:          trueCostPtr,
+		TodayCostUSD:         todayCostPtr,
 		SubscriptionCount:     subscriptionCount,
 		SubscriptionBreakdown: subscriptionBreakdown,
 	}

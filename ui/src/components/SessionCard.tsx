@@ -113,6 +113,38 @@ export function SessionCard({
           </div>
         </div>
       </CardHeader>
+      {session.context_percent > 0 && (
+        <div className="px-4 -mt-1 pb-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden cursor-default">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    session.context_percent >= 80 ? "bg-red-500" :
+                    session.context_percent >= 50 ? "bg-yellow-500" : "bg-green-500"
+                  )}
+                  style={{ width: `${session.context_percent}%` }}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="space-y-0.5">
+                {session.model && <div className="font-medium">{session.model}</div>}
+                <div>{session.context_percent}% context used</div>
+                {session.true_cost_usd != null && (
+                  <div>
+                    ${session.true_cost_usd.toFixed(2)} total
+                    {session.today_cost_usd != null && session.today_cost_usd > 0 && (
+                      <span> (${session.today_cost_usd.toFixed(2)} today)</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
       {session.blocked && (
         <div className="px-4 pb-1 -mt-1 pl-8">
           <span className="inline-flex items-center gap-1 text-red-400 text-xs">

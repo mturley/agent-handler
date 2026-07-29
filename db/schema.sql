@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS sessions (
     last_active TEXT NOT NULL,
     last_prompt TEXT,
     cwd TEXT,
+    model TEXT,
+    context_percent INTEGER,
     registered_at TEXT NOT NULL,
     jsonl_path TEXT NOT NULL
 );
