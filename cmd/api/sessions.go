@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 )
@@ -396,18 +397,21 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		}
 	}
 
-	// Compute cost if available
+	// Compute cost if available and enabled in config
 	var trueCostPtr, todayCostPtr *float64
 	if displayState == "active" || displayState == "idle" {
-		if snap, err := s.DB.GetCostSnapshot(session.SessionID); err == nil && snap != nil && snap.ReportedCostUSD > 0 {
-			trueCost := snap.ReportedCostUSD
-			if adj, err := s.DB.GetTotalAdjustment(session.SessionID); err == nil {
-				trueCost += adj
-			}
-			trueCostPtr = &trueCost
-			today := time.Now().UTC().Format("2006-01-02")
-			if dc, err := s.DB.GetDailyCostForSession(session.SessionID, today); err == nil && dc != nil {
-				todayCostPtr = &dc.CostUSD
+		cfg, _ := config.Read(config.DefaultPath())
+		if cfg != nil && cfg.ExperimentalCostDisplay() {
+			if snap, err := s.DB.GetCostSnapshot(session.SessionID); err == nil && snap != nil && snap.ReportedCostUSD > 0 {
+				trueCost := snap.ReportedCostUSD
+				if adj, err := s.DB.GetTotalAdjustment(session.SessionID); err == nil {
+					trueCost += adj
+				}
+				trueCostPtr = &trueCost
+				today := time.Now().UTC().Format("2006-01-02")
+				if dc, err := s.DB.GetDailyCostForSession(session.SessionID, today); err == nil && dc != nil {
+					todayCostPtr = &dc.CostUSD
+				}
 			}
 		}
 	}

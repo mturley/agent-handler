@@ -114,15 +114,15 @@ export function SessionCard({
         </div>
       </CardHeader>
       {session.context_percent > 0 && (
-        <div className="px-4 -mt-1 pb-1">
+        <div className="px-4 -mt-1 pb-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden cursor-default">
                 <div
                   className={cn(
                     "h-full rounded-full transition-all",
-                    session.context_percent >= 80 ? "bg-red-500" :
-                    session.context_percent >= 50 ? "bg-yellow-500" : "bg-green-500"
+                    session.context_percent >= 80 ? "bg-red-400/60" :
+                    session.context_percent >= 50 ? "bg-yellow-400/50" : "bg-green-400/40"
                   )}
                   style={{ width: `${session.context_percent}%` }}
                 />

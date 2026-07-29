@@ -84,7 +84,7 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
               {event.resources.map((resource, i) => {
                 const meta = resource.metadata
                 const label = resource.resource_type === "pr"
-                  ? `PR #${resource.resource_id}`
+                  ? `PR ${resource.resource_id}`
                   : resource.resource_id
                 return (
                   <div key={i} className="text-xs flex items-start gap-1">
