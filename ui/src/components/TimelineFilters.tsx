@@ -30,7 +30,7 @@ export const CATEGORY_TYPES: Record<string, string[]> = {
   Milestones: ["milestone", "decision"],
   Messages: ["message"],
   Status: ["status", "blocked", "unblocked", "handoff", "followup"],
-  CI: ["ci_check_passed", "ci_check_failed"],
+  CI: ["ci_check_passed", "ci_check_failed", "ci_passed", "ci_failed", "ci_pending", "ci_partial_failure"],
   "PR Activity": ["pr_comment", "pr_review_comment", "pr_approved", "pr_merged", "pr_closed"],
   Jira: ["jira_comment", "jira_status_change", "jira_assigned", "jira_labels_changed", "jira_description_changed"],
 }

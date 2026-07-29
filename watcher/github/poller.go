@@ -174,28 +174,84 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 		logger.Printf("Emitted pr_review_comment for %s by %s", resource.ResourceID, reviewComment.Author)
 	}
 
-	// Process check runs
-	for _, checkRun := range prData.CheckRuns {
-		if checkRun.CompletedAt <= cursor {
-			continue
+	// Process check runs as a bundle per commit
+	if len(prData.CheckRuns) > 0 && prData.Commits.LatestSHA != "" {
+		hasNewChecks := false
+		for _, cr := range prData.CheckRuns {
+			if cr.CompletedAt != "" && cr.CompletedAt > cursor {
+				hasNewChecks = true
+				break
+			}
 		}
 
-		eventType, ok := checkRunEventType(checkRun.Conclusion)
-		if !ok {
-			continue
-		}
+		if hasNewChecks || cursor == "" {
+			passed, failed, pending := 0, 0, 0
+			var latestTS string
+			var failedNames, pendingNames, passedNames []string
 
-		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, eventType, checkRun.CompletedAt) {
-			continue
-		}
+			for _, cr := range prData.CheckRuns {
+				if cr.Status == "COMPLETED" {
+					_, isCI := checkRunEventType(cr.Conclusion)
+					if !isCI {
+						continue
+					}
+					if cr.CompletedAt > latestTS {
+						latestTS = cr.CompletedAt
+					}
+					switch cr.Conclusion {
+					case "SUCCESS", "NEUTRAL", "SKIPPED":
+						passed++
+						passedNames = append(passedNames, fmt.Sprintf("✓ %s", cr.Name))
+					default:
+						failed++
+						failedNames = append(failedNames, fmt.Sprintf("✗ %s: %s", cr.Name, cr.Conclusion))
+					}
+				} else if cr.Status == "IN_PROGRESS" || cr.Status == "QUEUED" {
+					pending++
+					pendingNames = append(pendingNames, fmt.Sprintf("⧖ %s", cr.Name))
+				}
+			}
 
-		title := fmt.Sprintf("Check %s: %s", checkRun.Name, checkRun.Conclusion)
-		if err := watcher.EmitWatcherEvent(d, "github", eventType, title, nil, checkRun.CompletedAt, nil, nil, resource); err != nil {
-			return eventCount, fmt.Errorf("failed to emit %s event: %w", eventType, err)
+			total := passed + failed + pending
+			if total == 0 {
+				goto skipCIBundle
+			}
+
+			var eventType watcher.EventType
+			var title string
+			if failed > 0 && pending > 0 {
+				eventType = watcher.EventTypeCIPartialFailure
+				title = fmt.Sprintf("CI failing (%d failed, %d passed, %d pending)", failed, passed, pending)
+			} else if failed > 0 {
+				eventType = watcher.EventTypeCIFailed
+				title = fmt.Sprintf("CI failed (%d failed, %d passed)", failed, passed)
+			} else if pending > 0 {
+				eventType = watcher.EventTypeCIPending
+				title = fmt.Sprintf("CI running (%d/%d passed, %d pending)", passed, total, pending)
+			} else {
+				eventType = watcher.EventTypeCIPassed
+				title = fmt.Sprintf("CI passed (%d/%d checks)", passed, total)
+			}
+
+			// Build body: failures first, then pending, then passes
+			var bodyLines []string
+			bodyLines = append(bodyLines, failedNames...)
+			bodyLines = append(bodyLines, pendingNames...)
+			bodyLines = append(bodyLines, passedNames...)
+			body := strings.Join(bodyLines, "\n")
+
+			if latestTS == "" {
+				latestTS = time.Now().UTC().Format(time.RFC3339)
+			}
+
+			if err := watcher.UpsertCIBundle(d, prData.Commits.LatestSHA, eventType, title, body, latestTS, resource); err != nil {
+				return eventCount, fmt.Errorf("failed to upsert CI bundle: %w", err)
+			}
+			eventCount++
+			logger.Printf("Upserted CI bundle for %s (%s): %s", resource.ResourceID, prData.Commits.LatestSHA[:8], title)
 		}
-		eventCount++
-		logger.Printf("Emitted %s for %s: %s", eventType, resource.ResourceID, checkRun.Name)
 	}
+skipCIBundle:
 
 	// Check PR state
 	if prData.State == "MERGED" || prData.State == "CLOSED" {

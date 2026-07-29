@@ -116,6 +116,64 @@ func EmitWatcherEvent(d *db.DB, source string, eventType EventType, title string
 	return nil
 }
 
+// UpsertCIBundle finds or creates a CI bundle event for a specific commit on a resource.
+// If a bundle already exists (matched by tags containing "commit:<sha>"), it updates the
+// event type, title, body, and timestamps. Otherwise it creates a new event.
+func UpsertCIBundle(d *db.DB, commitSHA string, eventType EventType, title string, body string, externalTS string, resource Resource) error {
+	tag := "commit:" + commitSHA
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Look for existing bundle event for this resource+commit
+	var existingID string
+	err := d.QueryRow(`
+		SELECT e.id FROM events e
+		JOIN event_resources er ON e.id = er.event_id
+		WHERE e.source = 'github'
+		  AND e.type IN ('ci_passed', 'ci_failed', 'ci_pending', 'ci_partial_failure')
+		  AND er.resource_type = ? AND er.resource_id = ?
+		  AND e.tags = ?
+		LIMIT 1
+	`, resource.ResourceType, resource.ResourceID, tag).Scan(&existingID)
+
+	if err == nil && existingID != "" {
+		// Update existing bundle
+		_, err = d.Exec(`
+			UPDATE events SET type = ?, title = ?, body = ?, ts = ?, external_ts = ?
+			WHERE id = ?
+		`, string(eventType), title, body, now, externalTS, existingID)
+		if err != nil {
+			return fmt.Errorf("failed to update CI bundle: %w", err)
+		}
+		return nil
+	}
+
+	// Create new bundle
+	event := db.Event{
+		ID:         uuid.New().String(),
+		TS:         now,
+		ExternalTS: &externalTS,
+		Source:     "github",
+		Type:       string(eventType),
+		Title:      title,
+		Body:       &body,
+		Tags:       &tag,
+	}
+
+	resources := []db.EventResource{
+		{
+			ResourceType: resource.ResourceType,
+			ResourceID:   resource.ResourceID,
+			ResourceURL:  strPtr(resource.ResourceURL),
+		},
+	}
+
+	if err := d.InsertEvent(event, nil, resources); err != nil {
+		return fmt.Errorf("failed to insert CI bundle: %w", err)
+	}
+
+	return nil
+}
+
 // EmitWatcherError inserts a watcher_error event with event_resources.
 // Skips emitting if the watcher is already in error state with the same message.
 func EmitWatcherError(d *db.DB, source, title string, body *string, resource Resource) error {

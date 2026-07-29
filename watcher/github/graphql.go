@@ -77,6 +77,7 @@ type CommitInfo struct {
 // CheckRun represents a check run status.
 type CheckRun struct {
 	Name        string
+	Status      string
 	Conclusion  string
 	CompletedAt string
 }
@@ -233,6 +234,7 @@ func buildBatchedPRQuery(prs []PRRef) string {
                   checkRuns(last: 20) {
                     nodes {
                       name
+                      status
                       conclusion
                       completedAt
                     }
@@ -402,6 +404,7 @@ type checkRunsConnection struct {
 
 type checkRunNode struct {
 	Name        string  `json:"name"`
+	Status      *string `json:"status"`
 	Conclusion  *string `json:"conclusion"`
 	CompletedAt *string `json:"completedAt"`
 }
@@ -476,17 +479,24 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 		latestNode := node.Commits.Nodes[len(node.Commits.Nodes)-1]
 		for _, suite := range latestNode.Commit.CheckSuites.Nodes {
 			for _, run := range suite.CheckRuns.Nodes {
-				if run.CompletedAt != nil && *run.CompletedAt != "" {
-					conclusion := ""
-					if run.Conclusion != nil {
-						conclusion = *run.Conclusion
-					}
-					data.CheckRuns = append(data.CheckRuns, CheckRun{
-						Name:        run.Name,
-						Conclusion:  conclusion,
-						CompletedAt: *run.CompletedAt,
-					})
+				status := ""
+				if run.Status != nil {
+					status = *run.Status
 				}
+				conclusion := ""
+				if run.Conclusion != nil {
+					conclusion = *run.Conclusion
+				}
+				completedAt := ""
+				if run.CompletedAt != nil {
+					completedAt = *run.CompletedAt
+				}
+				data.CheckRuns = append(data.CheckRuns, CheckRun{
+					Name:        run.Name,
+					Status:      status,
+					Conclusion:  conclusion,
+					CompletedAt: completedAt,
+				})
 			}
 		}
 	}

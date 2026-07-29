@@ -14,6 +14,10 @@ const (
 	EventTypePRNewCommits      EventType = "pr_new_commits"
 	EventTypeCICheckPassed     EventType = "ci_check_passed"
 	EventTypeCICheckFailed     EventType = "ci_check_failed"
+	EventTypeCIPassed          EventType = "ci_passed"
+	EventTypeCIFailed          EventType = "ci_failed"
+	EventTypeCIPending         EventType = "ci_pending"
+	EventTypeCIPartialFailure  EventType = "ci_partial_failure"
 	EventTypeJiraComment       EventType = "jira_comment"
 	EventTypeJiraStatusChange  EventType = "jira_status_change"
 	EventTypeJiraAssigned      EventType = "jira_assigned"
@@ -36,6 +40,10 @@ var eventTypeDisplayNames = map[EventType]string{
 	EventTypePRNewCommits:      "new commits",
 	EventTypeCICheckPassed:     "CI passed",
 	EventTypeCICheckFailed:     "CI failed",
+	EventTypeCIPassed:          "CI passed",
+	EventTypeCIFailed:          "CI failed",
+	EventTypeCIPending:         "CI running",
+	EventTypeCIPartialFailure:  "CI failing",
 	EventTypeJiraComment:       "Jira comments",
 	EventTypeJiraStatusChange:  "status changes",
 	EventTypeJiraAssigned:      "assignments",

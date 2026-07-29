@@ -90,6 +90,11 @@ func (db *DB) QueryRow(query string, args ...interface{}) *sql.Row {
 	return db.conn.QueryRow(query, args...)
 }
 
+// Exec executes a query that doesn't return rows.
+func (db *DB) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return db.conn.Exec(query, args...)
+}
+
 // Query executes a query that returns rows.
 func (db *DB) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	return db.conn.Query(query, args...)
