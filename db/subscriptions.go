@@ -102,22 +102,6 @@ func (db *DB) Unsubscribe(sessionID, resourceType, resourceID string) error {
 		return fmt.Errorf("no active subscription found for session %q, resource %s/%s", sessionID, resourceType, resourceID)
 	}
 
-	// Check if this was the last active subscription for this resource
-	var remaining int
-	err = db.conn.QueryRow(`
-		SELECT COUNT(*) FROM subscriptions
-		WHERE resource_type = ? AND resource_id = ? AND deleted_at IS NULL
-	`, resourceType, resourceID).Scan(&remaining)
-	if err != nil {
-		return fmt.Errorf("failed to check remaining subscriptions: %w", err)
-	}
-
-	if remaining == 0 {
-		if err := db.DeleteResourceState(resourceType, resourceID); err != nil {
-			return fmt.Errorf("failed to clean up resource state: %w", err)
-		}
-	}
-
 	return nil
 }
 
