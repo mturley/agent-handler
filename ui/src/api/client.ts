@@ -99,6 +99,7 @@ export interface EventsParams {
   before?: string
   limit?: number
   session?: string
+  resource?: string
   type?: string
   source?: string
   search?: string
@@ -109,6 +110,7 @@ export async function getEvents(params: EventsParams = {}): Promise<EventsRespon
   if (params.before) searchParams.set("before", params.before)
   if (params.limit) searchParams.set("limit", String(params.limit))
   if (params.session) searchParams.set("session", params.session)
+  if (params.resource) searchParams.set("resource", params.resource)
   if (params.type) searchParams.set("type", params.type)
   if (params.source) searchParams.set("source", params.source)
   if (params.search) searchParams.set("search", params.search)

@@ -5,6 +5,7 @@ import { queryKeys } from "@/api/queryKeys"
 
 export interface TimelineFilters {
   session?: string
+  resource?: string
   types?: string[]
   source?: string
   search?: string
@@ -15,6 +16,7 @@ export function useTimeline() {
 
   const filterKey = useMemo(() => ({
     session: filters.session,
+    resource: filters.resource,
     types: filters.types?.join(","),
     source: filters.source,
     search: filters.search,
@@ -32,6 +34,7 @@ export function useTimeline() {
       const params: EventsParams = { limit: 50 }
       if (pageParam) params.before = pageParam
       if (filters.session) params.session = filters.session
+      if (filters.resource) params.resource = filters.resource
       if (filters.types?.length) params.type = filters.types.join(",")
       if (filters.source) params.source = filters.source
       if (filters.search) params.search = filters.search

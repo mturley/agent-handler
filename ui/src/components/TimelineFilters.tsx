@@ -10,17 +10,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { getSessions, getArchivedSessions } from "@/api/client"
+import { getSessions, getArchivedSessions, getResources } from "@/api/client"
 import type { Session } from "@/api/types"
 import { queryKeys } from "@/api/queryKeys"
 import { cn } from "@/lib/utils"
 
 export interface TimelineFiltersProps {
   sessionFilter: string | undefined
+  resourceFilter: string | undefined
   includeArchived: boolean
   categoryFilters: Set<string>
   searchText: string
   onSessionFilterChange: (session: string | undefined) => void
+  onResourceFilterChange: (resource: string | undefined) => void
   onIncludeArchivedChange: (include: boolean) => void
   onCategoryFilterToggle: (category: string) => void
   onSearchChange: (text: string) => void
@@ -37,12 +39,19 @@ export const CATEGORY_TYPES: Record<string, string[]> = {
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_TYPES)
 
+function resourceLabel(type: string, id: string): string {
+  if (type === "pr") return `PR ${id}`
+  return id
+}
+
 export function TimelineFilters({
   sessionFilter,
+  resourceFilter,
   includeArchived,
   categoryFilters,
   searchText,
   onSessionFilterChange,
+  onResourceFilterChange,
   onIncludeArchivedChange,
   onCategoryFilterToggle,
   onSearchChange,
@@ -58,6 +67,11 @@ export function TimelineFilters({
     enabled: includeArchived,
   })
 
+  const { data: resourcesData } = useQuery({
+    queryKey: queryKeys.resources,
+    queryFn: getResources,
+  })
+
   const allSessions = useMemo(() => {
     const active = activeSessions.map((s) => ({ ...s, _archived: false }))
     const archived = includeArchived && archivedData
@@ -66,9 +80,18 @@ export function TimelineFilters({
     return [...active, ...archived]
   }, [activeSessions, archivedData, includeArchived])
 
+  const resourceOptions = useMemo(() => {
+    if (!resourcesData?.resources) return []
+    return resourcesData.resources.map((r) => ({
+      value: `${r.resource_type}:${r.resource_id}`,
+      label: resourceLabel(r.resource_type, r.resource_id),
+      title: r.state?.title as string || r.state?.summary as string || undefined,
+    }))
+  }, [resourcesData])
+
   return (
     <div className="space-y-3">
-      {/* Session dropdown, include archived toggle, and search */}
+      {/* Filters row */}
       <div className="flex gap-2 flex-wrap items-center">
         <Select
           value={sessionFilter || "all"}
@@ -87,6 +110,23 @@ export function TimelineFilters({
               >
                 {s.session_name || s.session_id.slice(0, 12)}
                 {s._archived && " (archived)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={resourceFilter || "all"}
+          onValueChange={(v) => onResourceFilterChange(v === "all" ? undefined : v)}
+        >
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="All resources" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All resources</SelectItem>
+            {resourceOptions.map((r) => (
+              <SelectItem key={r.value} value={r.value}>
+                {r.label}
               </SelectItem>
             ))}
           </SelectContent>

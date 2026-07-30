@@ -14,14 +14,16 @@ function getUrlParams() {
   const params = new URLSearchParams(window.location.search)
   return {
     session: params.get("session") || undefined,
+    resource: params.get("resource") || undefined,
     archived: params.get("archived") === "true",
   }
 }
 
-function updateUrlParams(session?: string, archived?: boolean) {
+function updateUrlParams(opts: { session?: string; resource?: string; archived?: boolean }) {
   const params = new URLSearchParams()
-  if (session) params.set("session", session)
-  if (archived) params.set("archived", "true")
+  if (opts.session) params.set("session", opts.session)
+  if (opts.resource) params.set("resource", opts.resource)
+  if (opts.archived) params.set("archived", "true")
   const qs = params.toString()
   window.history.replaceState(null, "", qs ? `/timeline?${qs}` : "/timeline")
 }
@@ -38,6 +40,7 @@ export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter,
 
   const initial = getUrlParams()
   const [sessionFilter, setSessionFilter] = useState<string | undefined>(propSessionFilter ?? initial.session)
+  const [resourceFilter, setResourceFilter] = useState<string | undefined>(initial.resource)
   const [includeArchived, setIncludeArchived] = useState(propIncludeArchived ?? initial.archived)
 
   const prevPropSession = useRef(propSessionFilter)
@@ -60,13 +63,18 @@ export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter,
 
   const handleSessionFilterChange = useCallback((session: string | undefined) => {
     setSessionFilter(session)
-    updateUrlParams(session, includeArchived)
-  }, [includeArchived])
+    updateUrlParams({ session, resource: resourceFilter, archived: includeArchived })
+  }, [includeArchived, resourceFilter])
+
+  const handleResourceFilterChange = useCallback((resource: string | undefined) => {
+    setResourceFilter(resource)
+    updateUrlParams({ session: sessionFilter, resource, archived: includeArchived })
+  }, [includeArchived, sessionFilter])
 
   const handleIncludeArchivedChange = useCallback((include: boolean) => {
     setIncludeArchived(include)
-    updateUrlParams(sessionFilter, include)
-  }, [sessionFilter])
+    updateUrlParams({ session: sessionFilter, resource: resourceFilter, archived: include })
+  }, [sessionFilter, resourceFilter])
 
   const sentinelRef = useRef<HTMLDivElement>(null)
 
@@ -76,10 +84,11 @@ export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter,
       : undefined
     updateFilters({
       session: sessionFilter,
+      resource: resourceFilter,
       types: selectedTypes,
       search: searchText || undefined,
     })
-  }, [sessionFilter, categoryFilters, searchText, updateFilters])
+  }, [sessionFilter, resourceFilter, categoryFilters, searchText, updateFilters])
 
   useEffect(() => {
     if (!sentinelRef.current) return
@@ -111,10 +120,12 @@ export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter,
     <div className="space-y-4">
       <TimelineFilters
         sessionFilter={sessionFilter}
+        resourceFilter={resourceFilter}
         includeArchived={includeArchived}
         categoryFilters={categoryFilters}
         searchText={searchText}
         onSessionFilterChange={handleSessionFilterChange}
+        onResourceFilterChange={handleResourceFilterChange}
         onIncludeArchivedChange={handleIncludeArchivedChange}
         onCategoryFilterToggle={handleCategoryFilterToggle}
         onSearchChange={setSearchText}

@@ -41,6 +41,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	before := r.URL.Query().Get("before")
 	limitStr := r.URL.Query().Get("limit")
 	sessionFilter := r.URL.Query().Get("session")
+	resourceFilter := r.URL.Query().Get("resource")
 	typeFilter := r.URL.Query().Get("type")
 	sourceFilter := r.URL.Query().Get("source")
 	searchFilter := r.URL.Query().Get("search")
@@ -73,6 +74,16 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			WHERE sub.session_id = ?
 		))`
 		args = append(args, sessionFilter, sessionFilter)
+	}
+	if resourceFilter != "" {
+		parts := strings.SplitN(resourceFilter, ":", 2)
+		if len(parts) == 2 {
+			query += ` AND e.id IN (
+				SELECT er.event_id FROM event_resources er
+				WHERE er.resource_type = ? AND er.resource_id = ?
+			)`
+			args = append(args, parts[0], parts[1])
+		}
 	}
 	if typeFilter != "" {
 		types := strings.Split(typeFilter, ",")
