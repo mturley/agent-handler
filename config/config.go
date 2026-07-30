@@ -47,13 +47,16 @@ type StatuslineConfig struct {
 	ShowGit     *bool `yaml:"show_git,omitempty"`
 }
 
-// ExperimentalCostDisplay returns whether enhanced cost display is enabled (default false).
+// ExperimentalCostDisplay returns whether enhanced cost display is enabled (default true).
 // When enabled, the statusline shows true session cost (with reset adjustment) and today's spend,
 // and the handler session shows aggregate cost across all sessions.
 // When disabled, the statusline shows the raw cost from Claude Code's stdin.
 // Cost data is always recorded to the database regardless of this setting.
 func (c *Config) ExperimentalCostDisplay() bool {
-	return c.Experimental != nil && c.Experimental.CostDisplay != nil && *c.Experimental.CostDisplay
+	if c.Experimental == nil || c.Experimental.CostDisplay == nil {
+		return true
+	}
+	return *c.Experimental.CostDisplay
 }
 
 // StatuslineShowContext returns whether the model/context/cost line is shown (default true)
