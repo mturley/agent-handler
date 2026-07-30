@@ -222,17 +222,19 @@ func buildBatchedPRQuery(prs []PRRef) string {
             }
           }
         }
-        commits(last: 100) {
+        commits(last: 10) {
           totalCount
           nodes {
             commit {
               oid
               committedDate
               messageHeadline
-              checkSuites(last: 10) {
-                nodes {
-                  checkRuns(last: 20) {
-                    nodes {
+              statusCheckRollup {
+                contexts(first: 100) {
+                  totalCount
+                  nodes {
+                    __typename
+                    ... on CheckRun {
                       name
                       status
                       conclusion
@@ -383,26 +385,24 @@ type commitsConnection struct {
 
 type commitNode struct {
 	Commit struct {
-		OID             string                `json:"oid"`
-		CommittedDate   string                `json:"committedDate"`
-		MessageHeadline string                `json:"messageHeadline"`
-		CheckSuites     checkSuitesConnection `json:"checkSuites"`
+		OID                string              `json:"oid"`
+		CommittedDate      string              `json:"committedDate"`
+		MessageHeadline    string              `json:"messageHeadline"`
+		StatusCheckRollup  *statusCheckRollup  `json:"statusCheckRollup"`
 	} `json:"commit"`
 }
 
-type checkSuitesConnection struct {
-	Nodes []checkSuiteNode `json:"nodes"`
+type statusCheckRollup struct {
+	Contexts statusCheckContexts `json:"contexts"`
 }
 
-type checkSuiteNode struct {
-	CheckRuns checkRunsConnection `json:"checkRuns"`
+type statusCheckContexts struct {
+	TotalCount int                   `json:"totalCount"`
+	Nodes      []statusCheckContext  `json:"nodes"`
 }
 
-type checkRunsConnection struct {
-	Nodes []checkRunNode `json:"nodes"`
-}
-
-type checkRunNode struct {
+type statusCheckContext struct {
+	TypeName    string  `json:"__typename"`
 	Name        string  `json:"name"`
 	Status      *string `json:"status"`
 	Conclusion  *string `json:"conclusion"`
@@ -474,25 +474,28 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 		data.Commits.LatestDate = latest.Commit.CommittedDate
 	}
 
-	// Parse check runs (nested under commits → commit → checkSuites — use latest commit)
+	// Parse check runs from statusCheckRollup (includes workflow_run-triggered checks)
 	if len(node.Commits.Nodes) > 0 {
 		latestNode := node.Commits.Nodes[len(node.Commits.Nodes)-1]
-		for _, suite := range latestNode.Commit.CheckSuites.Nodes {
-			for _, run := range suite.CheckRuns.Nodes {
+		if latestNode.Commit.StatusCheckRollup != nil {
+			for _, ctx := range latestNode.Commit.StatusCheckRollup.Contexts.Nodes {
+				if ctx.TypeName != "CheckRun" {
+					continue
+				}
 				status := ""
-				if run.Status != nil {
-					status = *run.Status
+				if ctx.Status != nil {
+					status = *ctx.Status
 				}
 				conclusion := ""
-				if run.Conclusion != nil {
-					conclusion = *run.Conclusion
+				if ctx.Conclusion != nil {
+					conclusion = *ctx.Conclusion
 				}
 				completedAt := ""
-				if run.CompletedAt != nil {
-					completedAt = *run.CompletedAt
+				if ctx.CompletedAt != nil {
+					completedAt = *ctx.CompletedAt
 				}
 				data.CheckRuns = append(data.CheckRuns, CheckRun{
-					Name:        run.Name,
+					Name:        ctx.Name,
 					Status:      status,
 					Conclusion:  conclusion,
 					CompletedAt: completedAt,

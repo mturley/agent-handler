@@ -217,20 +217,25 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 				goto skipCIBundle
 			}
 
+			shortSHA := prData.Commits.LatestSHA
+			if len(shortSHA) > 7 {
+				shortSHA = shortSHA[:7]
+			}
+
 			var eventType watcher.EventType
 			var title string
 			if failed > 0 && pending > 0 {
 				eventType = watcher.EventTypeCIPartialFailure
-				title = fmt.Sprintf("CI failing (%d failed, %d passed, %d pending)", failed, passed, pending)
+				title = fmt.Sprintf("CI failing @ %s (%d failed, %d passed, %d pending)", shortSHA, failed, passed, pending)
 			} else if failed > 0 {
 				eventType = watcher.EventTypeCIFailed
-				title = fmt.Sprintf("CI failed (%d failed, %d passed)", failed, passed)
+				title = fmt.Sprintf("CI failed @ %s (%d failed, %d passed)", shortSHA, failed, passed)
 			} else if pending > 0 {
 				eventType = watcher.EventTypeCIPending
-				title = fmt.Sprintf("CI running (%d/%d passed, %d pending)", passed, total, pending)
+				title = fmt.Sprintf("CI running @ %s (%d/%d passed, %d pending)", shortSHA, passed, total, pending)
 			} else {
 				eventType = watcher.EventTypeCIPassed
-				title = fmt.Sprintf("CI passed (%d/%d checks)", passed, total)
+				title = fmt.Sprintf("CI passed @ %s (%d/%d checks)", shortSHA, passed, total)
 			}
 
 			// Build body: failures first, then pending, then passes
