@@ -1,6 +1,9 @@
 package db
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestGetCostSnapshotNotFound(t *testing.T) {
 	d := testDB(t)
@@ -209,3 +212,102 @@ func TestQueryTotalCostEmpty(t *testing.T) {
 		t.Errorf("expected all zeros, got cost=%f input=%d output=%d", cost, input, output)
 	}
 }
+
+func TestRecordCostTickFirstTick(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "tick-first")
+
+	err := d.RecordCostTick("tick-first", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", 5.00, 50000, 2000)
+	if err != nil {
+		t.Fatalf("RecordCostTick failed: %v", err)
+	}
+
+	snap, _ := d.GetCostSnapshot("tick-first")
+	if snap == nil || snap.ReportedCostUSD != 5.00 {
+		t.Fatalf("expected snapshot with cost 5.00, got %v", snap)
+	}
+
+	dc, _ := d.GetDailyCostForSession("tick-first", "2026-07-20")
+	if dc == nil || dc.CostUSD != 5.00 {
+		t.Fatalf("expected daily cost 5.00, got %v", dc)
+	}
+}
+
+func TestRecordCostTickNormalIncrease(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "tick-inc")
+
+	d.RecordCostTick("tick-inc", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", 5.00, 50000, 2000)
+	d.RecordCostTick("tick-inc", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", 8.00, 80000, 3000)
+
+	snap, _ := d.GetCostSnapshot("tick-inc")
+	if snap.ReportedCostUSD != 8.00 {
+		t.Errorf("expected snapshot 8.00, got %f", snap.ReportedCostUSD)
+	}
+
+	dc, _ := d.GetDailyCostForSession("tick-inc", "2026-07-20")
+	if dc.CostUSD != 8.00 {
+		t.Errorf("expected daily cost 8.00 (5+3), got %f", dc.CostUSD)
+	}
+}
+
+func TestRecordCostTickSkipsWhenUnchanged(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "tick-skip")
+
+	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", 5.00, 50000, 2000)
+	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", 5.00, 50000, 2000)
+	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", 5.00, 50000, 2000)
+
+	dc, _ := d.GetDailyCostForSession("tick-skip", "2026-07-20")
+	if dc.CostUSD != 5.00 {
+		t.Errorf("expected daily cost 5.00 (no change), got %f", dc.CostUSD)
+	}
+}
+
+func TestRecordCostTickResetDetection(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "tick-reset")
+
+	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", 20.00, 200000, 10000)
+	// Simulate restart — cost drops to 3.00
+	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:00Z", "2026-07-20", 3.00, 30000, 1000)
+
+	adj, _ := d.GetTotalAdjustment("tick-reset")
+	if adj != 20.00 {
+		t.Errorf("expected adjustment 20.00, got %f", adj)
+	}
+
+	snap, _ := d.GetCostSnapshot("tick-reset")
+	if snap.ReportedCostUSD != 3.00 {
+		t.Errorf("expected snapshot 3.00 after reset, got %f", snap.ReportedCostUSD)
+	}
+
+	// Next tick at same value should NOT create another adjustment
+	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:10Z", "2026-07-20", 3.00, 30000, 1000)
+
+	adj2, _ := d.GetTotalAdjustment("tick-reset")
+	if adj2 != 20.00 {
+		t.Errorf("expected adjustment still 20.00 (no duplicate), got %f", adj2)
+	}
+}
+
+func TestRecordCostTickResetNoRepeat(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "tick-no-repeat")
+
+	// Simulate the exact bug scenario: many rapid ticks after a reset
+	d.RecordCostTick("tick-no-repeat", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", 100.00, 1000000, 50000)
+
+	// Restart: cost drops to 5.00, then stays at 5.00 for many ticks
+	for i := 0; i < 100; i++ {
+		ts := "2026-07-20T12:00:" + fmt.Sprintf("%02d", i%60) + "Z"
+		d.RecordCostTick("tick-no-repeat", "opus-4", ts, "2026-07-20", 5.00, 50000, 2000)
+	}
+
+	adj, _ := d.GetTotalAdjustment("tick-no-repeat")
+	if adj != 100.00 {
+		t.Errorf("expected exactly one adjustment of 100.00, got %f", adj)
+	}
+}
+

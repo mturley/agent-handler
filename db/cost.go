@@ -36,6 +36,103 @@ type SessionSummary struct {
 	OutputTokens int
 }
 
+// RecordCostTick atomically reads the current snapshot, computes deltas,
+// detects resets, and updates the snapshot + daily cost in a single transaction.
+// This prevents duplicate adjustments from concurrent statusline ticks.
+func (db *DB) RecordCostTick(sessionID, model, now, today string, reportedCost float64, reportedInput, reportedOutput int) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Read current snapshot within the transaction
+	var snap CostSnapshot
+	var hasSnap bool
+	err = tx.QueryRow(`
+		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at
+		FROM cost_snapshots WHERE session_id = ?
+	`, sessionID).Scan(&snap.SessionID, &snap.ReportedCostUSD, &snap.TotalInputTokens, &snap.TotalOutputTokens, &snap.Model, &snap.UpdatedAt)
+	if err == nil {
+		hasSnap = true
+	} else if err != sql.ErrNoRows {
+		return fmt.Errorf("failed to read snapshot: %w", err)
+	}
+
+	if !hasSnap {
+		// First tick for this session
+		if _, err := tx.Exec(`
+			INSERT INTO cost_snapshots (session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, sessionID, reportedCost, reportedInput, reportedOutput, model, now); err != nil {
+			return fmt.Errorf("failed to insert snapshot: %w", err)
+		}
+		if reportedCost > 0 {
+			if _, err := tx.Exec(`
+				INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
+				VALUES (?, ?, ?, ?, ?)
+				ON CONFLICT(session_id, date) DO UPDATE SET
+					cost_usd = daily_cost.cost_usd + excluded.cost_usd,
+					input_tokens = daily_cost.input_tokens + excluded.input_tokens,
+					output_tokens = daily_cost.output_tokens + excluded.output_tokens
+			`, sessionID, today, reportedCost, reportedInput, reportedOutput); err != nil {
+				return fmt.Errorf("failed to upsert daily cost: %w", err)
+			}
+		}
+		return tx.Commit()
+	}
+
+	// No change — skip
+	if reportedCost == snap.ReportedCostUSD {
+		return nil
+	}
+
+	var costDelta float64
+	var inputDelta, outputDelta int
+
+	if reportedCost < snap.ReportedCostUSD {
+		// Reset detected
+		if _, err := tx.Exec(`
+			INSERT INTO cost_adjustments (session_id, adjustment_usd, reason, created_at)
+			VALUES (?, ?, 'restart_reset', ?)
+		`, sessionID, snap.ReportedCostUSD, now); err != nil {
+			return fmt.Errorf("failed to insert adjustment: %w", err)
+		}
+		costDelta = reportedCost
+		inputDelta = reportedInput
+		outputDelta = reportedOutput
+	} else {
+		costDelta = reportedCost - snap.ReportedCostUSD
+		inputDelta = reportedInput - snap.TotalInputTokens
+		outputDelta = reportedOutput - snap.TotalOutputTokens
+	}
+
+	// Update snapshot
+	if _, err := tx.Exec(`
+		UPDATE cost_snapshots SET
+			reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?
+		WHERE session_id = ?
+	`, reportedCost, reportedInput, reportedOutput, model, now, sessionID); err != nil {
+		return fmt.Errorf("failed to update snapshot: %w", err)
+	}
+
+	// Update daily cost
+	if costDelta > 0 {
+		if _, err := tx.Exec(`
+			INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
+			VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT(session_id, date) DO UPDATE SET
+				cost_usd = daily_cost.cost_usd + excluded.cost_usd,
+				input_tokens = daily_cost.input_tokens + excluded.input_tokens,
+				output_tokens = daily_cost.output_tokens + excluded.output_tokens
+		`, sessionID, today, costDelta, inputDelta, outputDelta); err != nil {
+			return fmt.Errorf("failed to upsert daily cost: %w", err)
+		}
+	}
+
+	return tx.Commit()
+}
+
 func (db *DB) GetCostSnapshot(sessionID string) (*CostSnapshot, error) {
 	var s CostSnapshot
 	err := db.conn.QueryRow(`

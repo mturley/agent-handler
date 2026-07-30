@@ -83,60 +83,12 @@ type hookInput struct {
 func recordCostSnapshot(wd *db.DB, input *hookInput) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	today := time.Now().UTC().Format("2006-01-02")
-	sessionID := input.SessionID
-	reportedCost := input.Cost.TotalCostUSD
-	reportedInput := input.ContextWindow.TotalInputTokens
-	reportedOutput := input.ContextWindow.TotalOutputTokens
-
-	snap, err := wd.GetCostSnapshot(sessionID)
-	if err != nil {
-		return
-	}
-
-	if snap == nil {
-		wd.UpsertCostSnapshot(db.CostSnapshot{
-			SessionID:         sessionID,
-			ReportedCostUSD:   reportedCost,
-			TotalInputTokens:  reportedInput,
-			TotalOutputTokens: reportedOutput,
-			Model:             input.Model.ID,
-			UpdatedAt:         now,
-		})
-		if reportedCost > 0 {
-			wd.UpsertDailyCost(sessionID, today, reportedCost, reportedInput, reportedOutput)
-		}
-		return
-	}
-
-	if reportedCost == snap.ReportedCostUSD {
-		return
-	}
-
-	var costDelta float64
-	var inputDelta, outputDelta int
-
-	if reportedCost < snap.ReportedCostUSD {
-		wd.InsertCostAdjustment(sessionID, snap.ReportedCostUSD, "restart_reset", now)
-		costDelta = reportedCost
-		inputDelta = reportedInput
-		outputDelta = reportedOutput
-	} else {
-		costDelta = reportedCost - snap.ReportedCostUSD
-		inputDelta = reportedInput - snap.TotalInputTokens
-		outputDelta = reportedOutput - snap.TotalOutputTokens
-	}
-
-	wd.UpsertCostSnapshot(db.CostSnapshot{
-		SessionID:         sessionID,
-		ReportedCostUSD:   reportedCost,
-		TotalInputTokens:  reportedInput,
-		TotalOutputTokens: reportedOutput,
-		Model:             input.Model.ID,
-		UpdatedAt:         now,
-	})
-	if costDelta > 0 {
-		wd.UpsertDailyCost(sessionID, today, costDelta, inputDelta, outputDelta)
-	}
+	wd.RecordCostTick(
+		input.SessionID, input.Model.ID, now, today,
+		input.Cost.TotalCostUSD,
+		input.ContextWindow.TotalInputTokens,
+		input.ContextWindow.TotalOutputTokens,
+	)
 }
 
 func runStatusline(cmd *cobra.Command, args []string) error {
