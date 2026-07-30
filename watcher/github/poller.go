@@ -71,7 +71,7 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 			continue
 		}
 
-		count, err := processPR(d, prData, resource, logger)
+		count, err := processPR(d, prData, resource, token, logger)
 		if err != nil {
 			logger.Printf("ERROR: failed to process PR %s: %v", resourceID, err)
 			// Emit error event
@@ -91,7 +91,7 @@ func Poll(d *db.DB, cfg *config.Config, resources []watcher.Resource, logger *lo
 
 // processPR processes a single PR and emits events.
 // Returns the count of events emitted.
-func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.Logger) (int, error) {
+func processPR(d *db.DB, prData PRData, resource watcher.Resource, token string, logger *log.Logger) (int, error) {
 	eventCount := 0
 
 	// Get cursor (last seen external timestamp)
@@ -172,6 +172,16 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, logger *log.L
 		}
 		eventCount++
 		logger.Printf("Emitted pr_review_comment for %s by %s", resource.ResourceID, reviewComment.Author)
+	}
+
+	// Fetch remaining check contexts if paginated
+	if prData.CheckRunsHasMore && prData.CheckRunsEndCursor != "" {
+		moreRuns, err := FetchRemainingCheckContexts(token, prData.Owner, prData.Repo, prData.Number, prData.CheckRunsEndCursor)
+		if err != nil {
+			logger.Printf("WARNING: failed to paginate check contexts for %s: %v", resource.ResourceID, err)
+		} else {
+			prData.CheckRuns = append(prData.CheckRuns, moreRuns...)
+		}
 	}
 
 	// Process check runs as a bundle per commit

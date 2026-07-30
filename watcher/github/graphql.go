@@ -30,7 +30,10 @@ type PRData struct {
 	Comments       []Comment
 	ReviewComments []ReviewComment
 	Commits        CommitInfo
-	CheckRuns      []CheckRun
+	CheckRuns           []CheckRun
+	CheckRunsTotalCount int
+	CheckRunsHasMore    bool
+	CheckRunsEndCursor  string
 }
 
 // Review represents a PR review.
@@ -232,6 +235,10 @@ func buildBatchedPRQuery(prs []PRRef) string {
               statusCheckRollup {
                 contexts(first: 100) {
                   totalCount
+                  pageInfo {
+                    hasNextPage
+                    endCursor
+                  }
                   nodes {
                     __typename
                     ... on CheckRun {
@@ -398,6 +405,10 @@ type statusCheckRollup struct {
 
 type statusCheckContexts struct {
 	TotalCount int                   `json:"totalCount"`
+	PageInfo   struct {
+		HasNextPage bool   `json:"hasNextPage"`
+		EndCursor   string `json:"endCursor"`
+	} `json:"pageInfo"`
 	Nodes      []statusCheckContext  `json:"nodes"`
 }
 
@@ -478,7 +489,11 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 	if len(node.Commits.Nodes) > 0 {
 		latestNode := node.Commits.Nodes[len(node.Commits.Nodes)-1]
 		if latestNode.Commit.StatusCheckRollup != nil {
-			for _, ctx := range latestNode.Commit.StatusCheckRollup.Contexts.Nodes {
+			rollup := latestNode.Commit.StatusCheckRollup.Contexts
+			data.CheckRunsTotalCount = rollup.TotalCount
+			data.CheckRunsHasMore = rollup.PageInfo.HasNextPage
+			data.CheckRunsEndCursor = rollup.PageInfo.EndCursor
+			for _, ctx := range rollup.Nodes {
 				if ctx.TypeName != "CheckRun" {
 					continue
 				}
@@ -505,6 +520,93 @@ func parsePRNode(node *prNode, owner, repo string) PRData {
 	}
 
 	return data
+}
+
+// FetchRemainingCheckContexts paginates through remaining statusCheckRollup contexts.
+// Called when the initial query returned hasNextPage=true. Max 10 pages as a safety limit.
+func FetchRemainingCheckContexts(token, owner, repo string, prNumber int, cursor string) ([]CheckRun, error) {
+	var allRuns []CheckRun
+	currentCursor := cursor
+
+	for page := 0; page < 10; page++ {
+		query := fmt.Sprintf(`{"query":"{repository(owner:\"%s\",name:\"%s\"){pullRequest(number:%d){commits(last:1){nodes{commit{statusCheckRollup{contexts(first:100,after:\"%s\"){pageInfo{hasNextPage endCursor}nodes{__typename ... on CheckRun{name status conclusion completedAt}}}}}}}}}}"}`,
+			owner, repo, prNumber, currentCursor)
+
+		req, err := http.NewRequest("POST", "https://api.github.com/graphql", bytes.NewReader([]byte(query)))
+		if err != nil {
+			return allRuns, fmt.Errorf("failed to create request for page %d: %w", page+1, err)
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+
+		httpClient := &http.Client{}
+		resp, err := httpClient.Do(req)
+		if err != nil {
+			return allRuns, fmt.Errorf("failed to fetch check contexts page %d: %w", page+1, err)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return allRuns, fmt.Errorf("failed to read response for page %d: %w", page+1, err)
+		}
+
+		var result struct {
+			Data struct {
+				Repository struct {
+					PullRequest struct {
+						Commits struct {
+							Nodes []struct {
+								Commit struct {
+									StatusCheckRollup *statusCheckRollup `json:"statusCheckRollup"`
+								} `json:"commit"`
+							} `json:"nodes"`
+						} `json:"commits"`
+					} `json:"pullRequest"`
+				} `json:"repository"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return allRuns, fmt.Errorf("failed to parse check contexts page %d: %w", page+1, err)
+		}
+
+		commits := result.Data.Repository.PullRequest.Commits.Nodes
+		if len(commits) == 0 || commits[0].Commit.StatusCheckRollup == nil {
+			break
+		}
+
+		rollup := commits[0].Commit.StatusCheckRollup.Contexts
+		for _, ctx := range rollup.Nodes {
+			if ctx.TypeName != "CheckRun" {
+				continue
+			}
+			status := ""
+			if ctx.Status != nil {
+				status = *ctx.Status
+			}
+			conclusion := ""
+			if ctx.Conclusion != nil {
+				conclusion = *ctx.Conclusion
+			}
+			completedAt := ""
+			if ctx.CompletedAt != nil {
+				completedAt = *ctx.CompletedAt
+			}
+			allRuns = append(allRuns, CheckRun{
+				Name:        ctx.Name,
+				Status:      status,
+				Conclusion:  conclusion,
+				CompletedAt: completedAt,
+			})
+		}
+
+		if !rollup.PageInfo.HasNextPage {
+			break
+		}
+		currentCursor = rollup.PageInfo.EndCursor
+	}
+
+	return allRuns, nil
 }
 
 // authorType converts GitHub's __typename into "user" or "bot".
