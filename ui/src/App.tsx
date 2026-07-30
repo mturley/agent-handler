@@ -8,6 +8,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
 import { ResourcesPage } from "@/pages/ResourcesPage"
+import { CostBadge, CostDialog } from "@/components/CostDialog"
 
 const tabPaths: Record<string, string> = {
   sessions: "/",
@@ -27,6 +28,7 @@ export default function App() {
   useSSE()
 
   const isWide = useMediaQuery("(min-width: 1024px)")
+  const [costOpen, setCostOpen] = useState(false)
 
   const [location, setLocation] = useLocation()
   const basePath = location.split("?")[0]
@@ -146,8 +148,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 py-6">
-        <header className="mb-6">
+        <header className="mb-6 flex items-center justify-between">
           <h1 className="text-lg font-semibold tracking-tight">agent-handler</h1>
+          <CostBadge onClick={() => setCostOpen(true)} />
         </header>
 
         <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -179,6 +182,7 @@ export default function App() {
           </TabsContent>
         </Tabs>
       </div>
+      <CostDialog open={costOpen} onClose={() => setCostOpen(false)} />
       <Toaster />
     </div>
   )
