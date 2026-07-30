@@ -234,18 +234,20 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, token string,
 
 			var eventType watcher.EventType
 			var title string
+			prLabel := fmt.Sprintf("PR #%d", prData.Number)
+
 			if failed > 0 && pending > 0 {
 				eventType = watcher.EventTypeCIPartialFailure
-				title = fmt.Sprintf("CI failing @ %s (%d failed, %d passed, %d pending)", shortSHA, failed, passed, pending)
+				title = fmt.Sprintf("CI failing for %s @ %s (%d failed, %d/%d passed)", prLabel, shortSHA, failed, passed, total)
 			} else if failed > 0 {
 				eventType = watcher.EventTypeCIFailed
-				title = fmt.Sprintf("CI failed @ %s (%d failed, %d passed)", shortSHA, failed, passed)
+				title = fmt.Sprintf("CI failed for %s @ %s (%d failed, %d passed)", prLabel, shortSHA, failed, passed)
 			} else if pending > 0 {
 				eventType = watcher.EventTypeCIPending
-				title = fmt.Sprintf("CI running @ %s (%d/%d passed, %d pending)", shortSHA, passed, total, pending)
+				title = fmt.Sprintf("CI running for %s @ %s (%d/%d passed)", prLabel, shortSHA, passed, total)
 			} else {
 				eventType = watcher.EventTypeCIPassed
-				title = fmt.Sprintf("CI passed @ %s (%d/%d checks)", shortSHA, passed, total)
+				title = fmt.Sprintf("CI passed for %s @ %s (%d/%d checks)", prLabel, shortSHA, passed, total)
 			}
 
 			// Build body: failures first, then pending, then passes
