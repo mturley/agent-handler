@@ -134,9 +134,9 @@ export function SessionCard({
                 <div>{session.context_percent}% context used</div>
                 {session.true_cost_usd != null && (
                   <div>
-                    ${session.true_cost_usd.toFixed(2)} total
+                    ${session.true_cost_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total
                     {session.today_cost_usd != null && session.today_cost_usd > 0 && (
-                      <span> (${session.today_cost_usd.toFixed(2)} today)</span>
+                      <span> (${session.today_cost_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today)</span>
                     )}
                   </div>
                 )}

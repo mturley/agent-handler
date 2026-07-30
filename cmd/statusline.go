@@ -604,9 +604,9 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		barColor = colorYellow
 	}
 
-	costStr := fmt.Sprintf("$%.2f", trueCost)
+	costStr := "$" + formatMoney(trueCost)
 	if todayCost > 0 {
-		costStr += fmt.Sprintf(" ($%.2f today)", todayCost)
+		costStr += fmt.Sprintf(" ($%s today)", formatMoney(todayCost))
 	}
 
 	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s· %s%s",
@@ -614,6 +614,23 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		barColor, bar, colorReset,
 		pct,
 		colorDim, costStr, colorReset)
+}
+
+func formatMoney(v float64) string {
+	s := fmt.Sprintf("%.2f", v)
+	parts := strings.SplitN(s, ".", 2)
+	intPart := parts[0]
+	if len(intPart) <= 3 {
+		return s
+	}
+	var result []byte
+	for i, c := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			result = append(result, ',')
+		}
+		result = append(result, byte(c))
+	}
+	return string(result) + "." + parts[1]
 }
 
 func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
