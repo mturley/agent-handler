@@ -97,7 +97,7 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
 
   if (!data || !data.enabled) return null
 
-  const months = data.months || []
+  const months = [...(data.months || [])].reverse()
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
@@ -115,7 +115,7 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
                 <div className="text-xs text-muted-foreground">Today</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold">{months[0] ? formatCost(months[0].cost_usd) : "$0.00"}</div>
+                <div className="text-2xl font-bold">{months.length > 0 ? formatCost(months[months.length - 1].cost_usd) : "$0.00"}</div>
                 <div className="text-xs text-muted-foreground">This month</div>
               </div>
               <div className="text-center">
@@ -126,7 +126,7 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
 
             {/* Month tabs */}
             {months.length > 0 && (
-              <Tabs defaultValue="0">
+              <Tabs defaultValue={String(months.length - 1)}>
                 <TabsList>
                   {months.map((month, i) => (
                     <TabsTrigger key={i} value={String(i)}>
@@ -158,7 +158,8 @@ export function CostBadge({ onClick }: { onClick: () => void }) {
 
   if (!data || !data.enabled) return null
 
-  const monthCost = data.months?.[0]?.cost_usd ?? 0
+  const months = data.months || []
+  const monthCost = months.length > 0 ? months[0].cost_usd : 0
 
   return (
     <button
