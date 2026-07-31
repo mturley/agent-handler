@@ -8,6 +8,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getCostSummary, type CostMonthSummary } from "@/api/client"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface CostDialogProps {
   open: boolean
@@ -16,12 +17,6 @@ interface CostDialogProps {
 
 function formatCost(v: number): string {
   return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
-  return String(n)
 }
 
 function MonthView({ month }: { month: CostMonthSummary }) {
@@ -36,13 +31,26 @@ function MonthView({ month }: { month: CostMonthSummary }) {
           <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
             {month.daily_breakdown.map((day) => {
               const barHeight = Math.max(Math.round((day.cost_usd / maxDailyCost) * 80), 2)
+              const dateObj = new Date(day.date + "T00:00:00")
+              const dayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
               return (
-                <div key={day.date} className="flex-1 flex flex-col items-center justify-end" title={`${day.date}: ${formatCost(day.cost_usd)} (${day.session_count} sessions)`}>
-                  <div
-                    className="w-full bg-green-500/60 rounded-t-sm hover:bg-green-400/80 transition-colors cursor-default"
-                    style={{ height: barHeight }}
-                  />
-                </div>
+                <Tooltip key={day.date}>
+                  <TooltipTrigger asChild>
+                    <div className="flex-1 flex flex-col items-center justify-end cursor-default">
+                      <div
+                        className="w-full bg-green-500/60 rounded-t-sm hover:bg-green-400/80 transition-colors"
+                        style={{ height: barHeight }}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="text-xs">
+                      <div className="font-medium">{dayLabel}</div>
+                      <div>{formatCost(day.cost_usd)}</div>
+                      <div className="text-muted-foreground">{day.session_count} session{day.session_count !== 1 ? "s" : ""}</div>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               )
             })}
           </div>
@@ -71,10 +79,7 @@ function MonthView({ month }: { month: CostMonthSummary }) {
                     {session.session_name || session.session_id.slice(0, 12)}
                   </span>
                 </div>
-                <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
-                  <span>{formatTokens(session.input_tokens)} in / {formatTokens(session.output_tokens)} out</span>
-                  <span className="font-medium text-foreground">{formatCost(session.cost_usd)}</span>
-                </div>
+                <span className="shrink-0 text-xs font-medium">{formatCost(session.cost_usd)}</span>
               </div>
             ))}
           </div>
