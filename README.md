@@ -80,7 +80,7 @@ There are also commands used by hooks and skills (`emit`, `peek`, `register`, `u
 
 Sessions auto-register on their first prompt — you don't need to do anything. The UserPromptSubmit hook detects new sessions and registers them with the current git repo, branch, and terminal environment.
 
-Once registered, sessions emit events to a central SQLite ledger as they work. The global rules file (`~/.claude/rules/agent-handler.md`) teaches each session what events to emit and when — milestones, decisions, blockers, status check-ins. Other sessions and the handler can see these events, enabling cross-session awareness.
+Once registered, sessions emit events to a central SQLite ledger as they work. The global rules file (`~/.claude/rules/agent-handler.md`) teaches each session what events to emit and when — status updates, blockers, messages. Other sessions and the handler can see these events, enabling cross-session awareness.
 
 ### Hooks
 

@@ -607,8 +607,8 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 		if global {
 			noMsgLabel = "No new events"
 		}
-		fmt.Printf("%s/inbox%s: %s %s· %s%s/message%s%s to talk to other sessions%s",
-			colorHint, colorReset, noMsgLabel, colorDim, colorDim, colorHint, colorReset, colorDim, colorReset)
+		fmt.Printf("%s/inbox%s: %s %s· %s%s/message%s%s to talk to other sessions or %s/reminder%s%s to message this session%s",
+			colorHint, colorReset, noMsgLabel, colorDim, colorDim, colorHint, colorReset, colorDim, colorHint, colorReset, colorDim, colorReset)
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {

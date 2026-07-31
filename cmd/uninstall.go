@@ -37,6 +37,7 @@ var skillNames = []string{
 	"done",
 	"block",
 	"unblock",
+	"reminder",
 	"handler-debug",
 }
 

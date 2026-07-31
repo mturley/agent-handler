@@ -36,6 +36,10 @@ handler unread --ack --agent-only --global --json 2>/dev/null
 - If invoked without `--auto` and the output is `null` or empty: say "No new messages."
 - Otherwise: present the events in a clear summary grouped by type, and for each actionable event suggest what to do about it (e.g. "There's a PR review comment — want me to look at it and address the feedback?")
 
+## Handling reminders
+
+If any events have `type: "reminder"`, present them separately from other events under a **Reminders** heading. After listing them, ask the user: "Would you like to snooze any of these reminders?" If the user says yes, run `handler bump <event-id>` for each reminder they want to snooze — this updates the event's timestamp to now so it reappears in the inbox on the next check.
+
 ## Formatting references as clickable links
 
 When mentioning Jira issues or GitHub PRs in your summary, always render them as markdown links so they're clickable:

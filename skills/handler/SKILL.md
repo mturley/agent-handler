@@ -48,7 +48,7 @@ Weight priority by resource importance: a session working on a Blocker/Critical 
 
 ### Timeline
 
-Chronological list of events since last report (from `handler log --global --since-cursor`). Group by session, showing milestones, decisions, status updates, and external events.
+Chronological list of events since last report (from `handler log --global --since-cursor`). Group by session, showing status updates, messages, and external events.
 
 ### Session Overview
 

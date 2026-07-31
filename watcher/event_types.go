@@ -51,6 +51,15 @@ var eventTypeDisplayNames = map[EventType]string{
 	EventTypeJiraLabelsChanged: "label changes",
 	EventTypeWatchStarted:      "watch started",
 	EventTypeWatcherError:      "watcher errors",
+	"status":                   "status",
+	"message":                  "message",
+	"reminder":                 "reminder",
+	"blocked":                  "blocked",
+	"unblocked":                "unblocked",
+	"milestone":                "milestone",
+	"decision":                 "decision",
+	"followup":                 "followup",
+	"handoff":                  "handoff",
 }
 
 // DisplayName returns the human-readable label for an EventType,

@@ -33,7 +33,7 @@ var (
 func init() {
 	emitCmd.GroupID = "agent"
 	rootCmd.AddCommand(emitCmd)
-	emitCmd.Flags().StringVar(&emitType, "type", "", "event type: milestone, decision, blocked, unblocked, handoff, followup, status, message (required)")
+	emitCmd.Flags().StringVar(&emitType, "type", "", "event type: status, message, reminder, blocked, unblocked (required)")
 	emitCmd.Flags().StringVar(&emitTitle, "title", "", "event title (required)")
 	emitCmd.Flags().StringVar(&emitMessage, "message", "", "alias for --title")
 	emitCmd.Flags().StringVar(&emitBody, "body", "", "event body")
@@ -95,6 +95,14 @@ func runEmit(cmd *cobra.Command, args []string) error {
 		recipients = append(recipients, db.EventRecipient{
 			RecipientType:  recipientType,
 			RecipientValue: recipientValue,
+		})
+	}
+
+	// Reminders auto-target the emitting session so they appear in its own inbox
+	if emitType == "reminder" && evt.SessionID != nil {
+		recipients = append(recipients, db.EventRecipient{
+			RecipientType:  "session",
+			RecipientValue: *evt.SessionID,
 		})
 	}
 

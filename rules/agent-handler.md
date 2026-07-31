@@ -23,17 +23,16 @@ Do not use `--broadcast` unless the user specifically asks to broadcast or messa
 | Trigger | Type | Example title |
 |---------|------|---------------|
 | Starting work on a task | `status` | "Beginning auth middleware refactor" |
-| Finish a commit or meaningful code change | `milestone` | "Implemented retry logic for API client" |
-| Push to remote | `milestone` | "Pushed feature branch auth-refactor" |
-| Find the root cause of a bug | `milestone` | "Root cause: token validated against wrong key" |
-| Choose between approaches | `decision` | "Chose RS256 over HS256 for token signing" |
-| Waiting on something external (PR review, CI, blocking issue, Slack reply) | `blocked` | "Waiting for review on PR #42" |
-| Blocker resolved, resuming work | `unblocked` | "PR #42 approved, continuing" |
-| Identify work for another session or later | `handoff` / `followup` | "Tech debt: error messages need i18n" |
-| Want to tell another session something | `message` | (use `--to <target>`) |
+| Finish a commit or meaningful code change | `status` | "Implemented retry logic for API client" |
+| Push to remote | `status` | "Pushed feature branch auth-refactor" |
+| Find the root cause of a bug | `status` | "Root cause: token validated against wrong key" |
+| Choose between approaches | `status` | "Chose RS256 over HS256 for token signing" |
+| Create or open a PR | `status` | "Opened PR #42 for auth refactor" |
+| Create a Jira issue | `status` | "Created RHOAIENG-12345 for token bug" |
 | Periodic check-in on current work | `status` | "Still debugging token refresh — narrowed to middleware" |
-| **Create or open a PR** | `milestone` | "Opened PR #42 for auth refactor" |
-| **Create a Jira issue** | `milestone` | "Created RHOAIENG-12345 for token bug" |
+| Waiting on something external | `blocked` | "Waiting for review on PR #42" |
+| Blocker resolved, resuming work | `unblocked` | "PR #42 approved, continuing" |
+| Want to tell another session something | `message` | (use `--to <target>`) |
 
 Emit `blocked` whenever you are waiting on something external. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report.
 
