@@ -49,10 +49,10 @@ func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
 	todayCost, _, _, _ := s.DB.QueryTotalCost(today, today)
 	allTimeCost, _, _, _ := s.DB.QueryTotalCost("2000-01-01", "2100-01-01")
 
-	lastMonth := time.Date(now.Year(), now.Month()-1, 1, 0, 0, 0, 0, time.UTC)
-	months := []monthSummary{
-		s.buildMonthSummary(now),
-		s.buildMonthSummary(lastMonth),
+	months := make([]monthSummary, 6)
+	for i := 0; i < 6; i++ {
+		m := time.Date(now.Year(), now.Month()-time.Month(i), 1, 0, 0, 0, 0, time.UTC)
+		months[i] = s.buildMonthSummary(m)
 	}
 
 	writeJSON(w, http.StatusOK, costSummary{
@@ -64,7 +64,7 @@ func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) buildMonthSummary(t time.Time) monthSummary {
-	label := t.Format("January 2006")
+	label := t.Format("January")
 	monthStart := t.Format("2006-01") + "-01"
 	nextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 	monthEnd := nextMonth.Format("2006-01-02")
