@@ -38,7 +38,7 @@ handler unread --ack --agent-only --global --json 2>/dev/null
 
 ## Handling reminders
 
-If any events have `type: "reminder"`, present them separately from other events under a **Reminders** heading. After listing them, ask the user: "Would you like to snooze any of these reminders?" If the user says yes, run `handler bump <event-id>` for each reminder they want to snooze — this updates the event's timestamp to now so it reappears in the inbox on the next check.
+If any events have `type: "reminder"`, present them separately from other events under a **Reminders** heading. After listing them, ask the user: "Would you like to snooze any of these reminders?" If the user says yes, run `handler snooze <event-id>` for each reminder they want to snooze — this updates the event's timestamp to now so it reappears in the inbox on the next check.
 
 ## Formatting references as clickable links
 

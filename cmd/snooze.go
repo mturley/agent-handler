@@ -7,19 +7,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var bumpCmd = &cobra.Command{
-	Use:   "bump <event-id>",
-	Short: "Bump an event's timestamp to now (re-delivers it to the inbox)",
+var snoozeCmd = &cobra.Command{
+	Use:   "snooze <event-id>",
+	Short: "Snooze an event — re-delivers it to the inbox on the next check",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runBump,
+	RunE:  runSnooze,
 }
 
 func init() {
-	bumpCmd.GroupID = "agent"
-	rootCmd.AddCommand(bumpCmd)
+	snoozeCmd.GroupID = "agent"
+	rootCmd.AddCommand(snoozeCmd)
 }
 
-func runBump(cmd *cobra.Command, args []string) error {
+func runSnooze(cmd *cobra.Command, args []string) error {
 	eventID := args[0]
 
 	d, err := openDB()
@@ -31,7 +31,7 @@ func runBump(cmd *cobra.Command, args []string) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	result, err := d.Conn().Exec(`UPDATE events SET ts = ? WHERE id = ?`, now, eventID)
 	if err != nil {
-		return fmt.Errorf("failed to bump event: %w", err)
+		return fmt.Errorf("failed to snooze event: %w", err)
 	}
 
 	rows, _ := result.RowsAffected()
@@ -39,6 +39,6 @@ func runBump(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("event not found: %s", eventID)
 	}
 
-	fmt.Printf("✓ Bumped event %s to %s\n", eventID, now)
+	fmt.Printf("✓ Snoozed — will reappear in inbox on next check\n")
 	return nil
 }

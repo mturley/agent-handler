@@ -100,10 +100,15 @@ These are available as `/slash-commands` in any Claude session:
 - `/watch` / `/unwatch` — subscribe to PRs and Jira issues
 - `/watching` — show watched resources and watcher status
 - `/message` — send messages to other sessions
+- `/reminder` — set a reminder that appears in your inbox on the next check (snoozable)
 - `/block` / `/unblock` — mark session as blocked or unblocked (shown in statusline)
 - `/done` — log a completion summary before closing a session
 - `/handler` — turn a session into a command center for all sessions
 - `/handler-debug` — debug session identity and inbox state
+
+## Reminders
+
+Use `/reminder check CI on PR #42` to leave yourself a note. Reminders appear in your inbox on the next `/inbox` check, presented separately from other events. When reviewing reminders, you can snooze them — this re-delivers them to your inbox on the next check, so they keep coming back until you're done with them.
 
 ## Inbox Modes
 
