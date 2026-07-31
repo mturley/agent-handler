@@ -164,7 +164,7 @@ export function CostBadge({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer select-none"
     >
-      <span className="font-medium">{formatCost(data.today_cost_usd)}</span>
+      <span className="font-medium">{formatCost(data.today_cost_usd)} today</span>
       <span className="mx-1">·</span>
       <span>{formatCost(monthCost)} this month</span>
     </button>
