@@ -157,21 +157,23 @@ func processPR(d *db.DB, prData PRData, resource watcher.Resource, token string,
 	}
 
 	// Process review comments (inline code comments)
+	// Batch-submitted reviews have multiple comments with the same createdAt.
+	// Use title-based dedup (which includes the file path) instead of timestamp-only dedup.
 	for _, reviewComment := range prData.ReviewComments {
 		if reviewComment.CreatedAt <= cursor {
 			continue
 		}
 
-		if watcher.IsDuplicate(d, "github", resource.ResourceType, resource.ResourceID, watcher.EventTypePRReviewComment, reviewComment.CreatedAt) {
+		title := fmt.Sprintf("Review comment by %s on %s", reviewComment.Author, reviewComment.Path)
+		if watcher.IsDuplicateByTitle(d, "github", resource.ResourceType, resource.ResourceID, watcher.EventTypePRReviewComment, title) {
 			continue
 		}
 
-		title := fmt.Sprintf("Review comment by %s on %s", reviewComment.Author, reviewComment.Path)
 		if err := watcher.EmitWatcherEvent(d, "github", watcher.EventTypePRReviewComment, title, &reviewComment.Body, reviewComment.CreatedAt, &reviewComment.Author, &reviewComment.AuthorType, resource); err != nil {
 			return eventCount, fmt.Errorf("failed to emit pr_review_comment event: %w", err)
 		}
 		eventCount++
-		logger.Printf("Emitted pr_review_comment for %s by %s", resource.ResourceID, reviewComment.Author)
+		logger.Printf("Emitted pr_review_comment for %s by %s on %s", resource.ResourceID, reviewComment.Author, reviewComment.Path)
 	}
 
 	// Fetch remaining check contexts if paginated

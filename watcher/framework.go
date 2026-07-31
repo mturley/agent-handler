@@ -84,6 +84,22 @@ func IsDuplicate(d *db.DB, source, resourceType, resourceID string, eventType Ev
 	return err == nil
 }
 
+// IsDuplicateByTitle checks if an event with the same title already exists for this resource.
+// Used when external_ts alone isn't unique (e.g. batch-submitted review comments).
+func IsDuplicateByTitle(d *db.DB, source, resourceType, resourceID string, eventType EventType, title string) bool {
+	query := `
+		SELECT 1
+		FROM events e
+		JOIN event_resources er ON er.event_id = e.id
+		WHERE e.source = ? AND er.resource_type = ? AND er.resource_id = ? AND e.type = ? AND e.title = ?
+		LIMIT 1
+	`
+
+	var exists int
+	err := d.QueryRow(query, source, resourceType, resourceID, eventType, title).Scan(&exists)
+	return err == nil
+}
+
 // EmitWatcherEvent inserts a watcher event with event_resources.
 func EmitWatcherEvent(d *db.DB, source string, eventType EventType, title string, body *string, externalTS string, author, authorType *string, resource Resource) error {
 	event := db.Event{
