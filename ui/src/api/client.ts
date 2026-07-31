@@ -28,13 +28,18 @@ export async function getSessionResources(sessionId: string): Promise<SessionRes
   return fetchJSON<SessionResource[]>(`/api/sessions/${encodeURIComponent(sessionId)}/resources`)
 }
 
+export interface CostMonthSummary {
+  label: string
+  cost_usd: number
+  daily_breakdown: { date: string; cost_usd: number; session_count: number }[]
+  top_sessions: { session_id: string; session_name: string; cost_usd: number; input_tokens: number; output_tokens: number }[]
+}
+
 export interface CostSummary {
   enabled: boolean
   today_cost_usd: number
-  month_cost_usd: number
   all_time_cost_usd: number
-  daily_breakdown: { date: string; cost_usd: number; session_count: number }[]
-  top_sessions: { session_id: string; session_name: string; cost_usd: number; input_tokens: number; output_tokens: number }[]
+  months: CostMonthSummary[]
 }
 
 export async function getCostSummary(): Promise<CostSummary> {

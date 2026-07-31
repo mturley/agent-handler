@@ -98,8 +98,9 @@ export default function App() {
     return (
       <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <header className="mb-6">
+          <header className="mb-6 flex items-center justify-between">
             <h1 className="text-lg font-semibold tracking-tight">agent-handler</h1>
+            <CostBadge onClick={() => setCostOpen(true)} />
           </header>
 
           <div className="flex gap-10">
@@ -139,6 +140,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        <CostDialog open={costOpen} onClose={() => setCostOpen(false)} />
         <Toaster />
       </div>
     )

@@ -5,8 +5,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { getCostSummary } from "@/api/client"
+import { getCostSummary, type CostMonthSummary } from "@/api/client"
 
 interface CostDialogProps {
   open: boolean
@@ -23,6 +24,70 @@ function formatTokens(n: number): string {
   return String(n)
 }
 
+function MonthView({ month }: { month: CostMonthSummary }) {
+  const maxDailyCost = Math.max(...(month.daily_breakdown || []).map((d) => d.cost_usd), 1)
+
+  return (
+    <div className="space-y-6">
+      {/* Daily bar chart */}
+      {month.daily_breakdown && month.daily_breakdown.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Daily Spend</h3>
+          <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
+            {month.daily_breakdown.map((day) => {
+              const barHeight = Math.max(Math.round((day.cost_usd / maxDailyCost) * 80), 2)
+              return (
+                <div key={day.date} className="flex-1 flex flex-col items-center justify-end" title={`${day.date}: ${formatCost(day.cost_usd)} (${day.session_count} sessions)`}>
+                  <div
+                    className="w-full bg-green-500/60 rounded-t-sm hover:bg-green-400/80 transition-colors cursor-default"
+                    style={{ height: barHeight }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex gap-[2px] mt-0.5">
+            {month.daily_breakdown.map((day) => {
+              const dateObj = new Date(day.date + "T00:00:00")
+              return (
+                <div key={day.date} className="flex-1 text-center">
+                  <span className="text-[9px] text-muted-foreground">{dateObj.getDate()}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Top sessions */}
+      {month.top_sessions && month.top_sessions.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-2">Top Sessions</h3>
+          <div className="space-y-1">
+            {month.top_sessions.map((session) => (
+              <div key={session.session_id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-xs truncate">
+                    {session.session_name || session.session_id.slice(0, 12)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
+                  <span>{formatTokens(session.input_tokens)} in / {formatTokens(session.output_tokens)} out</span>
+                  <span className="font-medium text-foreground">{formatCost(session.cost_usd)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {month.daily_breakdown?.length === 0 && month.top_sessions?.length === 0 && (
+        <p className="text-sm text-muted-foreground text-center py-4">No cost data for this month.</p>
+      )}
+    </div>
+  )
+}
+
 export function CostDialog({ open, onClose }: CostDialogProps) {
   const { data } = useQuery({
     queryKey: ["cost"],
@@ -32,7 +97,7 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
 
   if (!data || !data.enabled) return null
 
-  const maxDailyCost = Math.max(...(data.daily_breakdown || []).map((d) => d.cost_usd), 1)
+  const months = data.months || []
 
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
@@ -50,7 +115,7 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
                 <div className="text-xs text-muted-foreground">Today</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold">{formatCost(data.month_cost_usd)}</div>
+                <div className="text-2xl font-bold">{months[0] ? formatCost(months[0].cost_usd) : "$0.00"}</div>
                 <div className="text-xs text-muted-foreground">This month</div>
               </div>
               <div className="text-center">
@@ -59,51 +124,22 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
               </div>
             </div>
 
-            {/* Daily bar chart */}
-            {data.daily_breakdown && data.daily_breakdown.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Daily Spend</h3>
-                <div className="flex items-end gap-[2px] h-[80px]">
-                  {data.daily_breakdown.map((day) => {
-                    const height = Math.max((day.cost_usd / maxDailyCost) * 100, 2)
-                    const dateObj = new Date(day.date + "T00:00:00")
-                    const dayNum = dateObj.getDate()
-                    return (
-                      <div key={day.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${day.date}: ${formatCost(day.cost_usd)} (${day.session_count} sessions)`}>
-                        <div
-                          className="w-full bg-green-500/60 rounded-t-sm hover:bg-green-400/80 transition-colors cursor-default"
-                          style={{ height: `${height}%` }}
-                        />
-                        {data.daily_breakdown.length <= 31 && (
-                          <span className="text-[9px] text-muted-foreground">{dayNum}</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Top sessions */}
-            {data.top_sessions && data.top_sessions.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Top Sessions This Month</h3>
-                <div className="space-y-1">
-                  {data.top_sessions.map((session) => (
-                    <div key={session.session_id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono text-xs truncate">
-                          {session.session_name || session.session_id.slice(0, 12)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0 text-xs text-muted-foreground">
-                        <span>{formatTokens(session.input_tokens)} in / {formatTokens(session.output_tokens)} out</span>
-                        <span className="font-medium text-foreground">{formatCost(session.cost_usd)}</span>
-                      </div>
-                    </div>
+            {/* Month tabs */}
+            {months.length > 0 && (
+              <Tabs defaultValue="0">
+                <TabsList>
+                  {months.map((month, i) => (
+                    <TabsTrigger key={i} value={String(i)}>
+                      {month.label} ({formatCost(month.cost_usd)})
+                    </TabsTrigger>
                   ))}
-                </div>
-              </div>
+                </TabsList>
+                {months.map((month, i) => (
+                  <TabsContent key={i} value={String(i)} className="mt-4">
+                    <MonthView month={month} />
+                  </TabsContent>
+                ))}
+              </Tabs>
             )}
           </div>
         </ScrollArea>
@@ -121,6 +157,8 @@ export function CostBadge({ onClick }: { onClick: () => void }) {
 
   if (!data || !data.enabled) return null
 
+  const monthCost = data.months?.[0]?.cost_usd ?? 0
+
   return (
     <button
       onClick={onClick}
@@ -128,7 +166,7 @@ export function CostBadge({ onClick }: { onClick: () => void }) {
     >
       <span className="font-medium">{formatCost(data.today_cost_usd)}</span>
       <span className="mx-1">·</span>
-      <span>{formatCost(data.month_cost_usd)} this month</span>
+      <span>{formatCost(monthCost)} this month</span>
     </button>
   )
 }
