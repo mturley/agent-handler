@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -169,8 +170,10 @@ func (c *Client) FetchIssue(issueKey string, customFieldIDs map[string]string) (
 
 	// Parse comments
 	for _, c := range raw.Fields.Comment.Comments {
-		// For ADF bodies, just use a summary
-		body := fmt.Sprintf("Comment by %s on %s", c.Author.DisplayName, c.Created[:10])
+		body := extractADFText(c.Body)
+		if body == "" {
+			body = fmt.Sprintf("Comment by %s", c.Author.DisplayName)
+		}
 		issue.Comments = append(issue.Comments, IssueComment{
 			Author:    c.Author.DisplayName,
 			CreatedAt: c.Created,
@@ -224,4 +227,49 @@ func extractFieldValue(raw json.RawMessage) interface{} {
 	}
 
 	return nil
+}
+
+// extractADFText extracts plain text from an ADF (Atlassian Document Format) body.
+// ADF is a nested JSON structure; we recursively extract text nodes.
+func extractADFText(body interface{}) string {
+	if body == nil {
+		return ""
+	}
+	doc, ok := body.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	var texts []string
+	extractADFTextNodes(doc, &texts)
+	result := strings.Join(texts, "")
+	// Truncate long comments
+	if len(result) > 500 {
+		result = result[:497] + "..."
+	}
+	return strings.TrimSpace(result)
+}
+
+func extractADFTextNodes(node map[string]interface{}, texts *[]string) {
+	if nodeType, ok := node["type"].(string); ok && nodeType == "text" {
+		if text, ok := node["text"].(string); ok {
+			*texts = append(*texts, text)
+		}
+		return
+	}
+	// Add newlines between block-level elements
+	if nodeType, ok := node["type"].(string); ok {
+		switch nodeType {
+		case "paragraph", "heading", "bulletList", "orderedList", "listItem", "blockquote":
+			if len(*texts) > 0 {
+				*texts = append(*texts, "\n")
+			}
+		}
+	}
+	if content, ok := node["content"].([]interface{}); ok {
+		for _, child := range content {
+			if childMap, ok := child.(map[string]interface{}); ok {
+				extractADFTextNodes(childMap, texts)
+			}
+		}
+	}
 }
