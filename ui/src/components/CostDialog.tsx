@@ -130,12 +130,13 @@ export function CostDialog({ open, onClose }: CostDialogProps) {
                 <TabsList>
                   {months.map((month, i) => (
                     <TabsTrigger key={i} value={String(i)}>
-                      {month.label} ({formatCost(month.cost_usd)})
+                      {month.label}
                     </TabsTrigger>
                   ))}
                 </TabsList>
                 {months.map((month, i) => (
                   <TabsContent key={i} value={String(i)} className="mt-4">
+                    <div className="text-lg font-bold mb-4">{formatCost(month.cost_usd)}</div>
                     <MonthView month={month} />
                   </TabsContent>
                 ))}
