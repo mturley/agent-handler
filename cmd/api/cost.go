@@ -17,6 +17,7 @@ type costSummary struct {
 
 type monthSummary struct {
 	Label          string             `json:"label"`
+	FullLabel      string             `json:"full_label"`
 	CostUSD        float64            `json:"cost_usd"`
 	DailyBreakdown []dailyCostEntry   `json:"daily_breakdown"`
 	TopSessions    []sessionCostEntry `json:"top_sessions"`
@@ -102,6 +103,7 @@ func (s *Server) buildMonthSummary(t time.Time) monthSummary {
 
 	return monthSummary{
 		Label:          label,
+		FullLabel:      t.Format("January 2006"),
 		CostUSD:        monthCost,
 		DailyBreakdown: daily,
 		TopSessions:    sessions,

@@ -30,6 +30,7 @@ export async function getSessionResources(sessionId: string): Promise<SessionRes
 
 export interface CostMonthSummary {
   label: string
+  full_label: string
   cost_usd: number
   daily_breakdown: { date: string; cost_usd: number; session_count: number }[]
   top_sessions: { session_id: string; session_name: string; cost_usd: number; input_tokens: number; output_tokens: number }[]
