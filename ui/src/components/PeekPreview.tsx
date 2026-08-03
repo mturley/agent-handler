@@ -38,7 +38,7 @@ export function PeekPreview({
     queryKey: queryKeys.peek(sessionId),
     queryFn: () => getSessionPeek(sessionId),
     enabled: hovered || modalOpen,
-    staleTime: 15_000,
+    staleTime: 5_000,
   })
 
   const content = peekState?.content || ""
