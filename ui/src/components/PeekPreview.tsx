@@ -32,6 +32,12 @@ const highlightClass: Record<string, string> = {
   blue: "border-2 border-blue-500/50 bg-blue-950/20",
 }
 
+const highlightTerminalBg: Record<string, string> = {
+  amber: "bg-amber-950/30",
+  red: "bg-red-950/30",
+  blue: "bg-blue-950/30",
+}
+
 export function PeekSwitchButton({
   sessionId,
   sessionName,
@@ -110,7 +116,7 @@ export function PeekSwitchButton({
           align="end"
           className={cn("w-[90vw] max-w-[900px] p-0", highlightColor && highlightClass[highlightColor])}
         >
-          <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden">
+          <pre ref={scrollToBottom} className={cn("bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden", highlightColor && highlightTerminalBg[highlightColor])}>
             {trimmedContent || "No peek data available"}
           </pre>
         </HoverCardContent>
@@ -122,7 +128,7 @@ export function PeekSwitchButton({
             <DialogTitle>{sessionName} — Terminal Preview</DialogTitle>
           </DialogHeader>
           <div ref={scrollToBottom} className="flex-1 overflow-y-auto min-h-0">
-            <pre className="bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre-wrap break-all overflow-x-hidden">
+            <pre className={cn("bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre-wrap break-all overflow-x-hidden", highlightColor && highlightTerminalBg[highlightColor])}>
               {rawContent || "No peek data available"}
             </pre>
           </div>
