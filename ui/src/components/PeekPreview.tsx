@@ -42,7 +42,26 @@ export function PeekSwitchButton({
     refetchInterval: isActive ? 5_000 : false,
   })
 
-  const content = peekState?.content || ""
+  const rawContent = peekState?.content || ""
+
+  // Truncate below the prompt box for the hover preview.
+  // The prompt box contains a line where the session name is the only meaningful text
+  // (aside from whitespace and box-drawing ─ characters). We truncate 2 lines below that.
+  // Skip truncation if the session is awaiting approval (the name line hides in that state).
+  const trimmedContent = (() => {
+    if (!rawContent || !sessionName || peekState?.needs_input) return rawContent
+    const lines = rawContent.split("\n")
+    let promptLineIndex = -1
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const stripped = lines[i].replace(/[\s─]/g, "")
+      if (stripped === sessionName) {
+        promptLineIndex = i
+        break
+      }
+    }
+    if (promptLineIndex === -1) return rawContent
+    return lines.slice(0, promptLineIndex + 3).join("\n")
+  })()
 
   const scrollToBottom = useCallback((el: HTMLElement | null) => {
     if (el) {
@@ -85,7 +104,7 @@ export function PeekSwitchButton({
           className="w-[90vw] max-w-[900px] p-0"
         >
           <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden">
-            {content || "No peek data available"}
+            {trimmedContent || "No peek data available"}
           </pre>
         </HoverCardContent>
       </HoverCard>
@@ -97,7 +116,7 @@ export function PeekSwitchButton({
           </DialogHeader>
           <div ref={scrollToBottom} className="flex-1 overflow-y-auto min-h-0">
             <pre className="bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre-wrap break-all overflow-x-hidden">
-              {content || "No peek data available"}
+              {rawContent || "No peek data available"}
             </pre>
           </div>
           <DialogFooter className="gap-2">
