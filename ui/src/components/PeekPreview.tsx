@@ -72,21 +72,21 @@ export function PeekPreview({
         <HoverCardContent
           side="bottom"
           align="end"
-          className="w-[500px] max-w-[90vw] p-0"
+          className="w-[90vw] max-w-[900px] p-0"
         >
-          <pre className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md overflow-x-auto whitespace-pre max-h-[300px] overflow-y-auto">
+          <pre className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
             {preview || "No peek data available"}
           </pre>
         </HoverCardContent>
       </HoverCard>
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+        <DialogContent className="max-w-[90vw] w-full max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>{sessionName} — Terminal Preview</DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto min-h-0">
-            <pre className="bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre overflow-x-auto">
+            <pre className="bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre-wrap break-all">
               {content || "No peek data available"}
             </pre>
           </div>
