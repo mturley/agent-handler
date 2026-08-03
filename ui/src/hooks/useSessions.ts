@@ -78,6 +78,7 @@ export function useSessions() {
   const { data: sessions = [], isLoading: loading } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: getSessions,
+    staleTime: 0,
   })
 
   const [search, setSearch] = useState("")

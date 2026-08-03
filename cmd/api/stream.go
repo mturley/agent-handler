@@ -20,9 +20,11 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	flusher.Flush()
 
-	// Track latest event timestamp
+	// Track latest event and session working state
 	var lastEventTS string
 	s.DB.QueryRow("SELECT MAX(ts) FROM events").Scan(&lastEventTS)
+	var lastWorkingState string
+	s.DB.QueryRow("SELECT COALESCE(GROUP_CONCAT(session_id || ':' || working, ','), '') FROM sessions WHERE status = 'active'").Scan(&lastWorkingState)
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -42,7 +44,14 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprintf(w, "event: events_new\ndata: %s\n\n", data)
 			}
 
-			// Always send heartbeat
+			// Check for session working state changes
+			var currentWorkingState string
+			s.DB.QueryRow("SELECT COALESCE(GROUP_CONCAT(session_id || ':' || working, ','), '') FROM sessions WHERE status = 'active'").Scan(&currentWorkingState)
+			if currentWorkingState != lastWorkingState {
+				lastWorkingState = currentWorkingState
+			}
+
+			// Always send heartbeat (triggers sessions refetch)
 			data, err := json.Marshal(map[string]string{"type": "heartbeat"})
 			if err == nil {
 				fmt.Fprintf(w, "event: heartbeat\ndata: %s\n\n", data)
