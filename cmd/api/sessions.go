@@ -80,6 +80,34 @@ type archivedSessionsResponse struct {
 	HasMore  bool              `json:"has_more"`
 }
 
+type sessionQuickState struct {
+	Working    bool `json:"working"`
+	NeedsInput bool `json:"needs_input"`
+}
+
+func (s *Server) handleSessionsWorking(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.DB.Query(`
+		SELECT s.session_id, COALESCE(s.working, 0), COALESCE(p.needs_input, 0)
+		FROM sessions s
+		LEFT JOIN peek_state p ON s.session_id = p.session_id
+		WHERE s.status = 'active'
+	`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to query session state")
+		return
+	}
+	defer rows.Close()
+
+	result := make(map[string]sessionQuickState)
+	for rows.Next() {
+		var id string
+		var working, needsInput int
+		rows.Scan(&id, &working, &needsInput)
+		result[id] = sessionQuickState{Working: working == 1, NeedsInput: needsInput == 1}
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (s *Server) handleArchivedSessions(w http.ResponseWriter, r *http.Request) {
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")

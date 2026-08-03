@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Session } from "@/api/types"
-import { getSessions } from "@/api/client"
+import { getSessions, getSessionsQuickState } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
 export type SortField = "cmux" | "last_prompt" | "unread" | "name"
@@ -75,11 +75,26 @@ function repoName(repo: string): string {
 
 export function useSessions() {
   const queryClient = useQueryClient()
-  const { data: sessions = [], isLoading: loading } = useQuery({
+  const { data: rawSessions = [], isLoading: loading } = useQuery({
     queryKey: queryKeys.sessions,
     queryFn: getSessions,
+  })
+
+  const { data: quickState } = useQuery({
+    queryKey: ["sessions", "quickState"],
+    queryFn: getSessionsQuickState,
+    refetchInterval: 5_000,
     staleTime: 0,
   })
+
+  const sessions = useMemo(() => {
+    if (!quickState) return rawSessions
+    return rawSessions.map((s) => {
+      const qs = quickState[s.session_id]
+      if (!qs) return s
+      return { ...s, working: qs.working, needs_input: qs.needs_input }
+    })
+  }, [rawSessions, quickState])
 
   const [search, setSearch] = useState("")
   const [filters, setFilters] = useState<Set<FilterChip>>(new Set())

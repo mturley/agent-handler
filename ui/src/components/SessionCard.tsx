@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
-import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert, Loader2 } from "lucide-react"
+import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert, Asterisk } from "lucide-react"
 import { PeekSwitchButton } from "@/components/PeekPreview"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
@@ -68,7 +68,7 @@ export function SessionCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {session.working ? (
-              <Loader2 className="h-3 w-3 animate-spin text-green-500 shrink-0" />
+              <Asterisk className="h-3.5 w-3.5 animate-pulse text-orange-400 shrink-0" />
             ) : (
               <div
                 className={cn("w-2 h-2 rounded-full shrink-0", stateColors[session.display_state])}

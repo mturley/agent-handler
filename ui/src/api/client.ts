@@ -15,6 +15,15 @@ export async function getSessions(): Promise<Session[]> {
   return fetchJSON<Session[]>("/api/sessions")
 }
 
+export interface SessionQuickState {
+  working: boolean
+  needs_input: boolean
+}
+
+export async function getSessionsQuickState(): Promise<Record<string, SessionQuickState>> {
+  return fetchJSON<Record<string, SessionQuickState>>("/api/sessions/working")
+}
+
 export interface SessionResource {
   resource_type: string
   resource_id: string
