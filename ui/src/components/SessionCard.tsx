@@ -100,6 +100,12 @@ export function SessionCard({
                 sessionId={session.session_id}
                 sessionName={name}
                 cmuxAvailable={cmuxAvailable}
+                highlightColor={
+                  session.needs_input ? "amber" :
+                  session.blocked ? "red" :
+                  session.unread_count > 0 ? "blue" :
+                  undefined
+                }
                 onSwitch={onSwitch}
               />
             ) : cmuxAvailable && session.display_state !== "dead" ? (
