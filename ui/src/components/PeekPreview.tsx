@@ -34,11 +34,13 @@ export function PeekPreview({
   const [modalOpen, setModalOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
 
+  const isActive = hovered || modalOpen
   const { data: peekState } = useQuery({
     queryKey: queryKeys.peek(sessionId),
     queryFn: () => getSessionPeek(sessionId),
-    enabled: hovered || modalOpen,
+    enabled: isActive,
     staleTime: 5_000,
+    refetchInterval: isActive ? 5_000 : false,
   })
 
   const content = peekState?.content || ""
