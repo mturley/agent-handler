@@ -25,11 +25,6 @@ interface PeekPreviewProps {
   onSwitch: (id: string) => void
 }
 
-function getLastLines(content: string, n: number): string {
-  const lines = content.split("\n")
-  return lines.slice(-n).join("\n")
-}
-
 export function PeekPreview({
   sessionId,
   sessionName,
@@ -48,13 +43,19 @@ export function PeekPreview({
   })
 
   const content = peekState?.content || ""
-  const preview = content ? getLastLines(content, 40) : ""
+  const hoverRef = useRef<HTMLPreElement>(null)
 
   useEffect(() => {
     if (modalOpen && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [modalOpen, content])
+
+  useEffect(() => {
+    if (hovered && hoverRef.current) {
+      hoverRef.current.scrollTop = hoverRef.current.scrollHeight
+    }
+  }, [hovered, content])
 
   return (
     <>
@@ -81,8 +82,8 @@ export function PeekPreview({
           align="end"
           className="w-[90vw] max-w-[900px] p-0"
         >
-          <pre className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[45vh] overflow-y-auto">
-            {preview || "No peek data available"}
+          <pre ref={hoverRef} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[45vh] overflow-y-auto">
+            {content || "No peek data available"}
           </pre>
         </HoverCardContent>
       </HoverCard>
