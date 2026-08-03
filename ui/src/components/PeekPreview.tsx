@@ -33,9 +33,9 @@ const highlightClass: Record<string, string> = {
 }
 
 const highlightTerminalBg: Record<string, string> = {
-  amber: "bg-amber-950",
-  red: "bg-red-950",
-  blue: "bg-blue-950",
+  amber: "bg-[#1a1408]",
+  red: "bg-[#1a0808]",
+  blue: "bg-[#08101a]",
 }
 
 export function PeekSwitchButton({
