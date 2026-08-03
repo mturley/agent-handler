@@ -5,7 +5,7 @@ import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
 import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert } from "lucide-react"
-import { PeekPreview } from "@/components/PeekPreview"
+import { PeekSwitchButton } from "@/components/PeekPreview"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
 
@@ -95,15 +95,14 @@ export function SessionCard({
               </TooltipTrigger>
               <TooltipContent>View session timeline</TooltipContent>
             </Tooltip>
-            {session.peekable && (
-              <PeekPreview
+            {session.peekable && session.display_state !== "dead" ? (
+              <PeekSwitchButton
                 sessionId={session.session_id}
                 sessionName={name}
                 cmuxAvailable={cmuxAvailable}
                 onSwitch={onSwitch}
               />
-            )}
-            {cmuxAvailable && session.display_state !== "dead" && (
+            ) : cmuxAvailable && session.display_state !== "dead" ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -118,7 +117,7 @@ export function SessionCard({
                 </TooltipTrigger>
                 <TooltipContent>Switch to this session in cmux</TooltipContent>
               </Tooltip>
-            )}
+            ) : null}
           </div>
         </div>
       </CardHeader>

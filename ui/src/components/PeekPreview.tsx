@@ -13,24 +13,23 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Eye, ArrowUpRight } from "lucide-react"
 import { getSessionPeek } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
-interface PeekPreviewProps {
+interface PeekSwitchButtonProps {
   sessionId: string
   sessionName: string
   cmuxAvailable: boolean
   onSwitch: (id: string) => void
 }
 
-export function PeekPreview({
+export function PeekSwitchButton({
   sessionId,
   sessionName,
   cmuxAvailable,
   onSwitch,
-}: PeekPreviewProps) {
+}: PeekSwitchButtonProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
 
@@ -57,21 +56,28 @@ export function PeekPreview({
     <>
       <HoverCard openDelay={300} closeDelay={100}>
         <HoverCardTrigger asChild>
-          <span onMouseEnter={() => setHovered(true)}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => setModalOpen(true)}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Peek at terminal</TooltipContent>
-            </Tooltip>
-          </span>
+          <div
+            className="inline-flex rounded-md border border-input"
+            onMouseEnter={() => setHovered(true)}
+          >
+            <button
+              className="inline-flex items-center justify-center h-7 px-2 text-sm rounded-l-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+              onClick={() => setModalOpen(true)}
+              title="Peek at terminal"
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </button>
+            {cmuxAvailable && (
+              <button
+                className="inline-flex items-center gap-1 h-7 px-2 text-xs border-l border-input rounded-r-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
+                onClick={() => onSwitch(sessionId)}
+                title="Switch to this session in cmux"
+              >
+                Switch
+                <ArrowUpRight className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         </HoverCardTrigger>
         <HoverCardContent
           side="bottom"
