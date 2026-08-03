@@ -26,10 +26,10 @@ interface PeekSwitchButtonProps {
   onSwitch: (id: string) => void
 }
 
-const highlightBorderClass: Record<string, string> = {
-  amber: "border-2 border-amber-500/50",
-  red: "border-2 border-red-500/50",
-  blue: "border-2 border-blue-500/50",
+const highlightClass: Record<string, string> = {
+  amber: "border-2 border-amber-500/50 bg-amber-950/20",
+  red: "border-2 border-red-500/50 bg-red-950/20",
+  blue: "border-2 border-blue-500/50 bg-blue-950/20",
 }
 
 export function PeekSwitchButton({
@@ -108,7 +108,7 @@ export function PeekSwitchButton({
         <HoverCardContent
           side="bottom"
           align="end"
-          className={cn("w-[90vw] max-w-[900px] p-0", highlightColor && highlightBorderClass[highlightColor])}
+          className={cn("w-[90vw] max-w-[900px] p-0", highlightColor && highlightClass[highlightColor])}
         >
           <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden">
             {trimmedContent || "No peek data available"}
@@ -117,7 +117,7 @@ export function PeekSwitchButton({
       </HoverCard>
 
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className={cn("max-w-[90vw] w-full max-h-[80vh] flex flex-col", highlightColor && highlightBorderClass[highlightColor])}>
+        <DialogContent className={cn("max-w-[90vw] w-full max-h-[80vh] flex flex-col", highlightColor && highlightClass[highlightColor])}>
           <DialogHeader>
             <DialogTitle>{sessionName} — Terminal Preview</DialogTitle>
           </DialogHeader>

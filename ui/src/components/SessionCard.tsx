@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
-import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert } from "lucide-react"
+import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert, Loader2 } from "lucide-react"
 import { PeekSwitchButton } from "@/components/PeekPreview"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
@@ -59,17 +59,21 @@ export function SessionCard({
     <Card
       className={cn(
         "transition-colors",
-        session.needs_input && "border-2 border-amber-500/50",
-        session.blocked && !session.needs_input && "border-2 border-red-500/50",
-        session.unread_count > 0 && !session.needs_input && !session.blocked && "border-2 border-blue-500/50"
+        session.needs_input && "border-2 border-amber-500/50 bg-amber-950/20",
+        session.blocked && !session.needs_input && "border-2 border-red-500/50 bg-red-950/20",
+        session.unread_count > 0 && !session.needs_input && !session.blocked && "border-2 border-blue-500/50 bg-blue-950/20"
       )}
     >
       <CardHeader className="pb-2 pt-3 px-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div
-              className={cn("w-2 h-2 rounded-full shrink-0", stateColors[session.display_state])}
-            />
+            {session.working ? (
+              <Loader2 className="h-3 w-3 animate-spin text-green-500 shrink-0" />
+            ) : (
+              <div
+                className={cn("w-2 h-2 rounded-full shrink-0", stateColors[session.display_state])}
+              />
+            )}
             <span className="font-semibold text-sm truncate">{name}</span>
             {session.needs_input && (
               <span className="inline-flex items-center gap-1 text-amber-500 shrink-0">
