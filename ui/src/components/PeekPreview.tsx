@@ -82,9 +82,12 @@ export function PeekSwitchButton({
         <HoverCardContent
           side="bottom"
           align="end"
+          avoidCollisions
+          collisionPadding={16}
           className="w-[90vw] max-w-[900px] p-0"
+          style={{ maxHeight: 'var(--radix-hover-card-content-available-height, 70vh)' }}
         >
-          <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[45vh] overflow-y-auto overflow-x-hidden">
+          <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all h-full overflow-y-auto overflow-x-hidden">
             {content || "No peek data available"}
           </pre>
         </HoverCardContent>
