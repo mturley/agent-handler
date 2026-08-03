@@ -44,23 +44,21 @@ export function PeekSwitchButton({
 
   const rawContent = peekState?.content || ""
 
-  // Truncate below the prompt box for the hover preview.
-  // The prompt box contains a line where the session name is the only meaningful text
-  // (aside from whitespace and box-drawing ─ characters). We truncate 2 lines below that.
-  // Skip truncation if the session is awaiting approval (the name line hides in that state).
+  // Truncate below the /watching line in the hover preview to strip
+  // statusline hints. Keep inbox/inbox-mode/watching but drop everything after.
+  // Skip truncation when awaiting approval (statusline layout differs).
   const trimmedContent = (() => {
-    if (!rawContent || !sessionName || peekState?.needs_input) return rawContent
+    if (!rawContent || peekState?.needs_input) return rawContent
     const lines = rawContent.split("\n")
-    let promptLineIndex = -1
+    let watchingIndex = -1
     for (let i = lines.length - 1; i >= 0; i--) {
-      const stripped = lines[i].replace(/[\s─]/g, "")
-      if (stripped === sessionName) {
-        promptLineIndex = i
+      if (lines[i].includes("/watching")) {
+        watchingIndex = i
         break
       }
     }
-    if (promptLineIndex === -1) return rawContent
-    return lines.slice(0, promptLineIndex + 3).join("\n")
+    if (watchingIndex === -1) return rawContent
+    return lines.slice(0, watchingIndex + 1).join("\n")
   })()
 
   const scrollToBottom = useCallback((el: HTMLElement | null) => {
