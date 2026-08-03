@@ -22,10 +22,11 @@ import { queryKeys } from "@/api/queryKeys"
 // Use on switch buttons outside of SessionCard (e.g. alert summary, resource cards).
 interface PeekHoverCardProps {
   sessionId: string
+  highlightColor?: "amber" | "red" | "blue"
   children: React.ReactNode
 }
 
-export function PeekHoverCard({ sessionId, children }: PeekHoverCardProps) {
+export function PeekHoverCard({ sessionId, highlightColor, children }: PeekHoverCardProps) {
   const [hovered, setHovered] = useState(false)
 
   const { data: peekState } = useQuery({
@@ -57,9 +58,9 @@ export function PeekHoverCard({ sessionId, children }: PeekHoverCardProps) {
       <HoverCardContent
         side="bottom"
         align="end"
-        className="w-[90vw] max-w-[900px] p-0"
+        className={cn("w-[90vw] max-w-[900px] p-0", highlightColor && highlightClass[highlightColor])}
       >
-        <pre ref={scrollToBottom} className="bg-black text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden">
+        <pre ref={scrollToBottom} className={cn("bg-black text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden", highlightColor && highlightTerminalBg[highlightColor])}>
           {trimmedContent || "No peek data available"}
         </pre>
       </HoverCardContent>

@@ -191,7 +191,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                   </span>
                   <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
                     {awaitingSessions.map((s) => (
-                      <PeekHoverCard key={s.session_id} sessionId={s.session_id}>
+                      <PeekHoverCard key={s.session_id} sessionId={s.session_id} highlightColor="amber">
                         <Button
                           variant="outline"
                           size="sm"
@@ -224,7 +224,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                             .join(", ")
                         : ""
                       return (
-                        <PeekHoverCard key={s.session_id} sessionId={s.session_id}>
+                        <PeekHoverCard key={s.session_id} sessionId={s.session_id} highlightColor="blue">
                           <Button
                             variant="outline"
                             size="sm"
