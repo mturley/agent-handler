@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
@@ -32,8 +32,6 @@ export function PeekSwitchButton({
 }: PeekSwitchButtonProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
-  const [availableHeight, setAvailableHeight] = useState(400)
-  const triggerRef = useRef<HTMLDivElement>(null)
 
   const isActive = hovered || modalOpen
   const { data: peekState } = useQuery({
@@ -59,17 +57,8 @@ export function PeekSwitchButton({
       <HoverCard openDelay={300} closeDelay={100}>
         <HoverCardTrigger asChild>
           <div
-            ref={triggerRef}
             className="inline-flex rounded-md border border-input"
-            onMouseEnter={() => {
-              setHovered(true)
-              if (triggerRef.current) {
-                const rect = triggerRef.current.getBoundingClientRect()
-                const spaceBelow = window.innerHeight - rect.bottom - 32
-                const spaceAbove = rect.top - 32
-                setAvailableHeight(Math.max(spaceBelow, spaceAbove, 200))
-              }
-            }}
+            onMouseEnter={() => setHovered(true)}
           >
             <button
               className="inline-flex items-center justify-center h-7 px-2 text-sm rounded-l-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
@@ -93,12 +82,9 @@ export function PeekSwitchButton({
         <HoverCardContent
           side="bottom"
           align="end"
-          avoidCollisions
-          collisionPadding={16}
           className="w-[90vw] max-w-[900px] p-0"
-          style={{ maxHeight: `${availableHeight}px` }}
         >
-          <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-full overflow-y-auto overflow-x-hidden">
+          <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden">
             {content || "No peek data available"}
           </pre>
         </HoverCardContent>
