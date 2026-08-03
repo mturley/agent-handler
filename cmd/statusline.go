@@ -931,8 +931,8 @@ func renderDebugInfo(d *db.DB, session *db.Session, input *hookInput) {
 		dim, session.TerminalType, session.TerminalID, peekable, reset)
 	fmt.Printf("%s[debug] workspace=%q id=%s%s\n",
 		dim, session.CmuxWorkspaceName, session.CmuxWorkspaceID, reset)
-	fmt.Printf("%s[debug] role=%s cursor=%s%s\n",
-		dim, session.Role, cursor, reset)
+	fmt.Printf("%s[debug] role=%s cursor=%s working=%v%s\n",
+		dim, session.Role, cursor, session.Working, reset)
 	if input != nil {
 		fmt.Printf("%s[debug] reported_cost=$%.2f%s\n",
 			dim, input.Cost.TotalCostUSD, reset)

@@ -95,6 +95,9 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Mark session as working
+	d.SetWorking(input.SessionID, true)
+
 	// Sync session metadata (name, terminal)
 	termType, termID, workspaceID := terminal.Detect()
 	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID, input.CWD, "", -1)

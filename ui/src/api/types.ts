@@ -25,6 +25,7 @@ export interface Session {
   cwd?: string
   model?: string
   context_percent: number
+  working: boolean
   true_cost_usd?: number
   today_cost_usd?: number
   cmux_order: number

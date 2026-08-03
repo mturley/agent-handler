@@ -94,7 +94,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 	fmt.Printf("  Configure Claude Code hooks in %s:\n", settingsPath)
-	for _, hook := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact"} {
+	for _, hook := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact", "Stop"} {
 		fmt.Printf("    - %s\n", hook)
 	}
 	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
@@ -287,11 +287,13 @@ func configureHooks(home, hooksDir string) error {
 		"SessionEnd":       "session_end.sh",
 		"UserPromptSubmit": "user_prompt_submit.sh",
 		"PreCompact":       "pre_compact.sh",
+		"Stop":             "stop.sh",
 	}
 	timeouts := map[string]int{
 		"SessionEnd":       10,
 		"UserPromptSubmit": 5,
 		"PreCompact":       10,
+		"Stop":             2,
 	}
 
 	existingHooks, ok := settings["hooks"].(map[string]interface{})

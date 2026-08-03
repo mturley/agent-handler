@@ -28,6 +28,7 @@ type Session struct {
 	CWD                string
 	Model              string
 	ContextPercent     int
+	Working            bool
 	RegisteredAt     string
 	JSONLPath        string
 }
@@ -98,6 +99,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 			COALESCE(cwd, '') as cwd,
 			COALESCE(model, '') as model,
 			COALESCE(context_percent, 0) as context_percent,
+			COALESCE(working, 0) as working,
 			registered_at, jsonl_path
 		FROM sessions
 		WHERE session_id = ?
@@ -109,7 +111,7 @@ func (db *DB) GetSession(sessionID string) (*Session, error) {
 		&s.SessionName, &s.PID, &s.Status,
 		&s.InboxMode, &s.AutoPollInterval, &s.Role,
 		&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-		&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.RegisteredAt, &s.JSONLPath,
+		&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.Working, &s.RegisteredAt, &s.JSONLPath,
 	)
 
 	if err == sql.ErrNoRows {
@@ -154,6 +156,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			COALESCE(cwd, '') as cwd,
 			COALESCE(model, '') as model,
 			COALESCE(context_percent, 0) as context_percent,
+			COALESCE(working, 0) as working,
 			registered_at, jsonl_path
 		FROM sessions
 		%s
@@ -175,7 +178,7 @@ func (db *DB) ListSessions(includeArchived bool, limit, offset int) ([]Session, 
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
 			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-			&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.RegisteredAt, &s.JSONLPath,
+			&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.Working, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)
@@ -227,6 +230,7 @@ func (db *DB) ListArchivedSessions(search, sort string, limit, offset int) ([]Se
 			COALESCE(cwd, '') as cwd,
 			COALESCE(model, '') as model,
 			COALESCE(context_percent, 0) as context_percent,
+			COALESCE(working, 0) as working,
 			registered_at, jsonl_path
 		FROM sessions
 		%s
@@ -249,7 +253,7 @@ func (db *DB) ListArchivedSessions(search, sort string, limit, offset int) ([]Se
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
 			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-			&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.RegisteredAt, &s.JSONLPath,
+			&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.Working, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan archived session row: %w", err)
@@ -296,6 +300,7 @@ func (db *DB) ListSessionsByName(name string) ([]Session, error) {
 			COALESCE(cwd, '') as cwd,
 			COALESCE(model, '') as model,
 			COALESCE(context_percent, 0) as context_percent,
+			COALESCE(working, 0) as working,
 			registered_at, jsonl_path
 		FROM sessions
 		WHERE session_name = ? AND status = 'active'
@@ -315,7 +320,7 @@ func (db *DB) ListSessionsByName(name string) ([]Session, error) {
 			&s.SessionName, &s.PID, &s.Status,
 			&s.InboxMode, &s.AutoPollInterval, &s.Role,
 			&s.TerminalType, &s.TerminalID, &s.CmuxWorkspaceID, &s.CmuxWorkspaceName, &s.CmuxWorkspaceColor,
-			&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.RegisteredAt, &s.JSONLPath,
+			&s.LastActive, &s.LastPrompt, &s.CWD, &s.Model, &s.ContextPercent, &s.Working, &s.RegisteredAt, &s.JSONLPath,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)
@@ -345,6 +350,19 @@ func (db *DB) BumpLastActive(sessionID, ts string) error {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
+	return nil
+}
+
+// SetWorking sets the working flag for a session.
+func (db *DB) SetWorking(sessionID string, working bool) error {
+	val := 0
+	if working {
+		val = 1
+	}
+	_, err := db.conn.Exec("UPDATE sessions SET working = ? WHERE session_id = ?", val, sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to set working: %w", err)
+	}
 	return nil
 }
 

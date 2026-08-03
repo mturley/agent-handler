@@ -37,6 +37,7 @@ type enrichedSession struct {
 	SubscriptionBreakdown map[string]int `json:"subscriptions_breakdown,omitempty"`
 	CWD                string         `json:"cwd,omitempty"`
 	Model              string         `json:"model,omitempty"`
+	Working            bool           `json:"working"`
 	ContextPercent     int            `json:"context_percent"`
 	TrueCostUSD        *float64       `json:"true_cost_usd,omitempty"`
 	TodayCostUSD       *float64       `json:"today_cost_usd,omitempty"`
@@ -438,6 +439,7 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		Status:             session.Status,
 		CWD:                  session.CWD,
 		Model:                session.Model,
+		Working:              session.Working,
 		ContextPercent:       session.ContextPercent,
 		TrueCostUSD:          trueCostPtr,
 		TodayCostUSD:         todayCostPtr,
