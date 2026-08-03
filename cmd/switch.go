@@ -123,7 +123,7 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	}
 
 	// Bring the cmux window to the front (useful when switching from external browser)
-	exec.Command("cmux", "focus-window", "--window", "window:1").Run()
+	exec.Command("osascript", "-e", `tell application "cmux" to activate`).Run()
 
 	// Close the caller surface after switching. Same-workspace needed the
 	// reorder above to prevent focus steal; cross-workspace is safe to close directly.
