@@ -27,9 +27,9 @@ interface PeekSwitchButtonProps {
 }
 
 const highlightBorderClass: Record<string, string> = {
-  amber: "border-amber-500/50",
-  red: "border-red-500/50",
-  blue: "border-blue-500/50",
+  amber: "border-2 border-amber-500/50",
+  red: "border-2 border-red-500/50",
+  blue: "border-2 border-blue-500/50",
 }
 
 export function PeekSwitchButton({
