@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,7 +33,6 @@ export function PeekPreview({
 }: PeekPreviewProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
   const { data: peekState } = useQuery({
     queryKey: queryKeys.peek(sessionId),
@@ -43,19 +42,14 @@ export function PeekPreview({
   })
 
   const content = peekState?.content || ""
-  const hoverRef = useRef<HTMLPreElement>(null)
 
-  useEffect(() => {
-    if (modalOpen && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+  const scrollToBottom = useCallback((el: HTMLElement | null) => {
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight
+      })
     }
-  }, [modalOpen, content])
-
-  useEffect(() => {
-    if (hovered && hoverRef.current) {
-      hoverRef.current.scrollTop = hoverRef.current.scrollHeight
-    }
-  }, [hovered, content])
+  }, [])
 
   return (
     <>
@@ -82,7 +76,7 @@ export function PeekPreview({
           align="end"
           className="w-[90vw] max-w-[900px] p-0"
         >
-          <pre ref={hoverRef} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[45vh] overflow-y-auto">
+          <pre ref={scrollToBottom} className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[45vh] overflow-y-auto">
             {content || "No peek data available"}
           </pre>
         </HoverCardContent>
@@ -93,7 +87,7 @@ export function PeekPreview({
           <DialogHeader>
             <DialogTitle>{sessionName} — Terminal Preview</DialogTitle>
           </DialogHeader>
-          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+          <div ref={scrollToBottom} className="flex-1 overflow-y-auto min-h-0">
             <pre className="bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre-wrap break-all">
               {content || "No peek data available"}
             </pre>
