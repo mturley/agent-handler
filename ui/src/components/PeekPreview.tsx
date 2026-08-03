@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import {
@@ -38,6 +38,7 @@ export function PeekPreview({
 }: PeekPreviewProps) {
   const [modalOpen, setModalOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const { data: peekState } = useQuery({
     queryKey: queryKeys.peek(sessionId),
@@ -47,7 +48,13 @@ export function PeekPreview({
   })
 
   const content = peekState?.content || ""
-  const preview = content ? getLastLines(content, 18) : ""
+  const preview = content ? getLastLines(content, 40) : ""
+
+  useEffect(() => {
+    if (modalOpen && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [modalOpen, content])
 
   return (
     <>
@@ -74,7 +81,7 @@ export function PeekPreview({
           align="end"
           className="w-[90vw] max-w-[900px] p-0"
         >
-          <pre className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[300px] overflow-y-auto">
+          <pre className="bg-slate-950 text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[45vh] overflow-y-auto">
             {preview || "No peek data available"}
           </pre>
         </HoverCardContent>
@@ -85,7 +92,7 @@ export function PeekPreview({
           <DialogHeader>
             <DialogTitle>{sessionName} — Terminal Preview</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
             <pre className="bg-slate-950 text-slate-300 font-mono text-xs leading-tight p-4 rounded-md whitespace-pre-wrap break-all">
               {content || "No peek data available"}
             </pre>
