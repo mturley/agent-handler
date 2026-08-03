@@ -18,6 +18,55 @@ import { cn } from "@/lib/utils"
 import { getSessionPeek } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
+// Wrap any element with a peek hover card showing cached terminal output.
+// Use on switch buttons outside of SessionCard (e.g. alert summary, resource cards).
+interface PeekHoverCardProps {
+  sessionId: string
+  children: React.ReactNode
+}
+
+export function PeekHoverCard({ sessionId, children }: PeekHoverCardProps) {
+  const [hovered, setHovered] = useState(false)
+
+  const { data: peekState } = useQuery({
+    queryKey: queryKeys.peek(sessionId),
+    queryFn: () => getSessionPeek(sessionId),
+    enabled: hovered,
+    staleTime: 5_000,
+    refetchInterval: hovered ? 5_000 : false,
+  })
+
+  const rawContent = peekState?.content || ""
+  const trimmedContent = truncateAtWatching(rawContent, peekState?.needs_input)
+
+  const scrollToBottom = useCallback((el: HTMLElement | null) => {
+    if (el) {
+      requestAnimationFrame(() => {
+        el.scrollTop = el.scrollHeight
+      })
+    }
+  }, [])
+
+  return (
+    <HoverCard openDelay={300} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <span onMouseEnter={() => setHovered(true)}>
+          {children}
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent
+        side="bottom"
+        align="end"
+        className="w-[90vw] max-w-[900px] p-0"
+      >
+        <pre ref={scrollToBottom} className="bg-black text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden">
+          {trimmedContent || "No peek data available"}
+        </pre>
+      </HoverCardContent>
+    </HoverCard>
+  )
+}
+
 interface PeekSwitchButtonProps {
   sessionId: string
   sessionName: string
@@ -30,6 +79,20 @@ const highlightClass: Record<string, string> = {
   amber: "border-2 border-amber-500/50 bg-amber-950/20",
   red: "border-2 border-red-500/50 bg-red-950/20",
   blue: "border-2 border-blue-500/50 bg-blue-950/20",
+}
+
+function truncateAtWatching(content: string, needsInput?: boolean): string {
+  if (!content || needsInput) return content
+  const lines = content.split("\n")
+  let watchingIndex = -1
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].includes("/watching")) {
+      watchingIndex = i
+      break
+    }
+  }
+  if (watchingIndex === -1) return content
+  return lines.slice(0, watchingIndex + 1).join("\n")
 }
 
 const highlightTerminalBg: Record<string, string> = {
@@ -59,22 +122,7 @@ export function PeekSwitchButton({
 
   const rawContent = peekState?.content || ""
 
-  // Truncate below the /watching line in the hover preview to strip
-  // statusline hints. Keep inbox/inbox-mode/watching but drop everything after.
-  // Skip truncation when awaiting approval (statusline layout differs).
-  const trimmedContent = (() => {
-    if (!rawContent || peekState?.needs_input) return rawContent
-    const lines = rawContent.split("\n")
-    let watchingIndex = -1
-    for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].includes("/watching")) {
-        watchingIndex = i
-        break
-      }
-    }
-    if (watchingIndex === -1) return rawContent
-    return lines.slice(0, watchingIndex + 1).join("\n")
-  })()
+  const trimmedContent = truncateAtWatching(rawContent, peekState?.needs_input)
 
   const scrollToBottom = useCallback((el: HTMLElement | null) => {
     if (el) {

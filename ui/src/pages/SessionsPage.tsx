@@ -23,8 +23,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight, Skull, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
+import { PeekHoverCard } from "@/components/PeekPreview"
 
 const filterChips: { key: FilterChip; label: string }[] = [
   { key: "active", label: "Active" },
@@ -191,21 +191,18 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                   </span>
                   <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
                     {awaitingSessions.map((s) => (
-                      <Tooltip key={s.session_id}>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={!cmuxAvailable}
-                            onClick={() => handleSwitch(s.session_id)}
-                          >
-                            {s.session_name || s.session_id.slice(0, 12)}
-                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Switch to this session in cmux</TooltipContent>
-                      </Tooltip>
+                      <PeekHoverCard key={s.session_id} sessionId={s.session_id}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={!cmuxAvailable}
+                          onClick={() => handleSwitch(s.session_id)}
+                        >
+                          {s.session_name || s.session_id.slice(0, 12)}
+                          <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                        </Button>
+                      </PeekHoverCard>
                     ))}
                   </div>
                 </div>
@@ -227,24 +224,21 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                             .join(", ")
                         : ""
                       return (
-                        <Tooltip key={s.session_id}>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-auto py-1 text-xs whitespace-normal text-left"
-                              disabled={!cmuxAvailable}
-                              onClick={() => handleSwitch(s.session_id)}
-                            >
-                              <span className="shrink-0">{s.session_name || s.session_id.slice(0, 12)}</span>
-                              {breakdown && (
-                                <span className="text-muted-foreground ml-1">({breakdown})</span>
-                              )}
-                              <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Switch to this session in cmux</TooltipContent>
-                        </Tooltip>
+                        <PeekHoverCard key={s.session_id} sessionId={s.session_id}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-auto py-1 text-xs whitespace-normal text-left"
+                            disabled={!cmuxAvailable}
+                            onClick={() => handleSwitch(s.session_id)}
+                          >
+                            <span className="shrink-0">{s.session_name || s.session_id.slice(0, 12)}</span>
+                            {breakdown && (
+                              <span className="text-muted-foreground ml-1">({breakdown})</span>
+                            )}
+                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                          </Button>
+                        </PeekHoverCard>
                       )
                     })}
                   </div>

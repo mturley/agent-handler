@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Clock,
 } from "lucide-react"
+import { PeekHoverCard } from "@/components/PeekPreview"
 import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
 
 interface ResourceCardProps {
@@ -201,20 +202,17 @@ export function ResourceCard({
           <div className="flex items-center gap-1.5 flex-wrap mb-2">
             {resource.sessions.map((session) => (
               cmuxAvailable && session.display_state !== "dead" ? (
-                <Tooltip key={session.session_id}>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => onSwitch(session.session_id)}
-                    >
-                      {session.session_name}
-                      <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Switch to this session in cmux</TooltipContent>
-                </Tooltip>
+                <PeekHoverCard key={session.session_id} sessionId={session.session_id}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => onSwitch(session.session_id)}
+                  >
+                    {session.session_name}
+                    <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                  </Button>
+                </PeekHoverCard>
               ) : (
                 <Badge
                   key={session.session_id}
