@@ -7,4 +7,5 @@ export const queryKeys = {
     ["events", filters] as const,
   inbox: (sessionId: string) => ["inbox", sessionId] as const,
   resources: ["resources"] as const,
+  peek: (sessionId: string) => ["peek", sessionId] as const,
 }
