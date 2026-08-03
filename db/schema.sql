@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS cost_snapshots (
     total_input_tokens INTEGER NOT NULL,
     total_output_tokens INTEGER NOT NULL,
     model TEXT,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    last_prompt TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS cost_adjustments (

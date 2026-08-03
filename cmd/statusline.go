@@ -83,8 +83,12 @@ type hookInput struct {
 func recordCostSnapshot(wd *db.DB, input *hookInput) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	today := time.Now().UTC().Format("2006-01-02")
+	lastPrompt := ""
+	if s, err := wd.GetSession(input.SessionID); err == nil && s != nil {
+		lastPrompt = s.LastPrompt
+	}
 	wd.RecordCostTick(
-		input.SessionID, input.Model.ID, now, today,
+		input.SessionID, input.Model.ID, now, today, lastPrompt,
 		input.Cost.TotalCostUSD,
 		input.ContextWindow.TotalInputTokens,
 		input.ContextWindow.TotalOutputTokens,

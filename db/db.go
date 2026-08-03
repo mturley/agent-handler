@@ -58,6 +58,25 @@ func Open(path string) (*DB, error) {
 }
 
 func runMigrations(conn *sql.DB) error {
+	if err := addColumnIfMissing(conn, "cost_snapshots", "last_prompt", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func addColumnIfMissing(conn *sql.DB, table, column, colType string) error {
+	var count int
+	err := conn.QueryRow(
+		fmt.Sprintf(`SELECT COUNT(*) FROM pragma_table_info('%s') WHERE name = '%s'`, table, column),
+	).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check for %s.%s column: %w", table, column, err)
+	}
+	if count == 0 {
+		if _, err := conn.Exec(fmt.Sprintf(`ALTER TABLE %s ADD COLUMN %s %s`, table, column, colType)); err != nil {
+			return fmt.Errorf("failed to add %s.%s column: %w", table, column, err)
+		}
+	}
 	return nil
 }
 
