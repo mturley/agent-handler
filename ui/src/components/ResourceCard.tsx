@@ -79,7 +79,7 @@ export function ResourceCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               {isPR && <PRStateIcon state={prState?.state} />}
-              {!isPR && <JiraIssueTypeIcon issueType={jiraState?.issue_type} iconUrl={jiraState?.issue_type_icon} />}
+              {!isPR && <JiraIssueTypeIcon issueType={jiraState?.issue_type} />}
               <a
                 href={resource.resource_url}
                 target="_blank"

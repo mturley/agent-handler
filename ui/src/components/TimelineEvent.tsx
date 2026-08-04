@@ -89,7 +89,7 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
                 return (
                   <div key={i} className="text-xs flex items-start gap-1">
                     {resource.resource_type === "jira" && (
-                      <JiraIssueTypeIcon issueType={meta?.issue_type} iconUrl={meta?.issue_type_icon} className="mt-0.5 text-muted-foreground" />
+                      <JiraIssueTypeIcon issueType={meta?.issue_type} className="mt-0.5 text-muted-foreground" />
                     )}
                     {resource.resource_type === "pr" && (
                       <PRStateIcon state={meta?.state} className="mt-0.5" />

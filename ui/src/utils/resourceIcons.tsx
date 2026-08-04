@@ -15,10 +15,7 @@ const prStateIcons: Record<string, { icon: typeof GitPullRequest; color: string 
   CLOSED: { icon: XCircle, color: "text-red-500" },
 }
 
-export function JiraIssueTypeIcon({ issueType, iconUrl, className }: { issueType?: string; iconUrl?: string; className?: string }) {
-  if (iconUrl) {
-    return <img src={iconUrl} alt={issueType || ""} className={cn("h-4 w-4 shrink-0", className)} />
-  }
+export function JiraIssueTypeIcon({ issueType, className }: { issueType?: string; className?: string }) {
   if (!issueType) return null
   const Icon = jiraFallbackIcons[issueType]
   if (!Icon) return null

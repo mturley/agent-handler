@@ -35,7 +35,7 @@ function ResourceItem({ resource }: { resource: SessionResource }) {
     <div className={cn("py-2 space-y-1 px-2 rounded", hasUnreads && "bg-blue-500/5")}>
       <div className="flex items-start gap-2">
         {resource.resource_type === "jira" && (
-          <JiraIssueTypeIcon issueType={meta?.issue_type} iconUrl={meta?.issue_type_icon} className="mt-1" />
+          <JiraIssueTypeIcon issueType={meta?.issue_type} className="mt-1" />
         )}
         {resource.resource_type === "pr" && (
           <PRStateIcon state={meta?.state} className="mt-1" />
