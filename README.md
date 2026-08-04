@@ -1,4 +1,4 @@
-# <img src="ui/public/favicon.svg" width="28" height="28" align="top" /> agent-handler
+# <img src="ui/public/favicon.svg" width="28" height="28" style="vertical-align: text-bottom;" /> agent-handler
 
 Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, [GitHub and Jira resource watchers](#external-watchers), statusline enhancements, [terminal peeking](#session-inspection-peek), [cmux integrations](#cmux-integration) and [web dashboard](#web-ui).
 

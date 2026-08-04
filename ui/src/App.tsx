@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { useCapabilities } from "@/hooks/useCapabilities"
 import { useSSE } from "@/hooks/useSSE"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { useDynamicFavicon } from "@/hooks/useDynamicFavicon"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
 import { ResourcesPage } from "@/pages/ResourcesPage"
@@ -29,6 +30,7 @@ export default function App() {
 
   const isWide = useMediaQuery("(min-width: 1024px)")
   const [costOpen, setCostOpen] = useState(false)
+  useDynamicFavicon()
 
   const [location, setLocation] = useLocation()
   const basePath = location.split("?")[0]
