@@ -53,16 +53,16 @@ func (b *CmuxBackend) Bell(terminalID string) error {
 // CmuxWorkspaceInfo resolves the workspace name and color for a surface UUID.
 // Returns empty strings if resolution fails.
 func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
-	idOut, err := exec.Command("cmux", "identify").Output()
+	idOut, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
 	if err != nil {
 		return "", ""
 	}
 	var idData struct {
-		Caller *struct {
+		Focused *struct {
 			WorkspaceRef string `json:"workspace_ref"`
-		} `json:"caller"`
+		} `json:"focused"`
 	}
-	if err := json.Unmarshal(idOut, &idData); err != nil || idData.Caller == nil || idData.Caller.WorkspaceRef == "" {
+	if err := json.Unmarshal(idOut, &idData); err != nil || idData.Focused == nil || idData.Focused.WorkspaceRef == "" {
 		return "", ""
 	}
 
@@ -82,7 +82,7 @@ func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 		return "", ""
 	}
 	for _, w := range listData.Workspaces {
-		if w.Ref == idData.Caller.WorkspaceRef {
+		if w.Ref == idData.Focused.WorkspaceRef {
 			n := w.CustomTitle
 			if n == "" {
 				n = w.Title
@@ -97,19 +97,19 @@ func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 	return "", ""
 }
 
-// cmuxLiveWorkspaceID queries cmux for the current workspace of the calling process.
+// cmuxLiveWorkspaceID queries cmux for the workspace containing a surface.
 func cmuxLiveWorkspaceID(surfaceID string) string {
-	out, err := exec.Command("cmux", "identify").Output()
+	out, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
 	if err != nil {
 		return ""
 	}
 	var data struct {
-		Caller *struct {
+		Focused *struct {
 			WorkspaceRef string `json:"workspace_ref"`
-		} `json:"caller"`
+		} `json:"focused"`
 	}
-	if err := json.Unmarshal(out, &data); err != nil || data.Caller == nil {
+	if err := json.Unmarshal(out, &data); err != nil || data.Focused == nil {
 		return ""
 	}
-	return data.Caller.WorkspaceRef
+	return data.Focused.WorkspaceRef
 }
