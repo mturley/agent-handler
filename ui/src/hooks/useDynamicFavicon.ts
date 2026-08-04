@@ -9,7 +9,7 @@ const baseFavicon = (opts: { needsInput: boolean; hasUnread: boolean }) => {
 
   if (opts.needsInput && opts.hasUnread) {
     dotR = "5"
-    tl = "#3B82F6"; tr = "#F59E0B"; bl = "#F59E0B"; br = "#3B82F6"
+    tl = "#3B82F6"; tr = "#F59E0B"; bl = "#3B82F6"; br = "#F59E0B"
   } else if (opts.needsInput) {
     dotR = "5"
     tl = "#F59E0B"; tr = "#F59E0B"; bl = "#F59E0B"; br = "#F59E0B"
