@@ -661,7 +661,7 @@ func renderReminderLines(d *db.DB, session *db.Session) {
 		if len(title) > 60 {
 			title = title[:57] + "..."
 		}
-		fmt.Printf("%s  ↳ 🔔 %s%s%s\n", colorDim, colorCyan, title, colorReset)
+		fmt.Printf("%s  ↳%s 🔔 %s%s%s\n", colorDim, colorReset, colorCyan, title, colorReset)
 	}
 }
 
