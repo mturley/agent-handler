@@ -96,3 +96,20 @@ func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 	}
 	return "", ""
 }
+
+// cmuxLiveWorkspaceID queries cmux for the current workspace ID of a surface.
+func cmuxLiveWorkspaceID(surfaceID string) string {
+	out, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
+	if err != nil {
+		return ""
+	}
+	var data struct {
+		Caller *struct {
+			WorkspaceRef string `json:"workspace_ref"`
+		} `json:"caller"`
+	}
+	if err := json.Unmarshal(out, &data); err != nil || data.Caller == nil {
+		return ""
+	}
+	return data.Caller.WorkspaceRef
+}
