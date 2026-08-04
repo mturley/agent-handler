@@ -17,6 +17,13 @@ make install # Copies `handler` binary to /usr/local/bin and runs `handler setup
 
 `handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding. If you skip any of its steps (e.g. there are issues authenticating the watchers), run `handler setup` again to retry.
 
+### Agent View compatibility
+
+agent-handler does not currently work well with Claude Code's built-in Agent View. When a session is backgrounded by Agent View, it creates a duplicate session entry in handler and triggers a warning. For now, disable Agent View:
+
+- In your Claude Code settings, set `disableAgentView` to `true`, or
+- Set the environment variable `CLAUDE_CODE_DISABLE_AGENT_VIEW=true`
+
 A more convenient install/update script will come soon.
 
 ## Update
