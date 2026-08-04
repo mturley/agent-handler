@@ -136,8 +136,8 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 			wd.BumpLastActive(input.SessionID, now)
 		}
 
-		termType, termID, workspaceID := terminal.Detect()
-		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
+		termType, termID, workspaceID, surfaceRef := terminal.Detect()
+		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, surfaceRef, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)
 		wd.Close()
 	}
@@ -989,7 +989,7 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 		}
 	}
 
-	termType, termID, workspaceID := terminal.Detect()
+	termType, termID, workspaceID, surfaceRef := terminal.Detect()
 
 	// Check if this session has an existing cursor (re-registration after archive)
 	existingCursor, _ := d.GetCursor(input.SessionID)
@@ -1010,6 +1010,7 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 		JSONLPath:       input.TranscriptPath,
 		TerminalType:    termType,
 		TerminalID:      termID,
+		CmuxSurfaceRef:  surfaceRef,
 		CmuxWorkspaceID: workspaceID,
 	})
 
@@ -1069,7 +1070,7 @@ func reactivateSession(d *db.DB, input *hookInput, existing *db.Session) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Reactivate the session with updated metadata
-	termType, termID, workspaceID := terminal.Detect()
+	termType, termID, workspaceID, surfaceRef := terminal.Detect()
 	cwd := input.CWD
 	if cwd == "" {
 		cwd, _ = os.Getwd()
@@ -1093,6 +1094,7 @@ func reactivateSession(d *db.DB, input *hookInput, existing *db.Session) {
 		JSONLPath:       input.TranscriptPath,
 		TerminalType:    termType,
 		TerminalID:      termID,
+		CmuxSurfaceRef:  surfaceRef,
 		CmuxWorkspaceID: workspaceID,
 	})
 

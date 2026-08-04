@@ -99,8 +99,8 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	d.SetWorking(input.SessionID, true)
 
 	// Sync session metadata (name, terminal)
-	termType, termID, workspaceID := terminal.Detect()
-	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID, input.CWD, "", -1)
+	termType, termID, workspaceID, surfaceRef := terminal.Detect()
+	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, surfaceRef, workspaceID, input.CWD, "", -1)
 
 	// On-submit mode: notify about unread events
 	if session.InboxMode == "on-submit" {
@@ -137,7 +137,7 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 		}
 	}
 
-	termType, termID, workspaceID := terminal.Detect()
+	termType, termID, workspaceID, surfaceRef := terminal.Detect()
 
 	now := time.Now().UTC().Format(time.RFC3339)
 	d.UpsertSession(db.Session{
@@ -154,6 +154,7 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 		JSONLPath:       input.TranscriptPath,
 		TerminalType:    termType,
 		TerminalID:      termID,
+		CmuxSurfaceRef:  surfaceRef,
 		CmuxWorkspaceID: workspaceID,
 	})
 

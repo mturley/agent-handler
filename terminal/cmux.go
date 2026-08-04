@@ -97,19 +97,30 @@ func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 	return "", ""
 }
 
-// cmuxLiveWorkspaceID queries cmux for the workspace containing a surface.
-func cmuxLiveWorkspaceID(surfaceID string) string {
+// cmuxLiveInfo queries cmux for the workspace and surface ref of a surface.
+func cmuxLiveInfo(surfaceID string) (workspaceRef, surfaceRef string) {
 	out, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
 	if err != nil {
-		return ""
+		return "", ""
 	}
 	var data struct {
+		Caller *struct {
+			WorkspaceRef string `json:"workspace_ref"`
+			SurfaceRef   string `json:"surface_ref"`
+		} `json:"caller"`
 		Focused *struct {
 			WorkspaceRef string `json:"workspace_ref"`
 		} `json:"focused"`
 	}
-	if err := json.Unmarshal(out, &data); err != nil || data.Focused == nil {
-		return ""
+	if err := json.Unmarshal(out, &data); err != nil {
+		return "", ""
 	}
-	return data.Focused.WorkspaceRef
+	// Prefer caller (accurate for the calling surface) over focused (which is the active tab)
+	if data.Caller != nil && data.Caller.WorkspaceRef != "" {
+		return data.Caller.WorkspaceRef, data.Caller.SurfaceRef
+	}
+	if data.Focused != nil && data.Focused.WorkspaceRef != "" {
+		return data.Focused.WorkspaceRef, ""
+	}
+	return "", ""
 }

@@ -154,7 +154,7 @@ func findSessionsWithUnreads(d *db.DB, selfSessionID string) []db.Session {
 }
 
 // syncSessionMetadata updates session name, PID, and terminal info only if changed.
-func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, workspaceID, cwd, model string, contextPercent int) {
+func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, termID, surfaceRef, workspaceID, cwd, model string, contextPercent int) {
 	session, err := d.GetSession(sessionID)
 	if err != nil || session == nil {
 		return
@@ -175,12 +175,16 @@ func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, te
 		// Surface no longer exists (stale after cmux restart) — clear terminal info
 		updates["terminal_type"] = ""
 		updates["terminal_id"] = ""
+		updates["cmux_surface_ref"] = ""
 		updates["cmux_workspace_id"] = ""
 		updates["cmux_workspace_name"] = ""
 		updates["cmux_workspace_color"] = ""
 	}
 	if termID != "" && session.TerminalID != termID {
 		updates["terminal_id"] = termID
+	}
+	if surfaceRef != "" && session.CmuxSurfaceRef != surfaceRef {
+		updates["cmux_surface_ref"] = surfaceRef
 	}
 	if workspaceID != "" && session.CmuxWorkspaceID != workspaceID {
 		updates["cmux_workspace_id"] = workspaceID

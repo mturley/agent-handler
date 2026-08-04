@@ -61,6 +61,9 @@ func runMigrations(conn *sql.DB) error {
 	if err := addColumnIfMissing(conn, "cost_snapshots", "last_prompt", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := addColumnIfMissing(conn, "sessions", "cmux_surface_ref", "TEXT"); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -115,8 +115,13 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	).CombinedOutput(); err != nil {
 		return fmt.Errorf("cmux workspace select failed: %s", string(out))
 	}
+	// Use stored surface ref if available, otherwise fall back to UUID
+	surfaceRef := session.CmuxSurfaceRef
+	if surfaceRef == "" {
+		surfaceRef = session.TerminalID
+	}
 	if out, err := exec.Command("cmux", "focus-panel",
-		"--panel", session.TerminalID,
+		"--panel", surfaceRef,
 		"--workspace", session.CmuxWorkspaceID,
 	).CombinedOutput(); err != nil {
 		return fmt.Errorf("cmux focus-panel failed: %s", string(out))
