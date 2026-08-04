@@ -58,3 +58,11 @@
   }
 }
 
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.1; }
+}
+.animate-pulse-fast {
+  animation: pulse-fast 1s ease-in-out infinite;
+}
+

@@ -336,8 +336,8 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="recent">Recent</SelectItem>
                     <SelectItem value="cmux">cmux order</SelectItem>
-                    <SelectItem value="last_prompt">Last prompt</SelectItem>
                     <SelectItem value="unread">Unread count</SelectItem>
                     <SelectItem value="name">Name</SelectItem>
                   </SelectContent>
@@ -411,7 +411,44 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
             </p>
           )}
 
-          {grouped.map((repo, ri) => {
+          {/* Flat list when not in cmux sort (with optional repo headers) */}
+          {sortField !== "cmux" && grouped.map((repo, ri) => (
+            <div key={ri} className="space-y-2">
+              {repo.repo && (
+                <div
+                  className="flex items-center gap-2 cursor-pointer select-none"
+                  onClick={() => toggleRepoCollapse(repo.repo)}
+                >
+                  {collapsed.has(`repo:${repo.repo}`)
+                    ? <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    : <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  }
+                  <span className="font-bold text-foreground">{repo.repo}</span>
+                </div>
+              )}
+              {!collapsed.has(`repo:${repo.repo}`) && (
+                <div className={cn("space-y-1.5", repo.repo && "pl-6")}>
+                  {repo.workspaces.flatMap((w) => w.sessions).map((session) => (
+                    <SessionCard
+                      key={session.session_id}
+                      session={session}
+                      showBranch={groupByRepo}
+                      showRepoInfo={!groupByRepo}
+                      cmuxAvailable={cmuxAvailable}
+                      onSwitch={handleSwitch}
+                      onInboxOpen={handleInboxOpen}
+                      onResourcesOpen={handleResourcesOpen}
+                      onTimelineClick={onTimelineClick}
+                      isTimelineActive={activeTimelineSessionId === session.session_id}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Grouped list for cmux sort */}
+          {sortField === "cmux" && grouped.map((repo, ri) => {
             const repoKey = `repo:${repo.repo}`
             const repoCollapsed = collapsed.has(repoKey)
             const hasWorkspaces = repo.workspaces.length > 0
@@ -479,7 +516,8 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                                   <SessionCard
                                     key={session.session_id}
                                     session={session}
-                                    showBranch={!workspace.branch}
+                                    showBranch={sortField === "cmux" && !workspace.branch}
+                                    showRepoInfo={sortField !== "cmux"}
                                     cmuxAvailable={cmuxAvailable}
                                     onSwitch={handleSwitch}
                                     onInboxOpen={handleInboxOpen}

@@ -35,6 +35,7 @@ function hasUnreadsForResourceType(resourceType: string, breakdown: Record<strin
 interface SessionCardProps {
   session: Session
   showBranch?: boolean
+  showRepoInfo?: boolean
   cmuxAvailable: boolean
   isTimelineActive?: boolean
   onSwitch: (id: string) => void
@@ -46,6 +47,7 @@ interface SessionCardProps {
 export function SessionCard({
   session,
   showBranch = true,
+  showRepoInfo,
   cmuxAvailable,
   isTimelineActive,
   onSwitch,
@@ -68,7 +70,7 @@ export function SessionCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {session.working ? (
-              <Asterisk className="h-3.5 w-3.5 animate-pulse text-orange-400 shrink-0" />
+              <Asterisk className="h-3.5 w-3.5 animate-pulse-fast text-orange-400 shrink-0" />
             ) : (
               <div
                 className={cn("w-2 h-2 rounded-full shrink-0", stateColors[session.display_state])}
@@ -132,7 +134,7 @@ export function SessionCard({
         </div>
       </CardHeader>
       {session.context_percent > 0 && (
-        <div className="px-4 -mt-1 pb-2">
+        <div className="px-4 mt-0.5 pb-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden cursor-default">
@@ -183,7 +185,8 @@ export function SessionCard({
         </div>
       )}
       <CardContent className="px-4 pb-3 pt-0">
-        <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 flex-wrap">
           {showBranch && session.branch && (
             <span className="font-mono text-xs">{session.branch}</span>
           )}
@@ -200,7 +203,7 @@ export function SessionCard({
                 ? Object.entries(session.subscriptions_breakdown)
                     .sort(([a], [b]) => a.localeCompare(b))
                     .map(([type, count], i, arr) => {
-                      const label = type === "pr" ? "PR" : type === "jira" ? "Jira" : formatEventType(type)
+                      const label = type === "pr" ? (count === 1 ? "PR" : "PRs") : type === "jira" ? "Jira" : formatEventType(type)
                       const hasUnreads = session.unread_breakdown && hasUnreadsForResourceType(type, session.unread_breakdown)
                       return (
                         <span key={type} className={hasUnreads ? "text-blue-400" : ""}>
@@ -216,6 +219,13 @@ export function SessionCard({
             <Badge variant="outline" className="text-xs font-normal">
               inbox: {session.inbox_mode}
             </Badge>
+          )}
+          </div>
+          {showRepoInfo && session.repo && (
+            <span className="font-mono text-xs shrink-0">
+              {session.repo.split("/").pop()}
+              {session.branch && ` (${session.branch})`}
+            </span>
           )}
         </div>
       </CardContent>

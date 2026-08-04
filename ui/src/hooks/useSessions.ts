@@ -4,7 +4,7 @@ import type { Session } from "@/api/types"
 import { getSessions, getSessionsQuickState } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
-export type SortField = "cmux" | "last_prompt" | "unread" | "name"
+export type SortField = "cmux" | "recent" | "unread" | "name"
 
 export type FilterChip =
   | "active"
@@ -52,7 +52,15 @@ function sortSessions(a: Session, b: Session, field: SortField, reverse: boolean
     case "cmux":
       cmp = a.cmux_order - b.cmux_order
       break
-    case "last_prompt":
+    case "recent":
+      if (!reverse) {
+        const tierA = a.needs_input ? 0 : a.working ? 1 : 2
+        const tierB = b.needs_input ? 0 : b.working ? 1 : 2
+        if (tierA !== tierB) {
+          cmp = tierA - tierB
+          break
+        }
+      }
       cmp = (b.last_prompt || "").localeCompare(a.last_prompt || "")
       break
     case "unread":
@@ -98,9 +106,47 @@ export function useSessions() {
 
   const [search, setSearch] = useState("")
   const [filters, setFilters] = useState<Set<FilterChip>>(new Set())
-  const [sortField, setSortField] = useState<SortField>("cmux")
-  const [sortReverse, setSortReverse] = useState(false)
-  const [groupByRepo, setGroupByRepo] = useState(false)
+
+  const urlParams = new URLSearchParams(window.location.search)
+  const [sortField, setSortFieldState] = useState<SortField>(
+    (urlParams.get("sort") as SortField) || "recent"
+  )
+  const [sortReverse, setSortReverseState] = useState(
+    urlParams.get("desc") === "true"
+  )
+  const [groupByRepo, setGroupByRepoState] = useState(
+    urlParams.get("group") === "repo"
+  )
+
+  const updateUrlParams = useCallback((sort: SortField, desc: boolean, group: boolean) => {
+    const params = new URLSearchParams(window.location.search)
+    if (sort !== "cmux") params.set("sort", sort); else params.delete("sort")
+    if (desc) params.set("desc", "true"); else params.delete("desc")
+    if (group) params.set("group", "repo"); else params.delete("group")
+    const qs = params.toString()
+    window.history.replaceState(null, "", qs ? `/?${qs}` : "/")
+  }, [])
+
+  const setSortField = useCallback((v: SortField) => {
+    setSortFieldState(v)
+    updateUrlParams(v, sortReverse, groupByRepo)
+  }, [sortReverse, groupByRepo, updateUrlParams])
+
+  const setSortReverse = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    setSortReverseState((prev) => {
+      const next = typeof v === "function" ? v(prev) : v
+      updateUrlParams(sortField, next, groupByRepo)
+      return next
+    })
+  }, [sortField, groupByRepo, updateUrlParams])
+
+  const setGroupByRepo = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    setGroupByRepoState((prev) => {
+      const next = typeof v === "function" ? v(prev) : v
+      updateUrlParams(sortField, sortReverse, next)
+      return next
+    })
+  }, [sortField, sortReverse, updateUrlParams])
 
   const toggleFilter = useCallback((chip: FilterChip) => {
     setFilters((prev) => {
@@ -131,6 +177,47 @@ export function useSessions() {
   }, [sessions, search, filters, sortField, sortReverse])
 
   const grouped = useMemo((): RepoGroup[] => {
+    // Non-cmux sort: no workspace grouping, optional repo grouping
+    if (sortField !== "cmux" && !groupByRepo) {
+      return [{
+        repo: "",
+        collapsed: false,
+        workspaces: [{
+          workspace: "",
+          collapsed: false,
+          sessions: filtered,
+        }],
+      }]
+    }
+
+    if (sortField !== "cmux" && groupByRepo) {
+      const repoMap = new Map<string, Session[]>()
+      for (const s of filtered) {
+        const repo = repoName(s.repo)
+        if (!repoMap.has(repo)) repoMap.set(repo, [])
+        repoMap.get(repo)!.push(s)
+      }
+      const repos: RepoGroup[] = []
+      for (const [repo, sessions] of repoMap) {
+        repos.push({
+          repo,
+          collapsed: false,
+          workspaces: [{
+            workspace: "",
+            collapsed: false,
+            sessions,
+          }],
+        })
+      }
+      repos.sort((a, b) => {
+        const aTop = a.workspaces[0]?.sessions[0]
+        const bTop = b.workspaces[0]?.sessions[0]
+        if (!aTop || !bTop) return 0
+        return sortSessions(aTop, bTop, sortField, sortReverse)
+      })
+      return repos
+    }
+
     if (!groupByRepo) {
       const wsMap = new Map<string, Session[]>()
       for (const s of filtered) {

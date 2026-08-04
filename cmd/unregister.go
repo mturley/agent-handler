@@ -46,7 +46,8 @@ func runUnregister(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	// Archive the session
+	// Clear working state and archive the session
+	d.SetWorking(sessionID, false)
 	archived, err := d.ArchiveSessions([]string{sessionID})
 	if err != nil {
 		return fmt.Errorf("failed to archive session: %w", err)
