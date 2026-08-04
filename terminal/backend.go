@@ -19,10 +19,11 @@ type Backend interface {
 // terminal ID, and workspace ID. Checks cmux first, then tmux.
 func Detect() (backendType, terminalID, workspaceID string) {
 	if surfaceID := os.Getenv("CMUX_SURFACE_ID"); surfaceID != "" {
-		// Query cmux for the live workspace ID (env var is stale after pane moves)
+		// Query cmux for the live workspace — also validates the surface still exists
 		wsID := cmuxLiveWorkspaceID(surfaceID)
 		if wsID == "" {
-			wsID = os.Getenv("CMUX_WORKSPACE_ID")
+			// Surface not found in cmux (stale after cmux restart) — don't report it
+			return "", "", ""
 		}
 		return "cmux", surfaceID, wsID
 	}

@@ -171,6 +171,13 @@ func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, te
 	}
 	if termType != "" && session.TerminalType != termType {
 		updates["terminal_type"] = termType
+	} else if termType == "" && session.TerminalType != "" {
+		// Surface no longer exists (stale after cmux restart) — clear terminal info
+		updates["terminal_type"] = ""
+		updates["terminal_id"] = ""
+		updates["cmux_workspace_id"] = ""
+		updates["cmux_workspace_name"] = ""
+		updates["cmux_workspace_color"] = ""
 	}
 	if termID != "" && session.TerminalID != termID {
 		updates["terminal_id"] = termID
