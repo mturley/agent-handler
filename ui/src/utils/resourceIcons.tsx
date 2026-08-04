@@ -1,12 +1,14 @@
 import { Bug, BookOpen, Layers, CheckSquare, ListTree, GitPullRequest, GitMerge, XCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const jiraFallbackIcons: Record<string, typeof Bug> = {
-  Bug: Bug,
-  Story: BookOpen,
-  Epic: Layers,
-  Task: CheckSquare,
-  "Sub-task": ListTree,
+const jiraIssueTypeConfig: Record<string, { icon: typeof Bug; color: string }> = {
+  Bug: { icon: Bug, color: "text-red-500" },
+  Story: { icon: BookOpen, color: "text-green-500" },
+  Epic: { icon: Layers, color: "text-purple-500" },
+  Task: { icon: CheckSquare, color: "text-blue-500" },
+  "Sub-task": { icon: ListTree, color: "text-blue-400" },
+  Feature: { icon: BookOpen, color: "text-green-500" },
+  RFE: { icon: BookOpen, color: "text-green-500" },
 }
 
 const prStateIcons: Record<string, { icon: typeof GitPullRequest; color: string }> = {
@@ -17,9 +19,10 @@ const prStateIcons: Record<string, { icon: typeof GitPullRequest; color: string 
 
 export function JiraIssueTypeIcon({ issueType, className }: { issueType?: string; className?: string }) {
   if (!issueType) return null
-  const Icon = jiraFallbackIcons[issueType]
-  if (!Icon) return null
-  return <Icon className={cn("h-3.5 w-3.5 shrink-0", className)} />
+  const config = jiraIssueTypeConfig[issueType]
+  if (!config) return null
+  const Icon = config.icon
+  return <Icon className={cn("h-3.5 w-3.5 shrink-0", config.color, className)} />
 }
 
 export function PRStateIcon({ state, className }: { state?: string; className?: string }) {

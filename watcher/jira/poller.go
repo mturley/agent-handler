@@ -309,7 +309,6 @@ func buildJiraStateJSON(issue *IssueData) string {
 		"priority":   issue.Priority,
 		"assignee":   issue.Assignee,
 		"issue_type":      issue.IssueType,
-		"issue_type_icon": issue.IssueTypeIcon,
 		"labels":     issue.Labels,
 		"created_at": issue.CreatedAt,
 		"updated_at": issue.UpdatedAt,

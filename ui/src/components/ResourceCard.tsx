@@ -40,7 +40,6 @@ interface PRState extends Record<string, unknown> {
 interface JiraState extends Record<string, unknown> {
   summary?: string
   issue_type?: string
-  issue_type_icon?: string
   assignee?: string
   status?: string
   priority?: string

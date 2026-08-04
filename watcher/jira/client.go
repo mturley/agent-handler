@@ -22,9 +22,8 @@ type IssueData struct {
 	Summary      string
 	Status       string
 	Priority     string
-	IssueType       string
-	IssueTypeIcon   string
-	Assignee        *string
+	IssueType    string
+	Assignee     *string
 	Labels       []string
 	CreatedAt    string
 	UpdatedAt    string
@@ -94,8 +93,7 @@ func (c *Client) FetchIssue(issueKey string, customFieldIDs map[string]string) (
 				Name string `json:"name"`
 			} `json:"priority"`
 			IssueType struct {
-				Name    string `json:"name"`
-				IconURL string `json:"iconUrl"`
+				Name string `json:"name"`
 			} `json:"issuetype"`
 			Assignee *struct {
 				DisplayName string `json:"displayName"`
@@ -150,7 +148,6 @@ func (c *Client) FetchIssue(issueKey string, customFieldIDs map[string]string) (
 		Status:       raw.Fields.Status.Name,
 		Priority:     raw.Fields.Priority.Name,
 		IssueType:    raw.Fields.IssueType.Name,
-		IssueTypeIcon: raw.Fields.IssueType.IconURL,
 		Labels:       raw.Fields.Labels,
 		CreatedAt:    raw.Fields.Created,
 		UpdatedAt:    raw.Fields.Updated,

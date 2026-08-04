@@ -236,9 +236,6 @@ func extractResourceMetadata(resourceType, stateJSON string) map[string]string {
 		if it := str("issue_type"); it != "" {
 			meta["issue_type"] = it
 		}
-		if iti := str("issue_type_icon"); iti != "" {
-			meta["issue_type_icon"] = iti
-		}
 		if a := str("assignee"); a != "" {
 			meta["assignee"] = a
 		}
