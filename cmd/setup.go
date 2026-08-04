@@ -105,10 +105,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			fmt.Printf("    - %s (%s)\n", id, action["shortcut"])
 		}
 	}
-	completionShell, completionPath := detectCompletion()
-	if completionPath != "" {
-		if _, err := os.Stat(completionPath); err == nil {
-			fmt.Printf("  Update shell completion: %s\n", completionPath)
+	completionTargets := allCompletionTargets()
+	if len(completionTargets) > 0 {
+		fmt.Printf("  Install shell completions:\n")
+		for _, ct := range completionTargets {
+			fmt.Printf("    - %s\n", ct.path)
 		}
 	}
 	fmt.Println("  Offer to auto-allow handler CLI commands (Bash permission)")
@@ -229,17 +230,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("configuring status line: %w", err)
 	}
 
-	// 9. Update or suggest shell completion
-	if completionPath != "" {
-		if _, err := os.Stat(completionPath); err == nil {
-			if err := writeCompletion(completionShell, completionPath); err != nil {
-				return fmt.Errorf("updating shell completion: %w", err)
-			}
-			fmt.Printf("  ✓ Updated shell completion: %s\n", completionPath)
-		} else {
-			fmt.Printf("\n  \033[2mtip:\033[0m Shell completion is not installed.\n")
-			fmt.Printf("       Run \033[1mhandler completion --help\033[0m for setup instructions.\n")
-		}
+	// 9. Install shell completions for all detected shells
+	if err := installAllCompletions(); err != nil {
+		return fmt.Errorf("installing shell completions: %w", err)
 	}
 
 	// 10. Configure cmux actions (if cmux is available)
@@ -416,52 +409,78 @@ func configurePermissions(home string) {
 	fmt.Printf("  ✓ Added permission: %s\n", permission)
 }
 
-func detectCompletion() (shell, path string) {
-	shell = detectShell()
-	path = completionPath(shell)
-	return
+var allShells = []string{"zsh", "bash", "fish"}
+
+type completionTarget struct {
+	shell string
+	path  string
 }
 
-func detectShell() string {
-	if s := os.Getenv("SHELL"); s != "" {
-		return filepath.Base(s)
+func allCompletionTargets() []completionTarget {
+	var targets []completionTarget
+	for _, shell := range allShells {
+		dir := completionDir(shell)
+		if dir == "" {
+			continue
+		}
+		targets = append(targets, completionTarget{
+			shell: shell,
+			path:  filepath.Join(dir, completionFilename(shell)),
+		})
 	}
-	return ""
+	return targets
 }
 
-func completionPath(shell string) string {
+func completionDir(shell string) string {
+	home, _ := os.UserHomeDir()
 	switch shell {
 	case "zsh":
 		if prefix, err := exec.Command("brew", "--prefix").Output(); err == nil {
-			p := filepath.Join(strings.TrimSpace(string(prefix)), "share", "zsh", "site-functions", "_handler")
-			if dir := filepath.Dir(p); dirExists(dir) {
-				return p
-			}
+			return filepath.Join(strings.TrimSpace(string(prefix)), "share", "zsh", "site-functions")
 		}
-		home, _ := os.UserHomeDir()
-		p := filepath.Join(home, ".zsh", "completions", "_handler")
-		if dir := filepath.Dir(p); dirExists(dir) {
-			return p
-		}
+		return filepath.Join(home, ".zsh", "completions")
 	case "bash":
-		for _, dir := range []string{"/etc/bash_completion.d", "/usr/local/etc/bash_completion.d"} {
-			if dirExists(dir) {
-				return filepath.Join(dir, "handler")
-			}
+		if prefix, err := exec.Command("brew", "--prefix").Output(); err == nil {
+			return filepath.Join(strings.TrimSpace(string(prefix)), "etc", "bash_completion.d")
 		}
+		return "/etc/bash_completion.d"
 	case "fish":
-		home, _ := os.UserHomeDir()
-		dir := filepath.Join(home, ".config", "fish", "completions")
-		if dirExists(dir) {
-			return filepath.Join(dir, "handler.fish")
-		}
+		return filepath.Join(home, ".config", "fish", "completions")
 	}
 	return ""
 }
 
-func dirExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
+func completionFilename(shell string) string {
+	switch shell {
+	case "zsh":
+		return "_handler"
+	case "bash":
+		return "handler"
+	case "fish":
+		return "handler.fish"
+	}
+	return ""
+}
+
+func installAllCompletions() error {
+	for _, ct := range allCompletionTargets() {
+		os.MkdirAll(filepath.Dir(ct.path), 0755)
+		if err := writeCompletion(ct.shell, ct.path); err != nil {
+			fmt.Printf("  ⚠ Failed to install %s completion: %v\n", ct.shell, err)
+			continue
+		}
+		fmt.Printf("  ✓ Installed %s completion: %s\n", ct.shell, ct.path)
+	}
+	return nil
+}
+
+func removeAllCompletions() {
+	for _, ct := range allCompletionTargets() {
+		if _, err := os.Stat(ct.path); err == nil {
+			os.Remove(ct.path)
+			fmt.Printf("  ✓ Removed %s completion: %s\n", ct.shell, ct.path)
+		}
+	}
 }
 
 func writeCompletion(shell, path string) error {

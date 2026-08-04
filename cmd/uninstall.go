@@ -135,6 +135,21 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Check shell completions
+	completionTargets := allCompletionTargets()
+	var existingCompletions []completionTarget
+	for _, ct := range completionTargets {
+		if _, err := os.Stat(ct.path); err == nil {
+			existingCompletions = append(existingCompletions, ct)
+		}
+	}
+	if len(existingCompletions) > 0 {
+		fmt.Printf("  Remove shell completions:\n")
+		for _, ct := range existingCompletions {
+			fmt.Printf("    - %s\n", ct.path)
+		}
+	}
+
 	if hasHandlerPermission(settingsPath) {
 		fmt.Printf("  Remove Bash(handler *) permission from %s\n", settingsPath)
 	}
@@ -171,6 +186,9 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		os.Remove(filepath.Join(claudeRulesDir, name))
 		fmt.Printf("  ✓ Removed global rule %s\n", name)
 	}
+
+	// Remove shell completions
+	removeAllCompletions()
 
 	if len(hookNames) > 0 {
 		removeHooks(home)
