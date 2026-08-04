@@ -297,6 +297,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 
 	// Handler lines (inbox, inbox-mode, watching)
 	unreadCount, unreadMsg := renderInboxLine(d, session, false)
+	renderReminderLines(d, session)
 	renderAutoDeliveredLine(d, session)
 	renderInboxModeLine(session)
 	renderWatchingLine(d, session, cfg, false)
@@ -634,6 +635,34 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	}
 	fmt.Println()
 	return unreadCount, notifyMsg
+}
+
+func renderReminderLines(d *db.DB, session *db.Session) {
+	cursor, err := d.GetCursor(session.SessionID)
+	if err != nil || cursor == "" {
+		return
+	}
+	rows, err := d.Conn().Query(`
+		SELECT e.title FROM events e
+		JOIN event_recipients er ON er.event_id = e.id
+		WHERE e.type = 'reminder'
+		  AND e.ts > ?
+		  AND er.recipient_type = 'session' AND er.recipient_value = ?
+		ORDER BY e.ts ASC
+	`, cursor, session.SessionID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var title string
+		rows.Scan(&title)
+		if len(title) > 60 {
+			title = title[:57] + "..."
+		}
+		fmt.Printf("%s  ↳ 🔔 %s%s\n", colorDim, title, colorReset)
+	}
 }
 
 func renderAutoDeliveredLine(d *db.DB, session *db.Session) {
