@@ -658,9 +658,6 @@ func renderReminderLines(d *db.DB, session *db.Session) {
 	for rows.Next() {
 		var title string
 		rows.Scan(&title)
-		if len(title) > 60 {
-			title = title[:57] + "..."
-		}
 		fmt.Printf("%s  ↳%s 🔔 %s%s%s\n", colorDim, colorReset, colorCyan, title, colorReset)
 	}
 }
