@@ -5,7 +5,8 @@ import { useTimeline } from "@/hooks/useTimeline"
 import { Loader2 } from "lucide-react"
 
 interface TimelinePageProps {
-  onSessionClick: (sessionName: string) => void
+  cmuxAvailable?: boolean
+  onSwitch?: (sessionId: string) => void
   sessionFilter?: string
   includeArchived?: boolean
 }
@@ -28,7 +29,7 @@ function updateUrlParams(opts: { session?: string; resource?: string; archived?:
   window.history.replaceState(null, "", qs ? `/timeline?${qs}` : "/timeline")
 }
 
-export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter, includeArchived: propIncludeArchived }: TimelinePageProps) {
+export function TimelinePage({ cmuxAvailable, onSwitch, sessionFilter: propSessionFilter, includeArchived: propIncludeArchived }: TimelinePageProps) {
   const {
     events,
     loading,
@@ -148,7 +149,7 @@ export function TimelinePage({ onSessionClick, sessionFilter: propSessionFilter,
           <div className="relative ml-8 space-y-4">
             <div className="absolute -left-[20px] top-0 bottom-0 w-0 border-l-2 border-slate-700" />
             {events.map((event) => (
-              <TimelineEvent key={event.id} event={event} onSessionClick={onSessionClick} />
+              <TimelineEvent key={event.id} event={event} cmuxAvailable={cmuxAvailable} onSwitch={onSwitch} />
             ))}
           </div>
 

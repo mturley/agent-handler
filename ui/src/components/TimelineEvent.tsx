@@ -6,7 +6,8 @@ import type { TimelineEvent as TimelineEventType } from "@/api/types"
 import { formatEventType } from "@/utils/formatLabel"
 import { timeAgo } from "@/utils/timeAgo"
 import { eventDotColor, eventBadgeVariant } from "@/utils/eventColors"
-import { ChevronRight, ChevronDown, ExternalLink, OctagonAlert, ArrowUp, ArrowDown, Minus, Equal } from "lucide-react"
+import { ChevronRight, ChevronDown, ExternalLink, OctagonAlert, ArrowUp, ArrowDown, Minus, Equal, ArrowUpRight } from "lucide-react"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
 import { cn } from "@/lib/utils"
 
@@ -21,10 +22,11 @@ const priorityConfig: Record<string, { icon: typeof ArrowUp; color: string }> = 
 
 interface TimelineEventProps {
   event: TimelineEventType
-  onSessionClick?: (sessionName: string) => void
+  cmuxAvailable?: boolean
+  onSwitch?: (sessionId: string) => void
 }
 
-export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
+export function TimelineEvent({ event, cmuxAvailable, onSwitch }: TimelineEventProps) {
   const [expanded, setExpanded] = useState(false)
   const hasBody = event.body && event.body.trim().length > 0
   const hasResources = event.resources && event.resources.length > 0
@@ -58,18 +60,27 @@ export function TimelineEvent({ event, onSessionClick }: TimelineEventProps) {
             </span>
           </div>
 
-          {/* Meta: session name, author */}
+          {/* Meta: session switch button, author */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
             {event.session_name && (
-              <span
-                className={cn(
-                  "font-mono",
-                  onSessionClick && "cursor-pointer hover:text-foreground"
-                )}
-                onClick={() => onSessionClick?.(event.session_name!)}
-              >
-                {event.session_name}
-              </span>
+              cmuxAvailable && onSwitch && event.session_id ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-5 text-[11px] px-1.5 py-0"
+                      onClick={() => onSwitch(event.session_id!)}
+                    >
+                      {event.session_name}
+                      <ArrowUpRight className="h-2.5 w-2.5 ml-0.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Switch to this session in cmux</TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="font-mono">{event.session_name}</span>
+              )
             )}
             {event.author && (
               <span>

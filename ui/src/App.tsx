@@ -3,6 +3,8 @@ import { useLocation } from "wouter"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Toaster } from "@/components/ui/sonner"
 import { useCapabilities } from "@/hooks/useCapabilities"
+import { switchSession } from "@/api/client"
+import { toast } from "sonner"
 import { useSSE } from "@/hooks/useSSE"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useDynamicFavicon } from "@/hooks/useDynamicFavicon"
@@ -91,6 +93,15 @@ export default function App() {
     setLocation(`/?search=${encodeURIComponent(sessionName)}`)
   }, [setLocation])
 
+  const handleSwitch = useCallback(async (id: string) => {
+    try {
+      await switchSession(id)
+      toast.success("Switched session")
+    } catch {
+      toast.error("Failed to switch")
+    }
+  }, [])
+
   const handleTabChange = useCallback((value: string) => {
     setLocation(tabPaths[value] || "/")
   }, [setLocation])
@@ -125,7 +136,8 @@ export default function App() {
 
                 <TabsContent value="timeline">
                   <TimelinePage
-                    onSessionClick={navigateToSessions}
+                    cmuxAvailable={cmuxAvailable}
+                    onSwitch={handleSwitch}
                     sessionFilter={timelineSessionFilter}
                     includeArchived={timelineIncludeArchived}
                   />
@@ -173,7 +185,8 @@ export default function App() {
 
           <TabsContent value="timeline">
             <TimelinePage
-              onSessionClick={navigateToSessions}
+              cmuxAvailable={cmuxAvailable}
+              onSwitch={handleSwitch}
             />
           </TabsContent>
 
