@@ -21,7 +21,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { switchSession, archiveSessions } from "@/api/client"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight, Skull, Loader2 } from "lucide-react"
+import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight, Skull, Loader2, Bell } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEventType } from "@/utils/formatLabel"
 import { PeekHoverCard } from "@/components/PeekPreview"
@@ -57,6 +57,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
     loading,
     awaitingSessions,
     unreadSessions,
+    reminderSessions,
     deadSessions,
   } = useSessions()
 
@@ -179,7 +180,7 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
   return (
     <div className="space-y-4">
       {/* Attention summary — above everything */}
-      {(awaitingSessions.length > 0 || unreadSessions.length > 0) && (
+      {(awaitingSessions.length > 0 || unreadSessions.length > 0 || reminderSessions.length > 0) && (
         <Card className="border-amber-500/30 bg-amber-500/5">
           <CardContent className="px-4 py-3 space-y-3">
             {awaitingSessions.length > 0 && (
@@ -236,6 +237,36 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                             {breakdown && (
                               <span className="text-muted-foreground ml-1">({breakdown})</span>
                             )}
+                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
+                          </Button>
+                        </PeekHoverCard>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+            {reminderSessions.length > 0 && (
+              <div className="flex items-start gap-2.5">
+                <Bell className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="text-base font-bold text-purple-400">
+                    {reminderSessions.length} session{reminderSessions.length !== 1 ? "s" : ""} with reminders
+                  </span>
+                  <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
+                    {reminderSessions.map((s) => {
+                      const count = s.unread_breakdown?.reminder || s.unread_count
+                      return (
+                        <PeekHoverCard key={s.session_id} sessionId={s.session_id} highlightColor="purple">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={!cmuxAvailable}
+                            onClick={() => handleSwitch(s.session_id)}
+                          >
+                            {s.session_name || s.session_id.slice(0, 12)}
+                            <span className="text-muted-foreground ml-1">({count})</span>
                             <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
                           </Button>
                         </PeekHoverCard>

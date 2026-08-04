@@ -343,7 +343,21 @@ export function useSessions() {
 
   const unreadSessions = useMemo(
     () => allNonArchived
-      .filter((s) => s.unread_count > 0)
+      .filter((s) => {
+        if (s.unread_count === 0) return false
+        if (!s.unread_breakdown) return true
+        return Object.keys(s.unread_breakdown).some((t) => t !== "reminder")
+      })
+      .sort((a, b) => (a.session_name || a.session_id).localeCompare(b.session_name || b.session_id)),
+    [allNonArchived]
+  )
+
+  const reminderSessions = useMemo(
+    () => allNonArchived
+      .filter((s) => {
+        if (s.unread_count === 0 || !s.unread_breakdown) return false
+        return Object.keys(s.unread_breakdown).every((t) => t === "reminder")
+      })
       .sort((a, b) => (a.session_name || a.session_id).localeCompare(b.session_name || b.session_id)),
     [allNonArchived]
   )
@@ -377,6 +391,7 @@ export function useSessions() {
     refetch,
     awaitingSessions,
     unreadSessions,
+    reminderSessions,
     deadSessions,
   }
 }

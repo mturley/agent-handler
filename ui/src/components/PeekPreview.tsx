@@ -22,7 +22,7 @@ import { queryKeys } from "@/api/queryKeys"
 // Use on switch buttons outside of SessionCard (e.g. alert summary, resource cards).
 interface PeekHoverCardProps {
   sessionId: string
-  highlightColor?: "amber" | "red" | "blue"
+  highlightColor?: "amber" | "red" | "blue" | "purple"
   children: React.ReactNode
 }
 
@@ -72,7 +72,7 @@ interface PeekSwitchButtonProps {
   sessionId: string
   sessionName: string
   cmuxAvailable: boolean
-  highlightColor?: "amber" | "red" | "blue"
+  highlightColor?: "amber" | "red" | "blue" | "purple"
   onSwitch: (id: string) => void
 }
 
@@ -80,6 +80,7 @@ const highlightClass: Record<string, string> = {
   amber: "border-2 border-amber-500/50 bg-amber-950/20",
   red: "border-2 border-red-500/50 bg-red-950/20",
   blue: "border-2 border-blue-500/50 bg-blue-950/20",
+  purple: "border-2 border-purple-500/50 bg-purple-950/20",
 }
 
 function truncateAtWatching(content: string, needsInput?: boolean): string {
@@ -100,6 +101,7 @@ const highlightTerminalBg: Record<string, string> = {
   amber: "bg-[#1a1408]",
   red: "bg-[#1a0808]",
   blue: "bg-[#0a1525]",
+  purple: "bg-[#150a25]",
 }
 
 export function PeekSwitchButton({
