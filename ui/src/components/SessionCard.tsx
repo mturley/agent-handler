@@ -222,7 +222,7 @@ export function SessionCard({
           )}
           </div>
           {showRepoInfo && session.repo && (
-            <span className="font-mono text-xs shrink-0">
+            <span className="font-mono text-xs truncate max-w-[350px]" title={`${session.repo.split("/").pop()}${session.branch ? ` (${session.branch})` : ""}`}>
               {session.repo.split("/").pop()}
               {session.branch && ` (${session.branch})`}
             </span>
