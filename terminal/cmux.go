@@ -53,7 +53,7 @@ func (b *CmuxBackend) Bell(terminalID string) error {
 // CmuxWorkspaceInfo resolves the workspace name and color for a surface UUID.
 // Returns empty strings if resolution fails.
 func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
-	idOut, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
+	idOut, err := exec.Command("cmux", "identify").Output()
 	if err != nil {
 		return "", ""
 	}
@@ -97,9 +97,9 @@ func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 	return "", ""
 }
 
-// cmuxLiveWorkspaceID queries cmux for the current workspace ID of a surface.
+// cmuxLiveWorkspaceID queries cmux for the current workspace of the calling process.
 func cmuxLiveWorkspaceID(surfaceID string) string {
-	out, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
+	out, err := exec.Command("cmux", "identify").Output()
 	if err != nil {
 		return ""
 	}
