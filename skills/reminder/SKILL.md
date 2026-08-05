@@ -1,6 +1,7 @@
 ---
 name: reminder
 description: "agent-handler: Set a reminder for this session. The reminder will appear in your inbox on the next /inbox check."
+disable-model-invocation: true
 ---
 
 # /reminder — Remind This Session

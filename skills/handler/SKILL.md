@@ -1,6 +1,7 @@
 ---
 name: handler
 description: "agent-handler: Turn this session into the handler — a command center for managing all active sessions. Use when you want a global view of all sessions, events, and resources."
+disable-model-invocation: true
 ---
 
 # /handler — Handler Session

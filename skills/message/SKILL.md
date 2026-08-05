@@ -1,6 +1,7 @@
 ---
 name: message
 description: "agent-handler: Send a message to another session via handler emit. Use when the user says 'message session-xyz' or 'tell session-xyz about X'."
+disable-model-invocation: true
 ---
 
 # /message — Send a Message to Another Session

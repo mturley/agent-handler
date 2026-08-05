@@ -1,6 +1,7 @@
 ---
 name: handler-debug
 description: "agent-handler: Debug session identity and inbox state. Use when the statusline shows unread messages but /inbox returns nothing, or other session identity mismatches."
+disable-model-invocation: true
 ---
 
 # /handler-debug — Debug Session Identity

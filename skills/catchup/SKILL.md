@@ -1,6 +1,7 @@
 ---
 name: catchup
 description: "agent-handler: Summarize events auto-delivered while the user was away, then advance the human cursor"
+disable-model-invocation: true
 ---
 
 # /catchup — Catch Up on Auto-Delivered Events

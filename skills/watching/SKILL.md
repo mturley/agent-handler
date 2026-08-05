@@ -1,6 +1,7 @@
 ---
 name: watching
 description: "agent-handler: Show watched resources, watcher status, and recent watcher errors for this session"
+disable-model-invocation: true
 ---
 
 # /watching — Show Watched Resources

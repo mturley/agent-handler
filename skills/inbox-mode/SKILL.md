@@ -1,6 +1,7 @@
 ---
 name: inbox-mode
 description: "agent-handler: Set how this session receives unread events — manual, on-submit, or auto"
+disable-model-invocation: true
 ---
 
 # /inbox-mode — Configure Inbox Mode

@@ -1,6 +1,7 @@
 ---
 name: inbox
 description: "agent-handler: Check and act on unread events from the agent-handler ledger"
+disable-model-invocation: true
 ---
 
 # /inbox — Check Unread Events
