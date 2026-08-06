@@ -213,11 +213,11 @@ func TestQueryTotalCostEmpty(t *testing.T) {
 	}
 }
 
-func TestRecordCostTickFirstTick(t *testing.T) {
+func TestRecordCostTickFirstTickActive(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "tick-first")
 
-	err := d.RecordCostTick("tick-first", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", "2026-07-20T09:59:00Z", 5.00, 50000, 2000)
+	err := d.RecordCostTick("tick-first", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 5.00, 50000, 2000)
 	if err != nil {
 		t.Fatalf("RecordCostTick failed: %v", err)
 	}
@@ -233,21 +233,38 @@ func TestRecordCostTickFirstTick(t *testing.T) {
 	}
 }
 
-func TestRecordCostTickNormalIncrease(t *testing.T) {
+func TestRecordCostTickFirstTickInactive(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-inc")
+	seedSession(t, d, "tick-first-idle")
 
-	d.RecordCostTick("tick-inc", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", "2026-07-20T09:59:00Z", 5.00, 50000, 2000)
-	d.RecordCostTick("tick-inc", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", "2026-07-20T10:00:05Z", 8.00, 80000, 3000)
+	// Existing session tracked for the first time while idle — its full
+	// historical cost should NOT be attributed to today.
+	d.RecordCostTick("tick-first-idle", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", false, 50.00, 500000, 20000)
 
-	snap, _ := d.GetCostSnapshot("tick-inc")
-	if snap.ReportedCostUSD != 8.00 {
-		t.Errorf("expected snapshot 8.00, got %f", snap.ReportedCostUSD)
+	snap, _ := d.GetCostSnapshot("tick-first-idle")
+	if snap == nil || snap.ReportedCostUSD != 50.00 {
+		t.Fatalf("expected snapshot 50.00, got %v", snap)
 	}
 
-	dc, _ := d.GetDailyCostForSession("tick-inc", "2026-07-20")
-	if dc.CostUSD != 8.00 {
-		t.Errorf("expected daily cost 8.00 (5+3), got %f", dc.CostUSD)
+	dc, _ := d.GetDailyCostForSession("tick-first-idle", "2026-07-20")
+	if dc != nil {
+		t.Errorf("expected no daily cost for idle first tick, got %v", dc)
+	}
+}
+
+func TestRecordCostTickCapturesFullTurn(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "tick-turn")
+
+	// A single active turn: cost climbs across many ticks. ALL of it should
+	// be captured (one prompt triggers many API calls).
+	d.RecordCostTick("tick-turn", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 2.00, 20000, 1000)
+	d.RecordCostTick("tick-turn", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", true, 5.00, 50000, 2000)
+	d.RecordCostTick("tick-turn", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", true, 9.00, 90000, 3000)
+
+	dc, _ := d.GetDailyCostForSession("tick-turn", "2026-07-20")
+	if dc.CostUSD != 9.00 {
+		t.Errorf("expected daily cost 9.00 (full turn captured), got %f", dc.CostUSD)
 	}
 }
 
@@ -255,9 +272,9 @@ func TestRecordCostTickSkipsWhenUnchanged(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "tick-skip")
 
-	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", "2026-07-20T09:59:00Z", 5.00, 50000, 2000)
-	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", "2026-07-20T09:59:00Z", 5.00, 50000, 2000)
-	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", "2026-07-20T09:59:00Z", 5.00, 50000, 2000)
+	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 5.00, 50000, 2000)
+	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", true, 5.00, 50000, 2000)
+	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", true, 5.00, 50000, 2000)
 
 	dc, _ := d.GetDailyCostForSession("tick-skip", "2026-07-20")
 	if dc.CostUSD != 5.00 {
@@ -269,9 +286,9 @@ func TestRecordCostTickResetDetection(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "tick-reset")
 
-	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", "2026-07-20T09:59:00Z", 20.00, 200000, 10000)
-	// Simulate restart — cost drops to 3.00, new prompt
-	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:00Z", "2026-07-20", "2026-07-20T11:59:00Z", 3.00, 30000, 1000)
+	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 20.00, 200000, 10000)
+	// Simulate restart — cost drops to 3.00 while active
+	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:00Z", "2026-07-20", true, 3.00, 30000, 1000)
 
 	adj, _ := d.GetTotalAdjustment("tick-reset")
 	if adj != 20.00 {
@@ -284,7 +301,7 @@ func TestRecordCostTickResetDetection(t *testing.T) {
 	}
 
 	// Next tick at same value should NOT create another adjustment
-	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:10Z", "2026-07-20", "2026-07-20T11:59:00Z", 3.00, 30000, 1000)
+	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:10Z", "2026-07-20", true, 3.00, 30000, 1000)
 
 	adj2, _ := d.GetTotalAdjustment("tick-reset")
 	if adj2 != 20.00 {
@@ -297,12 +314,12 @@ func TestRecordCostTickResetNoRepeat(t *testing.T) {
 	seedSession(t, d, "tick-no-repeat")
 
 	// Simulate the exact bug scenario: many rapid ticks after a reset
-	d.RecordCostTick("tick-no-repeat", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", "2026-07-20T09:59:00Z", 100.00, 1000000, 50000)
+	d.RecordCostTick("tick-no-repeat", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 100.00, 1000000, 50000)
 
-	// Restart: cost drops to 5.00, new prompt, then stays at 5.00 for many ticks
+	// Restart: cost drops to 5.00, then stays at 5.00 for many ticks
 	for i := 0; i < 100; i++ {
 		ts := "2026-07-20T12:00:" + fmt.Sprintf("%02d", i%60) + "Z"
-		d.RecordCostTick("tick-no-repeat", "opus-4", ts, "2026-07-20", "2026-07-20T11:59:00Z", 5.00, 50000, 2000)
+		d.RecordCostTick("tick-no-repeat", "opus-4", ts, "2026-07-20", true, 5.00, 50000, 2000)
 	}
 
 	adj, _ := d.GetTotalAdjustment("tick-no-repeat")
@@ -311,16 +328,16 @@ func TestRecordCostTickResetNoRepeat(t *testing.T) {
 	}
 }
 
-func TestRecordCostTickIdleSessionIgnored(t *testing.T) {
+func TestRecordCostTickIdleDriftIgnored(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "tick-idle")
 
-	// First tick with a prompt
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", "2026-07-20T09:59:00Z", 10.00, 100000, 5000)
+	// Active turn establishes a baseline
+	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 10.00, 100000, 5000)
 
-	// Cost drifts on idle ticks (same lastPrompt) — should NOT increase daily_cost
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", "2026-07-20T09:59:00Z", 12.00, 110000, 5500)
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", "2026-07-20T09:59:00Z", 15.00, 120000, 6000)
+	// Cost drifts while idle (background recalculation) — should NOT count
+	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T13:00:00Z", "2026-07-20", false, 12.00, 110000, 5500)
+	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T16:00:00Z", "2026-07-20", false, 15.00, 120000, 6000)
 
 	dc, _ := d.GetDailyCostForSession("tick-idle", "2026-07-20")
 	if dc.CostUSD != 10.00 {
@@ -333,8 +350,8 @@ func TestRecordCostTickIdleSessionIgnored(t *testing.T) {
 		t.Errorf("expected snapshot to track latest value 15.00, got %f", snap.ReportedCostUSD)
 	}
 
-	// New prompt — now the delta from 15 to 18 should be recorded
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T10:01:00Z", "2026-07-20", "2026-07-20T10:00:50Z", 18.00, 130000, 7000)
+	// Active again — delta from 15 to 18 should be recorded
+	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T17:00:00Z", "2026-07-20", true, 18.00, 130000, 7000)
 
 	dc2, _ := d.GetDailyCostForSession("tick-idle", "2026-07-20")
 	if dc2.CostUSD != 13.00 {

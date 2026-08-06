@@ -12,7 +12,6 @@ type CostSnapshot struct {
 	TotalOutputTokens int
 	Model             string
 	UpdatedAt         string
-	LastPrompt        string
 }
 
 type DailyCost struct {
@@ -41,11 +40,13 @@ type SessionSummary struct {
 // detects resets, and updates the snapshot + daily cost in a single transaction.
 // This prevents duplicate adjustments from concurrent statusline ticks.
 //
-// lastPrompt is the session's last_prompt timestamp. Cost changes are only
-// attributed to daily_cost when lastPrompt has changed since the last snapshot,
-// indicating the session was actually used. This prevents phantom cost from
-// Claude Code's background cost recalculations on idle sessions.
-func (db *DB) RecordCostTick(sessionID, model, now, today, lastPrompt string, reportedCost float64, reportedInput, reportedOutput int) error {
+// active indicates whether the session is currently working (the last prompt was
+// recent enough that cost changes reflect real API calls for the current turn).
+// When inactive, cost changes are treated as background drift (Claude Code
+// recalculates total_cost_usd even on idle sessions) and update the snapshot but
+// are not attributed to daily_cost. This prevents phantom cost on idle sessions
+// while still capturing the full cost of an active turn's many API calls.
+func (db *DB) RecordCostTick(sessionID, model, now, today string, active bool, reportedCost float64, reportedInput, reportedOutput int) error {
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -56,9 +57,9 @@ func (db *DB) RecordCostTick(sessionID, model, now, today, lastPrompt string, re
 	var snap CostSnapshot
 	var hasSnap bool
 	err = tx.QueryRow(`
-		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at, last_prompt
+		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at
 		FROM cost_snapshots WHERE session_id = ?
-	`, sessionID).Scan(&snap.SessionID, &snap.ReportedCostUSD, &snap.TotalInputTokens, &snap.TotalOutputTokens, &snap.Model, &snap.UpdatedAt, &snap.LastPrompt)
+	`, sessionID).Scan(&snap.SessionID, &snap.ReportedCostUSD, &snap.TotalInputTokens, &snap.TotalOutputTokens, &snap.Model, &snap.UpdatedAt)
 	if err == nil {
 		hasSnap = true
 	} else if err != sql.ErrNoRows {
@@ -66,14 +67,16 @@ func (db *DB) RecordCostTick(sessionID, model, now, today, lastPrompt string, re
 	}
 
 	if !hasSnap {
-		// First tick for this session
+		// First tick for this session. Only attribute to daily_cost if the
+		// session is active — otherwise this is an existing session being
+		// tracked for the first time, and its full cost would inflate today.
 		if _, err := tx.Exec(`
-			INSERT INTO cost_snapshots (session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at, last_prompt)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, sessionID, reportedCost, reportedInput, reportedOutput, model, now, lastPrompt); err != nil {
+			INSERT INTO cost_snapshots (session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, sessionID, reportedCost, reportedInput, reportedOutput, model, now); err != nil {
 			return fmt.Errorf("failed to insert snapshot: %w", err)
 		}
-		if reportedCost > 0 {
+		if active && reportedCost > 0 {
 			if _, err := tx.Exec(`
 				INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
 				VALUES (?, ?, ?, ?, ?)
@@ -93,16 +96,14 @@ func (db *DB) RecordCostTick(sessionID, model, now, today, lastPrompt string, re
 		return nil
 	}
 
-	// Session is idle (no new prompts since last snapshot) — update snapshot
-	// to track the latest reported value, but don't attribute cost to daily_cost.
-	sessionActive := lastPrompt != snap.LastPrompt
-
-	if !sessionActive {
+	// Session is idle — update snapshot to track the latest reported value,
+	// but don't attribute background cost drift to daily_cost.
+	if !active {
 		if _, err := tx.Exec(`
 			UPDATE cost_snapshots SET
-				reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?, last_prompt = ?
+				reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?
 			WHERE session_id = ?
-		`, reportedCost, reportedInput, reportedOutput, model, now, lastPrompt, sessionID); err != nil {
+		`, reportedCost, reportedInput, reportedOutput, model, now, sessionID); err != nil {
 			return fmt.Errorf("failed to update snapshot: %w", err)
 		}
 		return tx.Commit()
@@ -131,9 +132,9 @@ func (db *DB) RecordCostTick(sessionID, model, now, today, lastPrompt string, re
 	// Update snapshot
 	if _, err := tx.Exec(`
 		UPDATE cost_snapshots SET
-			reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?, last_prompt = ?
+			reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?
 		WHERE session_id = ?
-	`, reportedCost, reportedInput, reportedOutput, model, now, lastPrompt, sessionID); err != nil {
+	`, reportedCost, reportedInput, reportedOutput, model, now, sessionID); err != nil {
 		return fmt.Errorf("failed to update snapshot: %w", err)
 	}
 
@@ -157,9 +158,9 @@ func (db *DB) RecordCostTick(sessionID, model, now, today, lastPrompt string, re
 func (db *DB) GetCostSnapshot(sessionID string) (*CostSnapshot, error) {
 	var s CostSnapshot
 	err := db.conn.QueryRow(`
-		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at, last_prompt
+		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at
 		FROM cost_snapshots WHERE session_id = ?
-	`, sessionID).Scan(&s.SessionID, &s.ReportedCostUSD, &s.TotalInputTokens, &s.TotalOutputTokens, &s.Model, &s.UpdatedAt, &s.LastPrompt)
+	`, sessionID).Scan(&s.SessionID, &s.ReportedCostUSD, &s.TotalInputTokens, &s.TotalOutputTokens, &s.Model, &s.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}

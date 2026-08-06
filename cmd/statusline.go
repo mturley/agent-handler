@@ -80,15 +80,27 @@ type hookInput struct {
 	} `json:"cost"`
 }
 
+// costActiveWindow is how recently a session must have received a prompt for its
+// cost changes to count as real work. Cost accrues rapidly during a turn (one
+// prompt triggers many API calls), so the window must cover a full turn. Beyond
+// it, cost changes are background drift (Claude Code recalculates total_cost_usd
+// on idle sessions) and are not attributed to daily cost.
+const costActiveWindow = 60 * time.Minute
+
 func recordCostSnapshot(wd *db.DB, input *hookInput) {
-	now := time.Now().UTC().Format(time.RFC3339)
-	today := time.Now().UTC().Format("2006-01-02")
-	lastPrompt := ""
-	if s, err := wd.GetSession(input.SessionID); err == nil && s != nil {
-		lastPrompt = s.LastPrompt
+	nowT := time.Now().UTC()
+	now := nowT.Format(time.RFC3339)
+	today := nowT.Format("2006-01-02")
+
+	active := false
+	if s, err := wd.GetSession(input.SessionID); err == nil && s != nil && s.LastPrompt != "" {
+		if lp, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
+			active = nowT.Sub(lp) <= costActiveWindow
+		}
 	}
+
 	wd.RecordCostTick(
-		input.SessionID, input.Model.ID, now, today, lastPrompt,
+		input.SessionID, input.Model.ID, now, today, active,
 		input.Cost.TotalCostUSD,
 		input.ContextWindow.TotalInputTokens,
 		input.ContextWindow.TotalOutputTokens,
@@ -136,8 +148,8 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 			wd.BumpLastActive(input.SessionID, now)
 		}
 
-		termType, termID, workspaceID, surfaceRef := terminal.Detect()
-		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, surfaceRef, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
+		termType, termID, workspaceID := terminal.Detect()
+		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)
 		wd.Close()
 	}
@@ -989,7 +1001,7 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 		}
 	}
 
-	termType, termID, workspaceID, surfaceRef := terminal.Detect()
+	termType, termID, workspaceID := terminal.Detect()
 
 	// Check if this session has an existing cursor (re-registration after archive)
 	existingCursor, _ := d.GetCursor(input.SessionID)
@@ -1010,7 +1022,6 @@ func registerSessionFromHook(d *db.DB, input *hookInput) {
 		JSONLPath:       input.TranscriptPath,
 		TerminalType:    termType,
 		TerminalID:      termID,
-		CmuxSurfaceRef:  surfaceRef,
 		CmuxWorkspaceID: workspaceID,
 	})
 
@@ -1070,7 +1081,7 @@ func reactivateSession(d *db.DB, input *hookInput, existing *db.Session) {
 	now := time.Now().UTC().Format(time.RFC3339)
 
 	// Reactivate the session with updated metadata
-	termType, termID, workspaceID, surfaceRef := terminal.Detect()
+	termType, termID, workspaceID := terminal.Detect()
 	cwd := input.CWD
 	if cwd == "" {
 		cwd, _ = os.Getwd()
@@ -1094,7 +1105,6 @@ func reactivateSession(d *db.DB, input *hookInput, existing *db.Session) {
 		JSONLPath:       input.TranscriptPath,
 		TerminalType:    termType,
 		TerminalID:      termID,
-		CmuxSurfaceRef:  surfaceRef,
 		CmuxWorkspaceID: workspaceID,
 	})
 
