@@ -209,16 +209,16 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             {costEnabled && (
               <TabsContent value="cost">
                 <div className="space-y-4">
-                  <div className="text-sm space-y-0.5">
-                    <div className="flex justify-between">
+                  <div className="text-sm space-y-0.5 w-48">
+                    <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">Total</span>
                       <span className="font-medium">{totalCost != null ? fmtUsd(totalCost) : "—"}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">Last 30 days</span>
                       <span className="font-medium">{last30Cost != null ? fmtUsd(last30Cost) : "—"}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between gap-4">
                       <span className="text-muted-foreground">Today</span>
                       <span className="font-medium">{todayCost != null ? fmtUsd(todayCost) : "$0.00"}</span>
                     </div>
