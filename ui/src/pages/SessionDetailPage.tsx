@@ -116,6 +116,16 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
         </p>
       ) : session ? (
         <>
+          <AttentionCard
+            awaitingSessions={otherAwaiting}
+            unreadSessions={otherUnread}
+            reminderSessions={otherReminders}
+            cmuxAvailable={cmuxAvailable}
+            onNavigate={(id) => setLocation(`/sessions/${id}`)}
+            onSwitch={handleSwitch}
+            other
+          />
+
           <SessionCard
             session={session}
             cmuxAvailable={cmuxAvailable}
@@ -133,16 +143,6 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             sessionName={name}
             scrollClassName="max-h-[40vh]"
             showHeader
-          />
-
-          <AttentionCard
-            awaitingSessions={otherAwaiting}
-            unreadSessions={otherUnread}
-            reminderSessions={otherReminders}
-            cmuxAvailable={cmuxAvailable}
-            onNavigate={(id) => setLocation(`/sessions/${id}`)}
-            onSwitch={handleSwitch}
-            other
           />
 
           <Tabs value={tab} onValueChange={handleTabChange}>
