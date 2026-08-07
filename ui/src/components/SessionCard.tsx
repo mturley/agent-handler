@@ -169,7 +169,7 @@ export function SessionCard({
         </div>
       )}
       {session.blocked && (
-        <div className="px-4 py-1.5 pl-8">
+        <div className={cn("px-4 pl-8", (nonReminderCount > 0 || reminderCount > 0) ? "pb-1" : "pb-2")}>
           <span className="inline-flex items-center gap-1 text-red-400 text-xs">
             <OctagonAlert className="h-3.5 w-3.5 shrink-0" />
             Blocked{session.blocked_reason ? `: ${session.blocked_reason}` : ""}
@@ -177,7 +177,7 @@ export function SessionCard({
         </div>
       )}
       {(nonReminderCount > 0 || reminderCount > 0) && (
-        <div className="px-4 py-1.5 pl-8 flex flex-col gap-0.5">
+        <div className="px-4 pb-2 pl-8 flex flex-col gap-0.5">
           {nonReminderCount > 0 && (
             <span className="inline-flex items-start gap-1 text-blue-400 text-xs">
               <Mail className="h-3.5 w-3.5 shrink-0 mt-0.5" />
