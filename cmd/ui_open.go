@@ -48,6 +48,8 @@ func runUIOpen(cmd *cobra.Command, args []string) error {
 	defer d.Close()
 
 	// Resolve target: positional arg (name/id/branch), or the current session.
+	// With no arg and no determinable current session, fall back to the main
+	// page rather than aborting.
 	var sessionID string
 	if len(args) > 0 && args[0] != "" {
 		session, err := resolveSessionByTarget(d, args[0])
@@ -56,10 +58,8 @@ func runUIOpen(cmd *cobra.Command, args []string) error {
 		}
 		sessionID = session.SessionID
 	} else {
-		sessionID, err = resolveSessionID(cmd)
-		if err != nil {
-			return fmt.Errorf("could not determine session: %w", err)
-		}
+		// Ignore the error — an empty sessionID means "open the main page".
+		sessionID, _ = resolveSessionID(cmd)
 	}
 
 	port := uiPortForRunningServer()
@@ -67,7 +67,11 @@ func runUIOpen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no handler UI server is running. Start one with `handler ui` in another terminal (or `make dev` for development)")
 	}
 
-	url := fmt.Sprintf("http://localhost:%d/sessions/%s?tab=inbox", port, sessionID)
+	base := fmt.Sprintf("http://localhost:%d", port)
+	url := base + "/"
+	if sessionID != "" {
+		url = fmt.Sprintf("%s/sessions/%s?tab=inbox", base, sessionID)
+	}
 	openBrowser(url)
 	fmt.Printf("Opening %s\n", url)
 	return nil
