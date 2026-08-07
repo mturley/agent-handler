@@ -660,8 +660,11 @@ func renderReminderLines(d *db.DB, session *db.Session) {
 		WHERE e.type = 'reminder'
 		  AND e.ts > ?
 		  AND er.recipient_type = 'session' AND er.recipient_value = ?
+		  AND NOT EXISTS (
+		    SELECT 1 FROM dismissed_events d WHERE d.session_id = ? AND d.event_id = e.id
+		  )
 		ORDER BY e.ts ASC
-	`, cursor, session.SessionID)
+	`, cursor, session.SessionID, session.SessionID)
 	if err != nil {
 		return
 	}
