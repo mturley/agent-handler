@@ -101,6 +101,19 @@ func runUI(cmd *cobra.Command, args []string) error {
 }
 
 func openBrowser(url string) {
+	// Inside cmux, use `cmux open <url>` so the page lands in a cmux browser
+	// pane instead of the OS default browser (which cmux can't capture).
+	if os.Getenv("CMUX_SURFACE_ID") != "" {
+		if _, err := exec.LookPath("cmux"); err == nil {
+			// Run (not Start) so cmux fully delivers the open over its socket
+			// before this process exits.
+			if err := exec.Command("cmux", "open", url).Run(); err == nil {
+				return
+			}
+			// fall through to the OS opener if cmux fails
+		}
+	}
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
