@@ -17,11 +17,11 @@ interface SessionDetailPageProps {
   cmuxAvailable: boolean
 }
 
-const VALID_TABS = ["inbox", "timeline", "resources"] as const
+const VALID_TABS = ["timeline", "resources"] as const
 
 function getTab(): string {
   const t = new URLSearchParams(window.location.search).get("tab")
-  return t && (VALID_TABS as readonly string[]).includes(t) ? t : "inbox"
+  return t && (VALID_TABS as readonly string[]).includes(t) ? t : "timeline"
 }
 
 export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPageProps) {
@@ -46,7 +46,7 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
   const handleTabChange = useCallback((value: string) => {
     setTab(value)
     const params = new URLSearchParams(window.location.search)
-    if (value === "inbox") params.delete("tab")
+    if (value === "timeline") params.delete("tab")
     else params.set("tab", value)
     const qs = params.toString()
     window.history.replaceState(null, "", `/sessions/${sessionId}${qs ? `?${qs}` : ""}`)
@@ -88,22 +88,19 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             expandedInfo
           />
 
+          <InboxContent
+            sessionId={sessionId}
+            sessionName={name}
+            cmuxAvailable={cmuxAvailable}
+            scrollClassName="max-h-[40vh]"
+            showSwitch={false}
+          />
+
           <Tabs value={tab} onValueChange={handleTabChange}>
             <TabsList>
-              <TabsTrigger value="inbox">Inbox</TabsTrigger>
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
               <TabsTrigger value="resources">Resources</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="inbox">
-              <InboxContent
-                sessionId={sessionId}
-                sessionName={name}
-                cmuxAvailable={cmuxAvailable}
-                scrollClassName="max-h-[60vh]"
-                showSwitch={false}
-              />
-            </TabsContent>
 
             <TabsContent value="timeline">
               <TimelinePage
