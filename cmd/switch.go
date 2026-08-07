@@ -10,6 +10,7 @@ import (
 	"github.com/chzyer/readline"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
+	"github.com/mturley/agent-handler/terminal"
 	"github.com/spf13/cobra"
 )
 
@@ -110,19 +111,24 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Resolve the live location by matching the Claude session ID against cmux's
+	// resume_binding.checkpoint_id. Stored workspace/surface IDs go stale when
+	// tabs are moved between workspaces, so always prefer the live lookup.
+	workspaceRef := session.CmuxWorkspaceID
+	surfaceRef := session.TerminalID
+	if liveWS, liveSurface := terminal.FindSurfaceBySessionID(session.SessionID); liveWS != "" {
+		workspaceRef = liveWS
+		surfaceRef = liveSurface
+	}
+
 	if out, err := exec.Command("cmux", "workspace", "select",
-		"--workspace", session.CmuxWorkspaceID,
+		"--workspace", workspaceRef,
 	).CombinedOutput(); err != nil {
 		return fmt.Errorf("cmux workspace select failed: %s", string(out))
 	}
-	// Use stored surface ref if available, otherwise fall back to UUID
-	surfaceRef := session.CmuxSurfaceRef
-	if surfaceRef == "" {
-		surfaceRef = session.TerminalID
-	}
 	if out, err := exec.Command("cmux", "focus-panel",
 		"--panel", surfaceRef,
-		"--workspace", session.CmuxWorkspaceID,
+		"--workspace", workspaceRef,
 	).CombinedOutput(); err != nil {
 		return fmt.Errorf("cmux focus-panel failed: %s", string(out))
 	}

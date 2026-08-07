@@ -17,15 +17,15 @@ type Backend interface {
 
 // Detect checks the current environment and returns the terminal backend type,
 // terminal ID, and workspace ID. Checks cmux first, then tmux.
-func Detect() (backendType, terminalID, workspaceID, surfaceRef string) {
+func Detect() (backendType, terminalID, workspaceID string) {
 	if surfaceID := os.Getenv("CMUX_SURFACE_ID"); surfaceID != "" {
-		// Query cmux for the live workspace and surface ref — also validates the surface still exists
-		wsID, sRef := cmuxLiveInfo(surfaceID)
+		// Query cmux for the live workspace — also validates the surface still exists
+		wsID, _ := cmuxLiveInfo(surfaceID)
 		if wsID == "" {
 			// Surface not found in cmux (stale after cmux restart) — don't report it
-			return "", "", "", ""
+			return "", "", ""
 		}
-		return "cmux", surfaceID, wsID, sRef
+		return "cmux", surfaceID, wsID
 	}
 
 	if os.Getenv("TMUX") != "" {
@@ -33,12 +33,12 @@ func Detect() (backendType, terminalID, workspaceID, surfaceRef string) {
 		if err == nil {
 			paneID := strings.TrimSpace(string(out))
 			if paneID != "" {
-				return "tmux", paneID, "", ""
+				return "tmux", paneID, ""
 			}
 		}
 	}
 
-	return "", "", "", ""
+	return "", "", ""
 }
 
 // NewBackend returns a Backend implementation for the given type.

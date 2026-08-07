@@ -124,3 +124,46 @@ func cmuxLiveInfo(surfaceID string) (workspaceRef, surfaceRef string) {
 	}
 	return "", ""
 }
+
+// FindSurfaceBySessionID scans all cmux workspaces for a surface whose resume
+// binding checkpoint_id matches the given Claude session ID. This is the most
+// reliable way to locate a session's surface — it doesn't depend on env vars
+// or the caller field, which can be stale or unavailable.
+func FindSurfaceBySessionID(sessionID string) (workspaceRef, surfaceRef string) {
+	wsOut, err := exec.Command("cmux", "list-workspaces", "--json").Output()
+	if err != nil {
+		return "", ""
+	}
+	var wsData struct {
+		Workspaces []struct {
+			Ref string `json:"ref"`
+		} `json:"workspaces"`
+	}
+	if err := json.Unmarshal(wsOut, &wsData); err != nil {
+		return "", ""
+	}
+
+	for _, ws := range wsData.Workspaces {
+		out, err := exec.Command("cmux", "list-panels", "--workspace", ws.Ref, "--json").Output()
+		if err != nil {
+			continue
+		}
+		var data struct {
+			Surfaces []struct {
+				Ref           string `json:"ref"`
+				ResumeBinding *struct {
+					CheckpointID string `json:"checkpoint_id"`
+				} `json:"resume_binding"`
+			} `json:"surfaces"`
+		}
+		if err := json.Unmarshal(out, &data); err != nil {
+			continue
+		}
+		for _, s := range data.Surfaces {
+			if s.ResumeBinding != nil && s.ResumeBinding.CheckpointID == sessionID {
+				return ws.Ref, s.Ref
+			}
+		}
+	}
+	return "", ""
+}

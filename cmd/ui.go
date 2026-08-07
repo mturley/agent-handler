@@ -57,7 +57,7 @@ func runUI(cmd *cobra.Command, args []string) error {
 	}
 
 	// Detect cmux
-	backendType, _, _, _ := terminal.Detect()
+	backendType, _, _ := terminal.Detect()
 	cmuxAvailable := backendType == "cmux"
 
 	if !cmuxAvailable && !uiAPIOnly {
