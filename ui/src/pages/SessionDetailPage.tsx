@@ -2,13 +2,16 @@ import { useCallback, useState } from "react"
 import { useLocation } from "wouter"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SessionCard } from "@/components/SessionCard"
 import { InboxContent } from "@/components/InboxContent"
 import { ResourcesContent } from "@/components/ResourcesContent"
 import { TimelinePage } from "@/pages/TimelinePage"
-import { getSessions, getArchivedSessions, switchSession } from "@/api/client"
+import { getSessions, getArchivedSessions, getEvents, getSessionResources, switchSession } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
+import { timeAgo } from "@/utils/timeAgo"
+import { formatEventType } from "@/utils/formatLabel"
 import { ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
@@ -42,6 +45,29 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
     archived?.sessions.find((s) => s.session_id === sessionId)
 
   const name = session?.session_name || sessionId.slice(0, 12)
+
+  // Tab badges: last timeline-event time, and per-type resource counts.
+  const { data: latestEvents } = useQuery({
+    queryKey: ["events", { session: sessionId, limit: 1 }],
+    queryFn: () => getEvents({ session: sessionId, limit: 1 }),
+  })
+  const lastEventTs = latestEvents?.events?.[0]?.ts
+
+  const { data: sessionResources } = useQuery({
+    queryKey: ["session-resources", sessionId],
+    queryFn: () => getSessionResources(sessionId),
+  })
+  const resourceCounts = (sessionResources ?? []).reduce<Record<string, number>>((acc, r) => {
+    acc[r.resource_type] = (acc[r.resource_type] ?? 0) + 1
+    return acc
+  }, {})
+  const resourceBadge = Object.entries(resourceCounts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, count]) => {
+      const label = type === "pr" ? (count === 1 ? "PR" : "PRs") : type === "jira" ? "Jira" : formatEventType(type)
+      return `${count} ${label}`
+    })
+    .join(", ")
 
   const handleTabChange = useCallback((value: string) => {
     setTab(value)
@@ -91,15 +117,28 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
           <InboxContent
             sessionId={sessionId}
             sessionName={name}
-            cmuxAvailable={cmuxAvailable}
             scrollClassName="max-h-[40vh]"
-            showSwitch={false}
+            showHeader
           />
 
           <Tabs value={tab} onValueChange={handleTabChange}>
             <TabsList>
-              <TabsTrigger value="timeline">Timeline</TabsTrigger>
-              <TabsTrigger value="resources">Resources</TabsTrigger>
+              <TabsTrigger value="timeline">
+                Timeline
+                {lastEventTs && (
+                  <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                    {timeAgo(lastEventTs)}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="resources">
+                Resources
+                {resourceBadge && (
+                  <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                    {resourceBadge}
+                  </Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="timeline">

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { getSessionInbox, dismissInbox, dismissEvent, switchSession } from "@/api/client"
+import { getSessionInbox, dismissInbox, dismissEvent } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
 import { formatEventType } from "@/utils/formatLabel"
@@ -15,13 +15,12 @@ import { toast } from "sonner"
 interface InboxContentProps {
   sessionId: string
   sessionName: string
-  cmuxAvailable: boolean
   /** Called after "Dismiss all" succeeds (e.g. to close a wrapping modal). */
   onDismissedAll?: () => void
   /** Tailwind classes for the scroll area (height differs between modal and tab). */
   scrollClassName?: string
-  /** Show the "Go to session" switch button in the footer. */
-  showSwitch?: boolean
+  /** Render an "Inbox" header with the unread count above the list. */
+  showHeader?: boolean
 }
 
 /**
@@ -32,10 +31,9 @@ interface InboxContentProps {
 export function InboxContent({
   sessionId,
   sessionName,
-  cmuxAvailable,
   onDismissedAll,
   scrollClassName = "max-h-[600px]",
-  showSwitch = true,
+  showHeader = false,
 }: InboxContentProps) {
   const queryClient = useQueryClient()
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -85,18 +83,18 @@ export function InboxContent({
     })
   }, [])
 
-  const handleSwitch = useCallback(async () => {
-    try {
-      await switchSession(sessionId)
-      toast.success(`Switched to ${sessionName}`)
-    } catch (e) {
-      console.error(e)
-      toast.error("Failed to switch session")
-    }
-  }, [sessionId, sessionName])
-
   return (
     <>
+      {showHeader && (
+        <h2 className="text-base font-semibold mb-1">
+          Inbox
+          {events.length > 0 && (
+            <span className="text-sm font-normal text-muted-foreground ml-1.5">
+              {events.length} unread
+            </span>
+          )}
+        </h2>
+      )}
       <ScrollArea className={cn(scrollClassName)}>
         {loading && (
           <p className="text-sm text-muted-foreground p-4">Loading...</p>
@@ -183,18 +181,13 @@ export function InboxContent({
         })}
       </ScrollArea>
 
-      <div className="flex items-center gap-2 justify-between pt-2">
-        {showSwitch && cmuxAvailable && (
-          <Button variant="link" size="sm" onClick={handleSwitch}>
-            Go to session
-          </Button>
-        )}
+      {events.length > 0 && (
+      <div className="flex items-center gap-2 justify-end pt-2">
         <div className="flex gap-2 ml-auto">
           {!confirmDismiss ? (
             <Button
               variant="destructive"
               size="sm"
-              disabled={events.length === 0}
               onClick={() => setConfirmDismiss(true)}
             >
               Dismiss all
@@ -218,6 +211,7 @@ export function InboxContent({
           )}
         </div>
       </div>
+      )}
     </>
   )
 }
