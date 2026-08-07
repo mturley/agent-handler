@@ -473,12 +473,13 @@ func (db *DB) DirectCountForSession(sessionID string) (int, error) {
 		SELECT COUNT(DISTINCT e.id) FROM events e
 		JOIN event_recipients er ON er.event_id = e.id
 		WHERE e.ts > ?
+		  ` + dismissedExclusionSQL + `
 		  AND (
 		    (er.recipient_type = 'session' AND er.recipient_value = ?)
 		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
 		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
 		  )
-	`, cursor, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
+	`, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
 
 	if err != nil {
 		return 0, fmt.Errorf("failed to count direct events: %w", err)

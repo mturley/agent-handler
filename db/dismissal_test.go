@@ -114,6 +114,39 @@ func TestPruneDismissedBehindCursor(t *testing.T) {
 	}
 }
 
+func TestDismissEventExcludesFromDirectCount(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "sess-direct")
+	d.AdvanceCursor("sess-direct", "1970-01-01T00:00:00Z")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	e := Event{ID: "direct-msg", TS: now, Source: "test", Type: "message", Title: "t"}
+	recipients := []EventRecipient{{RecipientType: "session", RecipientValue: "sess-direct"}}
+	if err := d.InsertEvent(e, recipients, nil); err != nil {
+		t.Fatalf("InsertEvent: %v", err)
+	}
+
+	before, err := d.DirectCountForSession("sess-direct")
+	if err != nil {
+		t.Fatalf("DirectCountForSession: %v", err)
+	}
+	if before != 1 {
+		t.Fatalf("before dismiss: got %d direct, want 1", before)
+	}
+
+	if err := d.DismissEvent("sess-direct", "direct-msg"); err != nil {
+		t.Fatalf("DismissEvent: %v", err)
+	}
+
+	after, err := d.DirectCountForSession("sess-direct")
+	if err != nil {
+		t.Fatalf("DirectCountForSession after dismiss: %v", err)
+	}
+	if after != 0 {
+		t.Fatalf("after dismiss: got %d direct, want 0", after)
+	}
+}
+
 func TestPruneKeepsRowsAheadOfCursor(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "sess-keep")
