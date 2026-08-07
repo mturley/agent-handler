@@ -67,6 +67,15 @@ CREATE TABLE IF NOT EXISTS session_cursors (
     human_seen_ts TEXT
 );
 
+CREATE TABLE IF NOT EXISTS dismissed_events (
+    session_id   TEXT NOT NULL,
+    event_id     TEXT NOT NULL,
+    dismissed_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dismissed_events_session ON dismissed_events(session_id);
+
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id TEXT PRIMARY KEY,

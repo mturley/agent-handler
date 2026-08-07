@@ -58,6 +58,20 @@ func Open(path string) (*DB, error) {
 }
 
 func runMigrations(conn *sql.DB) error {
+	// Safety net for existing databases created before a table was added to
+	// schema.sql. CREATE TABLE IF NOT EXISTS is idempotent.
+	_, err := conn.Exec(`
+		CREATE TABLE IF NOT EXISTS dismissed_events (
+			session_id   TEXT NOT NULL,
+			event_id     TEXT NOT NULL,
+			dismissed_at TEXT NOT NULL,
+			PRIMARY KEY (session_id, event_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_dismissed_events_session ON dismissed_events(session_id);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create dismissed_events table: %w", err)
+	}
 	return nil
 }
 

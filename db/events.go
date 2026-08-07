@@ -3,11 +3,35 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // inboxExcludedTypes are event types excluded from non-handler inbox queries.
 // These are bookkeeping events that shouldn't appear as unread in session inboxes.
 const inboxExcludedTypesSQL = "AND e.type NOT IN ('watch_started', 'watcher_error')"
+
+// dismissedExclusionSQL excludes events explicitly dismissed by the session.
+// The bound parameter is the session ID; it appears in the WHERE clause after
+// the subscription-join session param and the cursor param.
+const dismissedExclusionSQL = `AND NOT EXISTS (
+		SELECT 1 FROM dismissed_events d WHERE d.session_id = ? AND d.event_id = e.id
+	)`
+
+// DismissEvent records that a session has explicitly dismissed an event.
+// Dismissed events are excluded from all unread queries for that session,
+// independent of the cursor. Idempotent.
+func (db *DB) DismissEvent(sessionID, eventID string) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := db.conn.Exec(`
+		INSERT INTO dismissed_events (session_id, event_id, dismissed_at)
+		VALUES (?, ?, ?)
+		ON CONFLICT(session_id, event_id) DO NOTHING
+	`, sessionID, eventID, now)
+	if err != nil {
+		return fmt.Errorf("failed to dismiss event %q for session %q: %w", eventID, sessionID, err)
+	}
+	return nil
+}
 
 // Event represents an event in the system.
 type Event struct {
@@ -170,6 +194,7 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
 		  ` + inboxExcludedTypesSQL + `
+		  ` + dismissedExclusionSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
@@ -181,7 +206,7 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 	`
 
 	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role)
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread events: %w", err)
 	}
@@ -234,6 +259,7 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
 		  ` + inboxExcludedTypesSQL + `
+		  ` + dismissedExclusionSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
@@ -245,7 +271,7 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 	`
 
 	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role)
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to count unread events: %w", err)
 	}
@@ -292,6 +318,7 @@ func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, erro
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
 		  ` + inboxExcludedTypesSQL + `
+		  ` + dismissedExclusionSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
@@ -301,7 +328,7 @@ func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, erro
 		  )
 	`
 	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role)
+	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread resources: %w", err)
 	}
@@ -363,6 +390,7 @@ func (db *DB) HumanUnreadCountForSession(sessionID string) (int, error) {
 		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
 		WHERE e.ts > ?
 		  ` + inboxExcludedTypesSQL + `
+		  ` + dismissedExclusionSQL + `
 		  AND (
 		    e.broadcast = 1
 		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
@@ -374,7 +402,7 @@ func (db *DB) HumanUnreadCountForSession(sessionID string) (int, error) {
 
 	repoBranch := session.Repo + ":" + session.Branch
 	var count int
-	err = db.conn.QueryRow(query, sessionID, cursor, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
+	err = db.conn.QueryRow(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
 	if err != nil {
 		return 0, err
 	}

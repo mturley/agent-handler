@@ -36,6 +36,38 @@ func (db *DB) GetHumanCursor(sessionID string) (string, error) {
 	return cursor, nil
 }
 
+// pruneDismissedBehindCursor removes dismissed_events rows whose event has
+// scrolled behind BOTH cursors for the session. Those rows are redundant
+// because the event is already excluded by the ts > cursor filter.
+func (db *DB) pruneDismissedBehindCursor(sessionID string) error {
+	// Use the lower of the two cursors so a row is only pruned once the event
+	// is behind both. GetHumanCursor coalesces to last_seen_ts when NULL.
+	agent, err := db.GetCursor(sessionID)
+	if err != nil {
+		return err
+	}
+	human, err := db.GetHumanCursor(sessionID)
+	if err != nil {
+		return err
+	}
+	threshold := agent
+	if human != "" && human < threshold {
+		threshold = human
+	}
+	if threshold == "" {
+		return nil
+	}
+	_, err = db.conn.Exec(`
+		DELETE FROM dismissed_events
+		WHERE session_id = ?
+		  AND event_id IN (SELECT id FROM events WHERE ts <= ?)
+	`, sessionID, threshold)
+	if err != nil {
+		return fmt.Errorf("failed to prune dismissed events for %q: %w", sessionID, err)
+	}
+	return nil
+}
+
 // AdvanceCursor inserts or updates the agent cursor for the given session.
 func (db *DB) AdvanceCursor(sessionID, ts string) error {
 	_, err := db.conn.Exec(`
@@ -46,6 +78,7 @@ func (db *DB) AdvanceCursor(sessionID, ts string) error {
 	if err != nil {
 		return fmt.Errorf("failed to advance cursor for session %q: %w", sessionID, err)
 	}
+	_ = db.pruneDismissedBehindCursor(sessionID)
 	return nil
 }
 
@@ -60,6 +93,7 @@ func (db *DB) AdvanceBothCursors(sessionID, ts string) error {
 	if err != nil {
 		return fmt.Errorf("failed to advance both cursors for session %q: %w", sessionID, err)
 	}
+	_ = db.pruneDismissedBehindCursor(sessionID)
 	return nil
 }
 
@@ -72,6 +106,7 @@ func (db *DB) CatchUpHumanCursor(sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to catch up human cursor for session %q: %w", sessionID, err)
 	}
+	_ = db.pruneDismissedBehindCursor(sessionID)
 	return nil
 }
 
