@@ -32,6 +32,18 @@ func init() {
 }
 
 func runUI(cmd *cobra.Command, args []string) error {
+	// If a UI server is already running (dev on 5173 or prod on 8420), just
+	// open it instead of starting a second server. Skipped in --api-only mode,
+	// which is meant to run its own API alongside a separate Vite dev server.
+	if !uiAPIOnly {
+		if port := uiPortForRunningServer(); port != 0 {
+			url := fmt.Sprintf("http://localhost:%d", port)
+			fmt.Printf("A handler UI server is already running. Opening %s\n", url)
+			openBrowser(url)
+			return nil
+		}
+	}
+
 	// Check if web assets are built
 	var webFS fs.FS
 	if !uiAPIOnly {
