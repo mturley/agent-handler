@@ -84,7 +84,10 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     resource_id TEXT NOT NULL,
     resource_url TEXT,
     created_at TEXT NOT NULL,
-    deleted_at TEXT
+    deleted_at TEXT,
+    -- 'user' when the subscription was soft-deleted by an explicit /unwatch, so
+    -- session reactivation won't resurrect deliberate unsubscribes.
+    unsubscribed_by TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_subscriptions_resource ON subscriptions(resource_type, resource_id, deleted_at);

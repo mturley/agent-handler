@@ -72,6 +72,38 @@ func runMigrations(conn *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to create dismissed_events table: %w", err)
 	}
+
+	// Add subscriptions.unsubscribed_by for existing databases. ALTER TABLE
+	// ADD COLUMN is not idempotent, so only add it when absent.
+	if err := addColumnIfMissing(conn, "subscriptions", "unsubscribed_by", "TEXT"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// addColumnIfMissing adds a column to a table only if it doesn't already exist.
+func addColumnIfMissing(conn *sql.DB, table, column, colType string) error {
+	rows, err := conn.Query("SELECT name FROM pragma_table_info(?)", table)
+	if err != nil {
+		return fmt.Errorf("failed to inspect %s columns: %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return fmt.Errorf("failed to scan %s column: %w", table, err)
+		}
+		if name == column {
+			return nil // already present
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating %s columns: %w", table, err)
+	}
+	if _, err := conn.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colType)); err != nil {
+		return fmt.Errorf("failed to add column %s.%s: %w", table, column, err)
+	}
 	return nil
 }
 

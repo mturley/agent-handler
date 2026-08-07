@@ -180,3 +180,81 @@ func TestSubscribeDeduplicate(t *testing.T) {
 		t.Errorf("expected first subscription ID %q, got %q", sub1.ID, subs[0].ID)
 	}
 }
+
+func activeCount(t *testing.T, d *DB, sessionID string) int {
+	t.Helper()
+	subs, err := d.ListSubscriptions(sessionID, false)
+	if err != nil {
+		t.Fatalf("ListSubscriptions failed: %v", err)
+	}
+	return len(subs)
+}
+
+func TestRestoreDoesNotResurrectUserUnsubscribes(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "sess-restore")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	// Two subscriptions.
+	for i, id := range []string{"keep", "drop"} {
+		if err := d.Subscribe(Subscription{
+			ID: id, SessionID: "sess-restore", ResourceType: "pr",
+			ResourceID: "owner/repo#" + string(rune('1'+i)), CreatedAt: now,
+		}); err != nil {
+			t.Fatalf("Subscribe %s: %v", id, err)
+		}
+	}
+
+	// User explicitly unsubscribes from "drop".
+	if err := d.Unsubscribe("sess-restore", "pr", "owner/repo#2"); err != nil {
+		t.Fatalf("Unsubscribe: %v", err)
+	}
+	// The lifecycle soft-deletes everything (as happens on archive).
+	if _, err := d.SoftDeleteSubscriptionsForSession("sess-restore"); err != nil {
+		t.Fatalf("SoftDeleteSubscriptionsForSession: %v", err)
+	}
+	if c := activeCount(t, d, "sess-restore"); c != 0 {
+		t.Fatalf("after soft-delete: got %d active, want 0", c)
+	}
+
+	// Reactivation restores lifecycle deletes but NOT the user unsubscribe.
+	if _, err := d.RestoreSubscriptionsForSession("sess-restore"); err != nil {
+		t.Fatalf("RestoreSubscriptionsForSession: %v", err)
+	}
+	subs, err := d.ListSubscriptions("sess-restore", false)
+	if err != nil {
+		t.Fatalf("ListSubscriptions: %v", err)
+	}
+	if len(subs) != 1 || subs[0].ResourceID != "owner/repo#1" {
+		t.Fatalf("expected only owner/repo#1 restored, got %+v", subs)
+	}
+}
+
+func TestReinstateClearsUserUnsubscribe(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "sess-reinstate2")
+	now := time.Now().UTC().Format(time.RFC3339)
+	sub := Subscription{
+		ID: "r1", SessionID: "sess-reinstate2", ResourceType: "pr",
+		ResourceID: "owner/repo#9", CreatedAt: now,
+	}
+	if err := d.Subscribe(sub); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+	if err := d.Unsubscribe("sess-reinstate2", "pr", "owner/repo#9"); err != nil {
+		t.Fatalf("Unsubscribe: %v", err)
+	}
+	// Explicit re-subscribe should clear the user flag...
+	if err := d.Subscribe(sub); err != nil {
+		t.Fatalf("re-Subscribe: %v", err)
+	}
+	if c := activeCount(t, d, "sess-reinstate2"); c != 1 {
+		t.Fatalf("after re-subscribe: got %d active, want 1", c)
+	}
+	// ...so a subsequent lifecycle delete + restore brings it back.
+	d.SoftDeleteSubscriptionsForSession("sess-reinstate2")
+	d.RestoreSubscriptionsForSession("sess-reinstate2")
+	if c := activeCount(t, d, "sess-reinstate2"); c != 1 {
+		t.Fatalf("after restore: got %d active, want 1 (user flag should have been cleared)", c)
+	}
+}

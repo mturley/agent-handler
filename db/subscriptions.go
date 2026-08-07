@@ -87,7 +87,7 @@ func (db *DB) SubscribeIfNew(s Subscription) error {
 func (db *DB) Unsubscribe(sessionID, resourceType, resourceID string) error {
 	res, err := db.conn.Exec(`
 		UPDATE subscriptions
-		SET deleted_at = datetime('now')
+		SET deleted_at = datetime('now'), unsubscribed_by = 'user'
 		WHERE session_id = ? AND resource_type = ? AND resource_id = ? AND deleted_at IS NULL
 	`, sessionID, resourceType, resourceID)
 	if err != nil {
@@ -106,10 +106,12 @@ func (db *DB) Unsubscribe(sessionID, resourceType, resourceID string) error {
 }
 
 // Reinstate clears the deleted_at timestamp for a soft-deleted subscription.
+// Also clears unsubscribed_by, since an explicit re-subscribe overrides a prior
+// user unsubscribe.
 func (db *DB) Reinstate(sessionID, resourceType, resourceID string) error {
 	res, err := db.conn.Exec(`
 		UPDATE subscriptions
-		SET deleted_at = NULL
+		SET deleted_at = NULL, unsubscribed_by = NULL
 		WHERE session_id = ? AND resource_type = ? AND resource_id = ? AND deleted_at IS NOT NULL
 	`, sessionID, resourceType, resourceID)
 	if err != nil {
@@ -202,12 +204,15 @@ func (db *DB) SoftDeleteSubscriptionsForSession(sessionID string) (int, error) {
 	return int(rows), nil
 }
 
-// RestoreSubscriptionsForSession un-soft-deletes all subscriptions for a session.
+// RestoreSubscriptionsForSession un-soft-deletes subscriptions for a session
+// that were dropped by the archive/restart lifecycle. Subscriptions the user
+// explicitly removed via /unwatch (unsubscribed_by = 'user') are NOT restored.
 func (db *DB) RestoreSubscriptionsForSession(sessionID string) (int, error) {
 	res, err := db.conn.Exec(`
 		UPDATE subscriptions
 		SET deleted_at = NULL
 		WHERE session_id = ? AND deleted_at IS NOT NULL
+		  AND (unsubscribed_by IS NULL OR unsubscribed_by != 'user')
 	`, sessionID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to restore subscriptions for session %q: %w", sessionID, err)
