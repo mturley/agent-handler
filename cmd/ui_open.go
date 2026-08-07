@@ -70,7 +70,7 @@ func runUIOpen(cmd *cobra.Command, args []string) error {
 	base := fmt.Sprintf("http://localhost:%d", port)
 	url := base + "/"
 	if sessionID != "" {
-		url = fmt.Sprintf("%s/sessions/%s?tab=inbox", base, sessionID)
+		url = fmt.Sprintf("%s/sessions/%s", base, sessionID)
 	}
 	openBrowser(url)
 	fmt.Printf("Opening %s\n", url)

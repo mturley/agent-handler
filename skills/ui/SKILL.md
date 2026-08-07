@@ -28,6 +28,7 @@ If it reports that no UI server is running, tell the user to start one with
 
 ## Notes
 
-- The page opens on the Inbox tab by default.
+- The page shows this session's inbox inline, with Timeline and Resources tabs
+  below it.
 - To open a *different* session's page, pass its name or ID:
   `handler ui-open <session-name>`.

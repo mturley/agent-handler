@@ -260,9 +260,12 @@ View all active and idle sessions grouped by repo and cmux workspace. Features:
 - **Filter chips** — Active, Idle, Awaiting approval, Has unread — each showing a count
 - **Sort options** — Match cmux tab order (default), Last prompt, Unread count, Name
 - **Collapsible grouping** by repo and workspace, with colored workspace bars matching cmux
-- **Session cards** with state badges, unread event counts with type breakdowns, resource subscription counts, and cmux Switch buttons
-- **Inbox dialog** — view unread events for a session, dismiss them, or switch to the session
-- **Attention summary** — highlights sessions awaiting approval and sessions with unread messages
+- **Session cards** with state badges, unread event counts with type breakdowns, a separate reminders count, resource subscription counts, and cmux Switch buttons. Click a card to open its [session detail page](#session-detail-page).
+- **Attention summary** — highlights sessions awaiting approval, with unread messages, and with reminders; each entry links to the session's detail page (and can switch cmux to it)
+
+### Session Detail Page
+
+Clicking a session card (or running `handler ui-open` / the `/ui` skill) opens a focused page for one session at `/sessions/{id}`. It shows the session card, that session's inbox inline (expand and dismiss individual events, or dismiss all), and **Timeline** and **Resources** tabs hard-filtered to the session. The Timeline tab badge shows the time since the last event; the Resources tab badge shows per-type counts. This view is designed to live in its own cmux browser pane pointed at a single session.
 
 ### Timeline Tab
 
@@ -276,7 +279,9 @@ A chronological event feed in a chat-style layout with a vertical timeline, colo
 
 ### cmux Integration
 
-When `handler ui` is started from within cmux, session Switch buttons are enabled — clicking one navigates cmux to that session's workspace and surface tab. Outside cmux, Switch buttons are hidden and a warning is shown at startup.
+When `handler ui` is started from within cmux, session Switch buttons are enabled — clicking one navigates cmux to that session's workspace and surface tab (hovering shows a live terminal peek). Session references outside the session cards (in the attention summary, timeline events, and resource cards) are split buttons: the left side opens the session's detail page, and the right side switches cmux to it. Outside cmux, the switch side is hidden and a warning is shown at startup.
+
+`handler ui-open [name|id]` opens the web UI focused on a session (defaulting to the current session, or the main page if none), reusing an already-running server if one is up; the `/ui` skill wraps it. Both open the page in a cmux browser pane when run inside cmux.
 
 ## Design
 
