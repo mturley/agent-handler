@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback, useState, useEffect } from "react"
 import { useLocation } from "wouter"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,12 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
     archived?.sessions.find((s) => s.session_id === sessionId)
 
   const name = session?.session_name || sessionId.slice(0, 12)
+
+  // Reflect the focused session in the document title while on this page.
+  useEffect(() => {
+    document.title = `Handler (${name})`
+    return () => { document.title = "Agent Handler" }
+  }, [name])
 
   // Tab badges: last timeline-event time, and per-type resource counts.
   const { data: latestEvents } = useQuery({
