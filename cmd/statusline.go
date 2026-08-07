@@ -650,30 +650,12 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 }
 
 func renderReminderLines(d *db.DB, session *db.Session) {
-	cursor, err := d.GetCursor(session.SessionID)
-	if err != nil || cursor == "" {
-		return
-	}
-	rows, err := d.Conn().Query(`
-		SELECT e.title FROM events e
-		JOIN event_recipients er ON er.event_id = e.id
-		WHERE e.type = 'reminder'
-		  AND e.ts > ?
-		  AND er.recipient_type = 'session' AND er.recipient_value = ?
-		  AND NOT EXISTS (
-		    SELECT 1 FROM dismissed_events d WHERE d.session_id = ? AND d.event_id = e.id
-		  )
-		ORDER BY e.ts ASC
-	`, cursor, session.SessionID, session.SessionID)
+	reminders, err := d.UnreadEventsOfType(session.SessionID, "reminder")
 	if err != nil {
 		return
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var title string
-		rows.Scan(&title)
-		fmt.Printf("%s  ↳%s 🔔 %s%s%s\n", colorDim, colorReset, colorCyan, title, colorReset)
+	for _, ev := range reminders {
+		fmt.Printf("%s  ↳%s 🔔 %s%s%s\n", colorDim, colorReset, colorCyan, ev.Title, colorReset)
 	}
 }
 

@@ -185,30 +185,48 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 		return nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
-	// Build the unread query (excludes watch_started — those are handler-only bookkeeping)
 	query := `
-		SELECT DISTINCT e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags
-		FROM events e
-		LEFT JOIN event_recipients er ON e.id = er.event_id
-		LEFT JOIN event_resources eres ON e.id = eres.event_id
-		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
-		WHERE e.ts > ?
-		  ` + inboxExcludedTypesSQL + `
-		  ` + dismissedExclusionSQL + `
-		  AND (
-		    e.broadcast = 1
-		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
-		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
-		    OR s.id IS NOT NULL
-		  )
+		SELECT DISTINCT e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags` +
+		inboxJoinSQL + `
+		WHERE ` + inboxWhereSQL + `
 		ORDER BY e.ts ASC
 	`
 
-	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role)
+	rows, err := db.conn.Query(query, inboxScopeArgs(session, cursor)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread events: %w", err)
+	}
+	defer rows.Close()
+
+	return scanEvents(rows)
+}
+
+// UnreadEventsOfType returns unread events of a specific type for a session,
+// using the same inbox scope as UnreadForSession, ordered by ts ASC.
+func (db *DB) UnreadEventsOfType(sessionID, eventType string) ([]Event, error) {
+	cursor, err := db.GetCursor(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cursor: %w", err)
+	}
+	session, err := db.GetSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	if session == nil {
+		return nil, fmt.Errorf("session %q not found", sessionID)
+	}
+
+	query := `
+		SELECT DISTINCT e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags` +
+		inboxJoinSQL + `
+		WHERE ` + inboxWhereSQL + `
+		  AND e.type = ?
+		ORDER BY e.ts ASC
+	`
+	args := append(inboxScopeArgs(session, cursor), eventType)
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query unread events of type %q: %w", eventType, err)
 	}
 	defer rows.Close()
 
@@ -250,28 +268,14 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 		return 0, nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
-	// Count query (excludes watch_started — those are handler-only bookkeeping)
 	query := `
-		SELECT e.type, COUNT(DISTINCT e.id) as count
-		FROM events e
-		LEFT JOIN event_recipients er ON e.id = er.event_id
-		LEFT JOIN event_resources eres ON e.id = eres.event_id
-		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
-		WHERE e.ts > ?
-		  ` + inboxExcludedTypesSQL + `
-		  ` + dismissedExclusionSQL + `
-		  AND (
-		    e.broadcast = 1
-		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
-		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
-		    OR s.id IS NOT NULL
-		  )
+		SELECT e.type, COUNT(DISTINCT e.id) as count` +
+		inboxJoinSQL + `
+		WHERE ` + inboxWhereSQL + `
 		GROUP BY e.type
 	`
 
-	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role)
+	rows, err := db.conn.Query(query, inboxScopeArgs(session, cursor)...)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to count unread events: %w", err)
 	}
@@ -310,25 +314,17 @@ func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, erro
 		return nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
+	// Note: this query only cares about events that reference a resource, so it
+	// filters to eres IS NOT NULL rather than swapping the shared LEFT JOIN for
+	// an inner join — keeping inboxJoinSQL/inboxWhereSQL identical to the other
+	// inbox queries.
 	query := `
-		SELECT DISTINCT eres.resource_type, eres.resource_id
-		FROM events e
-		LEFT JOIN event_recipients er ON e.id = er.event_id
-		JOIN event_resources eres ON e.id = eres.event_id
-		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
-		WHERE e.ts > ?
-		  ` + inboxExcludedTypesSQL + `
-		  ` + dismissedExclusionSQL + `
-		  AND (
-		    e.broadcast = 1
-		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
-		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
-		    OR s.id IS NOT NULL
-		  )
+		SELECT DISTINCT eres.resource_type, eres.resource_id` +
+		inboxJoinSQL + `
+		WHERE ` + inboxWhereSQL + `
+		  AND eres.resource_type IS NOT NULL
 	`
-	repoBranch := session.Repo + ":" + session.Branch
-	rows, err := db.conn.Query(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role)
+	rows, err := db.conn.Query(query, inboxScopeArgs(session, cursor)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread resources: %w", err)
 	}
@@ -382,27 +378,16 @@ func (db *DB) HumanUnreadCountForSession(sessionID string) (int, error) {
 		return 0, err
 	}
 
+	// Uses the human cursor but the same routing/exclusion scope as the agent
+	// unread queries.
 	query := `
-		SELECT COUNT(DISTINCT e.id)
-		FROM events e
-		LEFT JOIN event_recipients er ON e.id = er.event_id
-		LEFT JOIN event_resources eres ON e.id = eres.event_id
-		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
-		WHERE e.ts > ?
-		  ` + inboxExcludedTypesSQL + `
-		  ` + dismissedExclusionSQL + `
-		  AND (
-		    e.broadcast = 1
-		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
-		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
-		    OR s.id IS NOT NULL
-		  )
+		SELECT COUNT(DISTINCT e.id)` +
+		inboxJoinSQL + `
+		WHERE ` + inboxWhereSQL + `
 	`
 
-	repoBranch := session.Repo + ":" + session.Branch
 	var count int
-	err = db.conn.QueryRow(query, sessionID, cursor, sessionID, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
+	err = db.conn.QueryRow(query, inboxScopeArgs(session, cursor)...).Scan(&count)
 	if err != nil {
 		return 0, err
 	}

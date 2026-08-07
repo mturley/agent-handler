@@ -147,23 +147,19 @@ func (db *DB) AutoDeliveredCount(sessionID string) (int, error) {
 		return 0, err
 	}
 
-	repoBranch := session.Repo + ":" + session.Branch
+	// Same inbox scope as the unread queries, plus an upper time bound (events
+	// between the human cursor and the agent cursor). The extra `e.ts <= ?`
+	// placeholder follows all of inboxWhereSQL's placeholders, so agentCursor is
+	// appended after inboxScopeArgs.
+	query := `
+		SELECT COUNT(DISTINCT e.id)` +
+		inboxJoinSQL + `
+		WHERE ` + inboxWhereSQL + `
+		  AND e.ts <= ?
+	`
+	args := append(inboxScopeArgs(session, *humanCursor), agentCursor)
 	var count int
-	err = db.conn.QueryRow(`
-		SELECT COUNT(DISTINCT e.id)
-		FROM events e
-		LEFT JOIN event_recipients er ON e.id = er.event_id
-		LEFT JOIN event_resources eres ON e.id = eres.event_id
-		LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL
-		WHERE e.ts > ? AND e.ts <= ?
-		  AND (
-		    e.broadcast = 1
-		    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-		    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
-		    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
-		    OR s.id IS NOT NULL
-		  )
-	`, sessionID, *humanCursor, agentCursor, sessionID, session.Branch, repoBranch, session.Role).Scan(&count)
+	err = db.conn.QueryRow(query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count auto-delivered events: %w", err)
 	}

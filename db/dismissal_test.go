@@ -147,6 +147,43 @@ func TestDismissEventExcludesFromDirectCount(t *testing.T) {
 	}
 }
 
+func TestUnreadEventsOfTypeRespectsDismissal(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "sess-typed")
+	d.AdvanceCursor("sess-typed", "1970-01-01T00:00:00Z")
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	recip := []EventRecipient{{RecipientType: "session", RecipientValue: "sess-typed"}}
+	for _, id := range []string{"rem-1", "rem-2"} {
+		e := Event{ID: id, TS: now, Source: "test", Type: "reminder", Title: id}
+		if err := d.InsertEvent(e, recip, nil); err != nil {
+			t.Fatalf("InsertEvent %s: %v", id, err)
+		}
+	}
+	// A non-reminder event should not appear in the reminder listing.
+	other := Event{ID: "status-1", TS: now, Source: "test", Type: "status", Title: "s", Broadcast: true}
+	d.InsertEvent(other, nil, nil)
+
+	got, err := d.UnreadEventsOfType("sess-typed", "reminder")
+	if err != nil {
+		t.Fatalf("UnreadEventsOfType: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("before dismiss: got %d reminders, want 2", len(got))
+	}
+
+	if err := d.DismissEvent("sess-typed", "rem-1"); err != nil {
+		t.Fatalf("DismissEvent: %v", err)
+	}
+	got, err = d.UnreadEventsOfType("sess-typed", "reminder")
+	if err != nil {
+		t.Fatalf("UnreadEventsOfType after dismiss: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "rem-2" {
+		t.Fatalf("after dismiss: expected only rem-2, got %+v", got)
+	}
+}
+
 func TestPruneKeepsRowsAheadOfCursor(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "sess-keep")
