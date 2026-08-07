@@ -89,6 +89,10 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
     queryFn: () => getSessionCost(sessionId),
   })
   const costEnabled = cost?.enabled ?? false
+  const totalCost = session?.true_cost_usd
+  const todayCost = session?.today_cost_usd
+  const last30Cost = cost?.total_cost_usd
+  const fmtUsd = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
   const handleTabChange = useCallback((value: string) => {
     setTab(value)
@@ -179,9 +183,9 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
               {costEnabled && (
                 <TabsTrigger value="cost">
                   Cost
-                  {cost && cost.total_cost_usd > 0 && (
+                  {totalCost != null && totalCost > 0 && (
                     <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
-                      ${cost.total_cost_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {fmtUsd(totalCost)}
                     </Badge>
                   )}
                 </TabsTrigger>
@@ -204,12 +208,28 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
 
             {costEnabled && (
               <TabsContent value="cost">
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold">
-                    Daily Spend
-                    <span className="text-xs font-normal text-muted-foreground ml-1.5">last 30 days</span>
-                  </h3>
-                  <DailySpendChart days={cost?.days ?? []} height={120} />
+                <div className="space-y-4">
+                  <div className="text-sm space-y-0.5">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-medium">{totalCost != null ? fmtUsd(totalCost) : "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Last 30 days</span>
+                      <span className="font-medium">{last30Cost != null ? fmtUsd(last30Cost) : "—"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Today</span>
+                      <span className="font-medium">{todayCost != null ? fmtUsd(todayCost) : "$0.00"}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold">
+                      Daily Spend
+                      <span className="text-xs font-normal text-muted-foreground ml-1.5">last 30 days</span>
+                    </h3>
+                    <DailySpendChart days={cost?.days ?? []} height={120} />
+                  </div>
                 </div>
               </TabsContent>
             )}
