@@ -16,13 +16,13 @@ import { ChevronRight, ChevronDown } from "lucide-react"
 interface ResourcesPageProps {
   cmuxAvailable: boolean
   onTimelineClick: (resourceType: string, resourceId: string) => void
-  onSessionClick: (sessionName: string) => void
+  onSessionNavigate: (sessionId: string) => void
 }
 
 export function ResourcesPage({
   cmuxAvailable,
   onTimelineClick,
-  onSessionClick,
+  onSessionNavigate,
 }: ResourcesPageProps) {
   const {
     loading,
@@ -97,7 +97,7 @@ export function ResourcesPage({
                   cmuxAvailable={cmuxAvailable}
                   onSwitch={handleSwitch}
                   onTimelineClick={onTimelineClick}
-                  onSessionClick={onSessionClick}
+                  onSessionNavigate={onSessionNavigate}
                 />
               ))}
             </div>
@@ -131,7 +131,7 @@ export function ResourcesPage({
                   cmuxAvailable={cmuxAvailable}
                   onSwitch={handleSwitch}
                   onTimelineClick={onTimelineClick}
-                  onSessionClick={onSessionClick}
+                  onSessionNavigate={onSessionNavigate}
                 />
               ))}
             </div>

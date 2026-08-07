@@ -11,6 +11,7 @@ import { useDynamicFavicon } from "@/hooks/useDynamicFavicon"
 import { SessionsPage } from "@/pages/SessionsPage"
 import { TimelinePage } from "@/pages/TimelinePage"
 import { ResourcesPage } from "@/pages/ResourcesPage"
+import { SessionDetailPage } from "@/pages/SessionDetailPage"
 import { CostBadge, CostDialog } from "@/components/CostDialog"
 
 const tabPaths: Record<string, string> = {
@@ -89,8 +90,12 @@ export default function App() {
     [setLocation, isWide]
   )
 
-  const navigateToSessions = useCallback((sessionName: string) => {
-    setLocation(`/?search=${encodeURIComponent(sessionName)}`)
+  const navigateToSession = useCallback((id: string) => {
+    setLocation(`/sessions/${id}`)
+  }, [setLocation])
+
+  const navigateToSessionResources = useCallback((id: string) => {
+    setLocation(`/sessions/${id}?tab=resources`)
   }, [setLocation])
 
   const handleSwitch = useCallback(async (id: string) => {
@@ -105,6 +110,17 @@ export default function App() {
   const handleTabChange = useCallback((value: string) => {
     setLocation(tabPaths[value] || "/")
   }, [setLocation])
+
+  // Single-session focused page (full width, both layouts).
+  const sessionMatch = basePath.match(/^\/sessions\/(.+)$/)
+  if (sessionMatch) {
+    return (
+      <div className="min-h-screen bg-background">
+        <SessionDetailPage sessionId={decodeURIComponent(sessionMatch[1])} cmuxAvailable={cmuxAvailable} />
+        <Toaster />
+      </div>
+    )
+  }
 
   // Wide layout: sessions on left, timeline/resources tabs on right
   if (isWide) {
@@ -122,6 +138,8 @@ export default function App() {
               <SessionsPage
                 cmuxAvailable={cmuxAvailable}
                 onTimelineClick={navigateToTimeline}
+                onCardClick={navigateToSession}
+                onResourcesOpen={navigateToSessionResources}
                 activeTimelineSessionId={rightTab === "timeline" ? timelineSessionFilter : undefined}
               />
             </div>
@@ -138,6 +156,7 @@ export default function App() {
                   <TimelinePage
                     cmuxAvailable={cmuxAvailable}
                     onSwitch={handleSwitch}
+                    onNavigate={navigateToSession}
                     sessionFilter={timelineSessionFilter}
                     includeArchived={timelineIncludeArchived}
                   />
@@ -147,7 +166,7 @@ export default function App() {
                   <ResourcesPage
                     cmuxAvailable={cmuxAvailable}
                     onTimelineClick={navigateToTimelineByResource}
-                    onSessionClick={navigateToSessions}
+                    onSessionNavigate={navigateToSession}
                   />
                 </TabsContent>
               </Tabs>
@@ -180,6 +199,8 @@ export default function App() {
             <SessionsPage
               cmuxAvailable={cmuxAvailable}
               onTimelineClick={navigateToTimeline}
+              onCardClick={navigateToSession}
+              onResourcesOpen={navigateToSessionResources}
             />
           </TabsContent>
 
@@ -187,6 +208,7 @@ export default function App() {
             <TimelinePage
               cmuxAvailable={cmuxAvailable}
               onSwitch={handleSwitch}
+              onNavigate={navigateToSession}
             />
           </TabsContent>
 
@@ -194,7 +216,7 @@ export default function App() {
             <ResourcesPage
               cmuxAvailable={cmuxAvailable}
               onTimelineClick={navigateToTimelineByResource}
-              onSessionClick={navigateToSessions}
+              onSessionNavigate={navigateToSession}
             />
           </TabsContent>
         </Tabs>

@@ -39,6 +39,7 @@ var skillNames = []string{
 	"unblock",
 	"reminder",
 	"handler-debug",
+	"ui",
 }
 
 func runUninstall(cmd *cobra.Command, args []string) error {

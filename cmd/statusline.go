@@ -313,6 +313,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	renderAutoDeliveredLine(d, session)
 	renderInboxModeLine(session)
 	renderWatchingLine(d, session, cfg, false)
+	renderUILine()
 
 	// Dispatch terminal notification
 	dispatchNotification(session, unreadCount, unreadMsg)
@@ -647,6 +648,11 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	}
 	fmt.Println()
 	return unreadCount, notifyMsg
+}
+
+func renderUILine() {
+	fmt.Printf("%s/ui%s %sto manage this session in the handler web dashboard%s\n",
+		colorHint, colorReset, colorDim, colorReset)
 }
 
 func renderReminderLines(d *db.DB, session *db.Session) {

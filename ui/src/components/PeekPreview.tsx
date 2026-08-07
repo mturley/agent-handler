@@ -13,58 +13,109 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { Eye, ArrowUpRight } from "lucide-react"
+import { Eye, Terminal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getSessionPeek } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 
-// Wrap any element with a peek hover card showing cached terminal output.
-// Use on switch buttons outside of SessionCard (e.g. alert summary, resource cards).
-interface PeekHoverCardProps {
+// A session link that navigates to the session's detail page (left/main part).
+// When cmux is available, it becomes a split compound button whose right segment
+// switches cmux to the session (with terminal peek on hover), matching
+// PeekSwitchButton's switch behavior. Used outside session cards (alert card,
+// timeline events, resource cards).
+interface SessionLinkButtonProps {
   sessionId: string
+  sessionName: string
+  cmuxAvailable: boolean
+  onNavigate: (id: string) => void
+  onSwitch: (id: string) => void
   highlightColor?: "amber" | "red" | "blue" | "purple"
-  children: React.ReactNode
+  /** Optional content shown after the name inside the navigate button (e.g. an unread breakdown). */
+  extra?: React.ReactNode
+  /** "xs" is a compact variant for dense contexts like timeline events. */
+  size?: "sm" | "xs"
 }
 
-export function PeekHoverCard({ sessionId, highlightColor, children }: PeekHoverCardProps) {
+export function SessionLinkButton({
+  sessionId,
+  sessionName,
+  cmuxAvailable,
+  onNavigate,
+  onSwitch,
+  highlightColor,
+  extra,
+  size = "sm",
+}: SessionLinkButtonProps) {
   const [hovered, setHovered] = useState(false)
-
   const { data: peekState } = useQuery({
     queryKey: queryKeys.peek(sessionId),
     queryFn: () => getSessionPeek(sessionId),
-    enabled: hovered,
+    enabled: cmuxAvailable && hovered,
     staleTime: 5_000,
-    refetchInterval: hovered ? 5_000 : false,
+    refetchInterval: cmuxAvailable && hovered ? 5_000 : false,
   })
-
-  const rawContent = peekState?.content || ""
-  const trimmedContent = truncateAtWatching(rawContent, peekState?.needs_input)
+  const trimmedContent = truncateAtWatching(peekState?.content || "", peekState?.needs_input)
 
   const scrollToBottom = useCallback((el: HTMLElement | null) => {
-    if (el) {
-      requestAnimationFrame(() => {
-        el.scrollTop = el.scrollHeight
-      })
-    }
+    if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
   }, [])
 
+  const seg = size === "xs" ? "h-5 px-1.5 text-[11px]" : "h-7 px-2 text-xs"
+  const iconSize = size === "xs" ? "h-2.5 w-2.5" : "h-3 w-3"
+
+  const navButton = (
+    <button
+      className={cn(
+        "inline-flex items-center gap-1 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer",
+        seg,
+        cmuxAvailable ? "rounded-l-md" : "rounded-md"
+      )}
+      onClick={() => onNavigate(sessionId)}
+      title="Open session page"
+    >
+      <span className="truncate">{sessionName}</span>
+      {extra}
+    </button>
+  )
+
+  // No cmux → just the plain navigate button (no switch, no peek).
+  if (!cmuxAvailable) {
+    return <div className="inline-flex rounded-md border border-input max-w-full">{navButton}</div>
+  }
+
+  // The peek-on-hover popover is scoped to ONLY the Switch (right) segment, so
+  // hovering the session name doesn't trigger a terminal peek.
+  const switchButton = (
+    <button
+      className={cn(
+        "inline-flex items-center gap-1 border-l border-input rounded-r-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer text-muted-foreground",
+        seg
+      )}
+      onClick={() => onSwitch(sessionId)}
+      onMouseEnter={() => setHovered(true)}
+      title="Switch to this session in cmux"
+    >
+      Switch
+      <Terminal className={iconSize} />
+    </button>
+  )
+
   return (
-    <HoverCard openDelay={300} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <span onMouseEnter={() => setHovered(true)}>
-          {children}
-        </span>
-      </HoverCardTrigger>
-      <HoverCardContent
-        side="bottom"
-        align="end"
-        className={cn("w-[90vw] max-w-[900px] p-0", highlightColor && highlightClass[highlightColor])}
-      >
-        <pre ref={scrollToBottom} className={cn("bg-black text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden", highlightColor && highlightTerminalBg[highlightColor])}>
-          {trimmedContent || "No peek data available"}
-        </pre>
-      </HoverCardContent>
-    </HoverCard>
+    <div className="inline-flex rounded-md border border-input max-w-full">
+      {navButton}
+      <HoverCard openDelay={300} closeDelay={100}>
+        <HoverCardTrigger asChild>{switchButton}</HoverCardTrigger>
+        <HoverCardContent
+          side="bottom"
+          align="end"
+          className={cn("w-[90vw] max-w-[900px] p-0", highlightColor && highlightClass[highlightColor])}
+        >
+          <pre ref={scrollToBottom} className={cn("bg-black text-slate-300 font-mono text-[11px] leading-tight p-3 rounded-md whitespace-pre-wrap break-all max-h-[50vh] overflow-y-auto overflow-x-hidden", highlightColor && highlightTerminalBg[highlightColor])}>
+            {trimmedContent || "No peek data available"}
+          </pre>
+        </HoverCardContent>
+      </HoverCard>
+    </div>
   )
 }
 
@@ -157,7 +208,7 @@ export function PeekSwitchButton({
                 title="Switch to this session in cmux"
               >
                 Switch
-                <ArrowUpRight className="h-3 w-3" />
+                <Terminal className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -194,7 +245,7 @@ export function PeekSwitchButton({
                 }}
               >
                 Switch
-                <ArrowUpRight className="h-3 w-3 ml-1" />
+                <Terminal className="h-3 w-3 ml-1" />
               </Button>
             )}
             <Button variant="secondary" size="sm" onClick={() => setModalOpen(false)}>

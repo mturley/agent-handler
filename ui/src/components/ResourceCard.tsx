@@ -10,11 +10,10 @@ import {
   ExternalLink,
   ChevronRight,
   ChevronDown,
-  ArrowUpRight,
   AlertTriangle,
   Clock,
 } from "lucide-react"
-import { PeekHoverCard } from "@/components/PeekPreview"
+import { SessionLinkButton } from "@/components/PeekPreview"
 import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
 
 interface ResourceCardProps {
@@ -22,7 +21,8 @@ interface ResourceCardProps {
   cmuxAvailable: boolean
   onSwitch: (sessionId: string) => void
   onTimelineClick: (resourceType: string, resourceId: string) => void
-  onSessionClick: (sessionName: string) => void
+  /** Navigate to a session's detail page. */
+  onSessionNavigate: (sessionId: string) => void
 }
 
 // PR state interface
@@ -62,7 +62,7 @@ export function ResourceCard({
   cmuxAvailable,
   onSwitch,
   onTimelineClick,
-  onSessionClick,
+  onSessionNavigate,
 }: ResourceCardProps) {
   const [expanded, setExpanded] = useState(false)
   const isPR = resource.resource_type === "pr"
@@ -200,28 +200,14 @@ export function ResourceCard({
         {resource.sessions.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap mb-2">
             {resource.sessions.map((session) => (
-              cmuxAvailable && session.display_state !== "dead" ? (
-                <PeekHoverCard key={session.session_id} sessionId={session.session_id}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={() => onSwitch(session.session_id)}
-                  >
-                    {session.session_name}
-                    <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                  </Button>
-                </PeekHoverCard>
-              ) : (
-                <Badge
-                  key={session.session_id}
-                  variant="outline"
-                  className="text-xs font-normal cursor-pointer hover:bg-muted"
-                  onClick={() => onSessionClick(session.session_name)}
-                >
-                  {session.session_name}
-                </Badge>
-              )
+              <SessionLinkButton
+                key={session.session_id}
+                sessionId={session.session_id}
+                sessionName={session.session_name}
+                cmuxAvailable={cmuxAvailable && session.display_state !== "dead"}
+                onNavigate={onSessionNavigate}
+                onSwitch={onSwitch}
+              />
             ))}
           </div>
         )}

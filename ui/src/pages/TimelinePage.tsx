@@ -7,8 +7,11 @@ import { Loader2 } from "lucide-react"
 interface TimelinePageProps {
   cmuxAvailable?: boolean
   onSwitch?: (sessionId: string) => void
+  onNavigate?: (sessionId: string) => void
   sessionFilter?: string
   includeArchived?: boolean
+  /** Hide the filter bar entirely (used by the single-session detail page). */
+  hideFilters?: boolean
 }
 
 function getUrlParams() {
@@ -29,7 +32,7 @@ function updateUrlParams(opts: { session?: string; resource?: string; archived?:
   window.history.replaceState(null, "", qs ? `/timeline?${qs}` : "/timeline")
 }
 
-export function TimelinePage({ cmuxAvailable, onSwitch, sessionFilter: propSessionFilter, includeArchived: propIncludeArchived }: TimelinePageProps) {
+export function TimelinePage({ cmuxAvailable, onSwitch, onNavigate, sessionFilter: propSessionFilter, includeArchived: propIncludeArchived, hideFilters }: TimelinePageProps) {
   const {
     events,
     loading,
@@ -130,6 +133,7 @@ export function TimelinePage({ cmuxAvailable, onSwitch, sessionFilter: propSessi
         onIncludeArchivedChange={handleIncludeArchivedChange}
         onCategoryFilterToggle={handleCategoryFilterToggle}
         onSearchChange={setSearchText}
+        categoriesOnly={hideFilters}
       />
 
       {loading && (
@@ -149,7 +153,7 @@ export function TimelinePage({ cmuxAvailable, onSwitch, sessionFilter: propSessi
           <div className="relative ml-8 space-y-4">
             <div className="absolute -left-[20px] top-0 bottom-0 w-0 border-l-2 border-slate-700" />
             {events.map((event) => (
-              <TimelineEvent key={event.id} event={event} cmuxAvailable={cmuxAvailable} onSwitch={onSwitch} />
+              <TimelineEvent key={event.id} event={event} cmuxAvailable={cmuxAvailable} onSwitch={onSwitch} onNavigate={onNavigate} />
             ))}
           </div>
 

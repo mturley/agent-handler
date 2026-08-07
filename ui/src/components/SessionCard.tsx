@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button"
 import type { Session } from "@/api/types"
 import { timeAgo } from "@/utils/timeAgo"
 import { cn } from "@/lib/utils"
-import { CircleAlert, ArrowUpRight, Mail, List, OctagonAlert, Asterisk } from "lucide-react"
+import { CircleAlert, Terminal, Mail, List, OctagonAlert, Asterisk, Bell } from "lucide-react"
 import { PeekSwitchButton } from "@/components/PeekPreview"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { formatEventType } from "@/utils/formatLabel"
+import { ContextBar, SessionInfoDetails, hasSessionInfo } from "@/components/SessionInfo"
 
 const stateColors: Record<string, string> = {
   active: "bg-green-500",
@@ -39,9 +40,14 @@ interface SessionCardProps {
   cmuxAvailable: boolean
   isTimelineActive?: boolean
   onSwitch: (id: string) => void
-  onInboxOpen: (id: string) => void
   onResourcesOpen: (id: string) => void
   onTimelineClick: (id: string) => void
+  /** When set, clicking the card body (not its inner controls) navigates. */
+  onCardClick?: (id: string) => void
+  /** Hide the "view timeline" button (e.g. on the single-session page). */
+  hideTimelineButton?: boolean
+  /** Show model/context/cost details inline under the context bar (detail page). */
+  expandedInfo?: boolean
 }
 
 export function SessionCard({
@@ -51,16 +57,31 @@ export function SessionCard({
   cmuxAvailable,
   isTimelineActive,
   onSwitch,
-  onInboxOpen,
   onResourcesOpen,
   onTimelineClick,
+  onCardClick,
+  hideTimelineButton,
+  expandedInfo,
 }: SessionCardProps) {
   const name = session.session_name || session.session_id.slice(0, 12)
 
-  return (
+  // Split unread into non-reminder events (blue) and reminders (purple).
+  const breakdown = session.unread_breakdown ?? {}
+  const reminderCount = breakdown["reminder"] ?? 0
+  const nonReminderEntries = Object.entries(breakdown)
+    .filter(([type]) => type !== "reminder")
+    .sort(([a], [b]) => a.localeCompare(b))
+  const nonReminderCount = session.unread_count - reminderCount
+  const nonReminderTypes = nonReminderEntries
+    .map(([type, count]) => `${count} ${formatEventType(type)}`)
+    .join(", ")
+
+  const card = (
     <Card
+      onClick={onCardClick ? () => onCardClick(session.session_id) : undefined}
       className={cn(
         "transition-colors",
+        onCardClick && "cursor-pointer hover:bg-accent/40",
         session.needs_input && "border-2 border-amber-500/50 bg-amber-950/20",
         session.blocked && !session.needs_input && "border-2 border-red-500/50 bg-red-950/20",
         session.unread_count > 0 && !session.needs_input && !session.blocked && "border-2 border-blue-500/50 bg-blue-950/20"
@@ -88,32 +109,36 @@ export function SessionCard({
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={isTimelineActive ? "default" : "ghost"}
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => onTimelineClick(session.session_id)}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>View session timeline</TooltipContent>
-            </Tooltip>
+            {!hideTimelineButton && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isTimelineActive ? "default" : "ghost"}
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={(e) => { e.stopPropagation(); onTimelineClick(session.session_id) }}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>View session timeline</TooltipContent>
+              </Tooltip>
+            )}
             {session.peekable && session.display_state !== "dead" ? (
-              <PeekSwitchButton
-                sessionId={session.session_id}
-                sessionName={name}
-                cmuxAvailable={cmuxAvailable}
-                highlightColor={
-                  session.needs_input ? "amber" :
-                  session.blocked ? "red" :
-                  session.unread_count > 0 ? "blue" :
-                  undefined
-                }
-                onSwitch={onSwitch}
-              />
+              <span onClick={(e) => e.stopPropagation()}>
+                <PeekSwitchButton
+                  sessionId={session.session_id}
+                  sessionName={name}
+                  cmuxAvailable={cmuxAvailable}
+                  highlightColor={
+                    session.needs_input ? "amber" :
+                    session.blocked ? "red" :
+                    session.unread_count > 0 ? "blue" :
+                    undefined
+                  }
+                  onSwitch={onSwitch}
+                />
+              </span>
             ) : cmuxAvailable && session.display_state !== "dead" ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -121,10 +146,10 @@ export function SessionCard({
                     variant="outline"
                     size="sm"
                     className="h-7 text-xs"
-                    onClick={() => onSwitch(session.session_id)}
+                    onClick={(e) => { e.stopPropagation(); onSwitch(session.session_id) }}
                   >
                     Switch
-                    <ArrowUpRight className="h-3 w-3 ml-1" />
+                    <Terminal className="h-3 w-3 ml-1" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Switch to this session in cmux</TooltipContent>
@@ -133,55 +158,43 @@ export function SessionCard({
           </div>
         </div>
       </CardHeader>
-      {session.context_percent > 0 && (
-        <div className="px-4 mt-0.5 pb-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden cursor-default">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all",
-                    session.context_percent >= 80 ? "bg-red-400/60" :
-                    session.context_percent >= 50 ? "bg-yellow-400/50" : "bg-green-400/40"
-                  )}
-                  style={{ width: `${session.context_percent}%` }}
-                />
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <div className="space-y-0.5">
-                {session.model && <div className="font-medium">{session.model}</div>}
-                <div>{session.context_percent}% context used</div>
-                {session.true_cost_usd != null && (
-                  <div>
-                    ${session.true_cost_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} total
-                    {session.today_cost_usd != null && session.today_cost_usd > 0 && (
-                      <span> (${session.today_cost_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} today)</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </TooltipContent>
-          </Tooltip>
+      {(session.context_percent > 0 || (expandedInfo && hasSessionInfo(session))) && (
+        <div className="px-4 mt-0.5 pb-2 space-y-1.5">
+          {session.context_percent > 0 && <ContextBar session={session} />}
+          {expandedInfo && hasSessionInfo(session) && (
+            <div className="text-xs text-muted-foreground">
+              <SessionInfoDetails session={session} />
+            </div>
+          )}
         </div>
       )}
       {session.blocked && (
-        <div className="px-4 pb-1 -mt-1 pl-8">
+        <div className="px-4 py-1.5 pl-8">
           <span className="inline-flex items-center gap-1 text-red-400 text-xs">
             <OctagonAlert className="h-3.5 w-3.5 shrink-0" />
             Blocked{session.blocked_reason ? `: ${session.blocked_reason}` : ""}
           </span>
         </div>
       )}
-      {session.unread_count > 0 && (
-        <div
-          className="px-4 pb-1 -mt-1 pl-8 cursor-pointer"
-          onClick={() => onInboxOpen(session.session_id)}
-        >
-          <span className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs">
-            <Mail className="h-3.5 w-3.5" />
-            {session.unread_count} unread
-          </span>
+      {(nonReminderCount > 0 || reminderCount > 0) && (
+        <div className="px-4 py-1.5 pl-8 flex flex-col gap-0.5">
+          {nonReminderCount > 0 && (
+            <span className="inline-flex items-start gap-1 text-blue-400 text-xs">
+              <Mail className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>
+                {nonReminderCount} unread
+                {nonReminderTypes && (
+                  <span className="text-blue-400/70"> ({nonReminderTypes})</span>
+                )}
+              </span>
+            </span>
+          )}
+          {reminderCount > 0 && (
+            <span className="inline-flex items-center gap-1 text-purple-400 text-xs">
+              <Bell className="h-3.5 w-3.5 shrink-0" />
+              {reminderCount} reminder{reminderCount !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       )}
       <CardContent className="px-4 pb-3 pt-0">
@@ -197,7 +210,7 @@ export function SessionCard({
             <Badge
               variant="outline"
               className="text-xs font-normal cursor-pointer hover:bg-accent gap-1"
-              onClick={() => onResourcesOpen(session.session_id)}
+              onClick={(e) => { e.stopPropagation(); onResourcesOpen(session.session_id) }}
             >
               {session.subscriptions_breakdown
                 ? Object.entries(session.subscriptions_breakdown)
@@ -231,4 +244,20 @@ export function SessionCard({
       </CardContent>
     </Card>
   )
+
+  // Whole-card hover tooltip (model / context / cost) shown to the right, so it
+  // doesn't fight the card's own click-to-navigate behavior. Only when the card
+  // is clickable — the detail page shows this info inline instead.
+  if (onCardClick && hasSessionInfo(session)) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent side="right">
+          <SessionInfoDetails session={session} />
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
+  return card
 }

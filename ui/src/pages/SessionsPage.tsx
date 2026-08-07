@@ -13,18 +13,16 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SessionCard } from "@/components/SessionCard"
 import { ArchivedSessionCard } from "@/components/ArchivedSessionCard"
-import { InboxDialog } from "@/components/InboxDialog"
-import { ResourcesDialog } from "@/components/ResourcesDialog"
 import { useSessions, type FilterChip, type SortField } from "@/hooks/useSessions"
 import { useArchivedSessions } from "@/hooks/useArchivedSessions"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { switchSession, archiveSessions } from "@/api/client"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, ArrowUpRight, Skull, Loader2, Bell } from "lucide-react"
+import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, Skull, Loader2, Bell } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { formatEventType } from "@/utils/formatLabel"
-import { PeekHoverCard } from "@/components/PeekPreview"
+import { SessionLinkButton } from "@/components/PeekPreview"
 
 const filterChips: { key: FilterChip; label: string }[] = [
   { key: "active", label: "Active" },
@@ -38,9 +36,12 @@ interface SessionsPageProps {
   cmuxAvailable: boolean
   onTimelineClick: (sessionId: string, archived?: boolean) => void
   activeTimelineSessionId?: string
+  onCardClick?: (id: string) => void
+  /** Navigate to the session's detail page focused on its Resources tab. */
+  onResourcesOpen: (id: string) => void
 }
 
-export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSessionId }: SessionsPageProps) {
+export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSessionId, onCardClick, onResourcesOpen }: SessionsPageProps) {
   const {
     grouped,
     search,
@@ -63,13 +64,6 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
 
   const archived = useArchivedSessions()
 
-  // Apply search query from URL
-  useEffect(() => {
-    const urlSearch = new URLSearchParams(window.location.search).get("search")
-    if (urlSearch) {
-      setSearch(urlSearch)
-    }
-  }, [setSearch])
 
   const queryClient = useQueryClient()
   const archiveMutation = useMutation({
@@ -80,16 +74,6 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
     },
     onError: () => toast.error("Failed to archive sessions"),
   })
-
-  const [inboxSession, setInboxSession] = useState<{
-    id: string
-    name: string
-  } | null>(null)
-
-  const [resourcesSession, setResourcesSession] = useState<{
-    id: string
-    name: string
-  } | null>(null)
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
@@ -106,29 +90,6 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
     []
   )
 
-  const handleInboxOpen = useCallback(
-    (id: string) => {
-      const all = grouped.flatMap((g) => g.workspaces.flatMap((w) => w.sessions))
-      const s = all.find((s) => s.session_id === id)
-      setInboxSession({
-        id,
-        name: s?.session_name || id.slice(0, 12),
-      })
-    },
-    [grouped]
-  )
-
-  const handleResourcesOpen = useCallback(
-    (id: string) => {
-      const all = grouped.flatMap((g) => g.workspaces.flatMap((w) => w.sessions))
-      const s = all.find((s) => s.session_id === id)
-      setResourcesSession({
-        id,
-        name: s?.session_name || id.slice(0, 12),
-      })
-    },
-    [grouped]
-  )
 
   const totalSessions = grouped.reduce(
     (n, g) => n + g.workspaces.reduce((m, w) => m + w.sessions.length, 0),
@@ -192,18 +153,15 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                   </span>
                   <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
                     {awaitingSessions.map((s) => (
-                      <PeekHoverCard key={s.session_id} sessionId={s.session_id} highlightColor="amber">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          disabled={!cmuxAvailable}
-                          onClick={() => handleSwitch(s.session_id)}
-                        >
-                          {s.session_name || s.session_id.slice(0, 12)}
-                          <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                        </Button>
-                      </PeekHoverCard>
+                      <SessionLinkButton
+                        key={s.session_id}
+                        sessionId={s.session_id}
+                        sessionName={s.session_name || s.session_id.slice(0, 12)}
+                        cmuxAvailable={cmuxAvailable}
+                        onNavigate={onCardClick ?? (() => {})}
+                        onSwitch={handleSwitch}
+                        highlightColor="amber"
+                      />
                     ))}
                   </div>
                 </div>
@@ -225,21 +183,16 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                             .join(", ")
                         : ""
                       return (
-                        <PeekHoverCard key={s.session_id} sessionId={s.session_id} highlightColor="blue">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-auto py-1 text-xs whitespace-normal text-left"
-                            disabled={!cmuxAvailable}
-                            onClick={() => handleSwitch(s.session_id)}
-                          >
-                            <span className="shrink-0">{s.session_name || s.session_id.slice(0, 12)}</span>
-                            {breakdown && (
-                              <span className="text-muted-foreground ml-1">({breakdown})</span>
-                            )}
-                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                          </Button>
-                        </PeekHoverCard>
+                        <SessionLinkButton
+                          key={s.session_id}
+                          sessionId={s.session_id}
+                          sessionName={s.session_name || s.session_id.slice(0, 12)}
+                          cmuxAvailable={cmuxAvailable}
+                          onNavigate={onCardClick ?? (() => {})}
+                          onSwitch={handleSwitch}
+                          highlightColor="blue"
+                          extra={breakdown ? <span className="text-muted-foreground">({breakdown})</span> : undefined}
+                        />
                       )
                     })}
                   </div>
@@ -257,19 +210,16 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                     {reminderSessions.map((s) => {
                       const count = s.unread_breakdown?.reminder || s.unread_count
                       return (
-                        <PeekHoverCard key={s.session_id} sessionId={s.session_id} highlightColor="purple">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={!cmuxAvailable}
-                            onClick={() => handleSwitch(s.session_id)}
-                          >
-                            {s.session_name || s.session_id.slice(0, 12)}
-                            <span className="text-muted-foreground ml-1">({count})</span>
-                            <ArrowUpRight className="h-3.5 w-3.5 ml-1 text-muted-foreground" />
-                          </Button>
-                        </PeekHoverCard>
+                        <SessionLinkButton
+                          key={s.session_id}
+                          sessionId={s.session_id}
+                          sessionName={s.session_name || s.session_id.slice(0, 12)}
+                          cmuxAvailable={cmuxAvailable}
+                          onNavigate={onCardClick ?? (() => {})}
+                          onSwitch={handleSwitch}
+                          highlightColor="purple"
+                          extra={<span className="text-muted-foreground">({count})</span>}
+                        />
                       )
                     })}
                   </div>
@@ -467,9 +417,9 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                       showRepoInfo={!groupByRepo}
                       cmuxAvailable={cmuxAvailable}
                       onSwitch={handleSwitch}
-                      onInboxOpen={handleInboxOpen}
-                      onResourcesOpen={handleResourcesOpen}
+                      onResourcesOpen={onResourcesOpen}
                       onTimelineClick={onTimelineClick}
+                      onCardClick={onCardClick}
                       isTimelineActive={activeTimelineSessionId === session.session_id}
                     />
                   ))}
@@ -551,9 +501,9 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
                                     showRepoInfo={sortField !== "cmux"}
                                     cmuxAvailable={cmuxAvailable}
                                     onSwitch={handleSwitch}
-                                    onInboxOpen={handleInboxOpen}
-                                    onResourcesOpen={handleResourcesOpen}
+                                    onResourcesOpen={onResourcesOpen}
                                     onTimelineClick={onTimelineClick}
+                                    onCardClick={onCardClick}
                                     isTimelineActive={activeTimelineSessionId === session.session_id}
                                   />
                                 ))}
@@ -647,22 +597,6 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
           )}
         </TabsContent>
       </Tabs>
-
-      {/* Inbox dialog */}
-      <InboxDialog
-        sessionId={inboxSession?.id ?? null}
-        sessionName={inboxSession?.name ?? ""}
-        cmuxAvailable={cmuxAvailable}
-        onClose={() => setInboxSession(null)}
-      />
-
-      {/* Resources dialog */}
-      <ResourcesDialog
-        sessionId={resourcesSession?.id ?? null}
-        sessionName={resourcesSession?.name ?? ""}
-        cmuxAvailable={cmuxAvailable}
-        onClose={() => setResourcesSession(null)}
-      />
     </div>
   )
 }

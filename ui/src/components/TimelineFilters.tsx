@@ -26,6 +26,8 @@ export interface TimelineFiltersProps {
   onIncludeArchivedChange: (include: boolean) => void
   onCategoryFilterToggle: (category: string) => void
   onSearchChange: (text: string) => void
+  /** Render only the category chips (used on the single-session page). */
+  categoriesOnly?: boolean
 }
 
 export const CATEGORY_TYPES: Record<string, string[]> = {
@@ -55,6 +57,7 @@ export function TimelineFilters({
   onIncludeArchivedChange,
   onCategoryFilterToggle,
   onSearchChange,
+  categoriesOnly,
 }: TimelineFiltersProps) {
   const { data: activeSessions = [] } = useQuery<Session[]>({
     queryKey: queryKeys.sessions,
@@ -92,6 +95,7 @@ export function TimelineFilters({
   return (
     <div className="space-y-3">
       {/* Filters row */}
+      {!categoriesOnly && (
       <div className="flex gap-2 flex-wrap items-center">
         <Select
           value={sessionFilter || "all"}
@@ -153,6 +157,7 @@ export function TimelineFilters({
           className="flex-1 min-w-[200px]"
         />
       </div>
+      )}
 
       {/* Category filter chips */}
       <div className="flex gap-1.5 flex-wrap">

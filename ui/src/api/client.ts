@@ -34,7 +34,7 @@ export interface SessionResource {
 }
 
 export async function getSessionResources(sessionId: string): Promise<SessionResource[]> {
-  return fetchJSON<SessionResource[]>(`/api/sessions/${encodeURIComponent(sessionId)}/resources`)
+  return (await fetchJSON<SessionResource[] | null>(`/api/sessions/${encodeURIComponent(sessionId)}/resources`)) ?? []
 }
 
 export interface CostMonthSummary {
@@ -84,7 +84,7 @@ export async function getSessionPeek(id: string): Promise<PeekState> {
 }
 
 export async function getSessionInbox(id: string): Promise<Event[]> {
-  return fetchJSON<Event[]>(`/api/sessions/${encodeURIComponent(id)}/inbox`)
+  return (await fetchJSON<Event[] | null>(`/api/sessions/${encodeURIComponent(id)}/inbox`)) ?? []
 }
 
 export async function getCapabilities(): Promise<Capabilities> {
