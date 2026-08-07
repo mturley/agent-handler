@@ -37,6 +37,16 @@ export async function getSessionResources(sessionId: string): Promise<SessionRes
   return (await fetchJSON<SessionResource[] | null>(`/api/sessions/${encodeURIComponent(sessionId)}/resources`)) ?? []
 }
 
+export interface SessionCostSummary {
+  enabled: boolean
+  total_cost_usd: number
+  days: { date: string; cost_usd: number; session_count: number }[]
+}
+
+export async function getSessionCost(sessionId: string): Promise<SessionCostSummary> {
+  return fetchJSON<SessionCostSummary>(`/api/sessions/${encodeURIComponent(sessionId)}/cost`)
+}
+
 export interface CostMonthSummary {
   label: string
   full_label: string

@@ -31,6 +31,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /api/sessions/{id}/peek", s.handleSessionPeek)
 	mux.HandleFunc("GET /api/sessions/{id}/inbox", s.handleSessionInbox)
 	mux.HandleFunc("GET /api/sessions/{id}/resources", s.handleSessionResources)
+	mux.HandleFunc("GET /api/sessions/{id}/cost", s.handleSessionCost)
 	mux.HandleFunc("GET /api/resources", s.handleResources)
 	mux.HandleFunc("GET /api/cost", s.handleCost)
 	mux.HandleFunc("GET /api/events", s.handleEvents)

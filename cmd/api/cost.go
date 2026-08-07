@@ -37,6 +37,50 @@ type sessionCostEntry struct {
 	OutputTokens int     `json:"output_tokens"`
 }
 
+type sessionCostSummary struct {
+	Enabled       bool             `json:"enabled"`
+	TotalCostUSD  float64          `json:"total_cost_usd"`
+	Days          []dailyCostEntry `json:"days"`
+}
+
+func (s *Server) handleSessionCost(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.PathValue("id")
+	if sessionID == "" {
+		writeError(w, http.StatusBadRequest, "session id is required")
+		return
+	}
+
+	cfg, _ := config.Read(config.DefaultPath())
+	if cfg == nil || !cfg.ExperimentalCostDisplay() {
+		writeJSON(w, http.StatusOK, sessionCostSummary{Enabled: false})
+		return
+	}
+
+	now := time.Now().UTC()
+	end := now.Format("2006-01-02")
+	start := now.AddDate(0, 0, -29).Format("2006-01-02") // last 30 days inclusive
+
+	rows, err := s.DB.QueryDailyCostForSession(sessionID, start, end)
+	if err != nil {
+		s.Logger.Printf("Error querying session cost for %s: %v", sessionID, err)
+		writeError(w, http.StatusInternalServerError, "Failed to query session cost")
+		return
+	}
+
+	days := make([]dailyCostEntry, 0, len(rows))
+	var total float64
+	for _, dc := range rows {
+		days = append(days, dailyCostEntry{Date: dc.Date, CostUSD: dc.CostUSD, SessionCount: 1})
+		total += dc.CostUSD
+	}
+
+	writeJSON(w, http.StatusOK, sessionCostSummary{
+		Enabled:      true,
+		TotalCostUSD: total,
+		Days:         days,
+	})
+}
+
 func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := config.Read(config.DefaultPath())
 	if cfg == nil || !cfg.ExperimentalCostDisplay() {

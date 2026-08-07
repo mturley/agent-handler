@@ -8,9 +8,10 @@ import { SessionCard } from "@/components/SessionCard"
 import { InboxContent } from "@/components/InboxContent"
 import { ResourcesContent } from "@/components/ResourcesContent"
 import { AttentionCard } from "@/components/AttentionCard"
+import { DailySpendChart } from "@/components/DailySpendChart"
 import { useSessions } from "@/hooks/useSessions"
 import { TimelinePage } from "@/pages/TimelinePage"
-import { getSessions, getArchivedSessions, getEvents, getSessionResources, switchSession } from "@/api/client"
+import { getSessions, getArchivedSessions, getEvents, getSessionResources, getSessionCost, switchSession } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
 import { formatEventType } from "@/utils/formatLabel"
@@ -22,7 +23,7 @@ interface SessionDetailPageProps {
   cmuxAvailable: boolean
 }
 
-const VALID_TABS = ["timeline", "resources"] as const
+const VALID_TABS = ["timeline", "resources", "cost"] as const
 
 function getTab(): string {
   const t = new URLSearchParams(window.location.search).get("tab")
@@ -82,6 +83,12 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
       return `${count} ${label}`
     })
     .join(", ")
+
+  const { data: cost } = useQuery({
+    queryKey: ["session-cost", sessionId],
+    queryFn: () => getSessionCost(sessionId),
+  })
+  const costEnabled = cost?.enabled ?? false
 
   const handleTabChange = useCallback((value: string) => {
     setTab(value)
@@ -151,7 +158,7 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             showHeader
           />
 
-          <Tabs value={tab} onValueChange={handleTabChange}>
+          <Tabs value={tab === "cost" && !costEnabled ? "timeline" : tab} onValueChange={handleTabChange}>
             <TabsList>
               <TabsTrigger value="timeline">
                 Timeline
@@ -169,6 +176,16 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
                   </Badge>
                 )}
               </TabsTrigger>
+              {costEnabled && (
+                <TabsTrigger value="cost">
+                  Cost
+                  {cost && cost.total_cost_usd > 0 && (
+                    <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                      ${cost.total_cost_usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="timeline">
@@ -184,6 +201,18 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             <TabsContent value="resources">
               <ResourcesContent sessionId={sessionId} scrollClassName="max-h-[60vh]" />
             </TabsContent>
+
+            {costEnabled && (
+              <TabsContent value="cost">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold">
+                    Daily Spend
+                    <span className="text-xs font-normal text-muted-foreground ml-1.5">last 30 days</span>
+                  </h3>
+                  <DailySpendChart days={cost?.days ?? []} height={120} />
+                </div>
+              </TabsContent>
+            )}
           </Tabs>
         </>
       ) : null}

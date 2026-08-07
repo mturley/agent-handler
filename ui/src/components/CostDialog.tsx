@@ -8,7 +8,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { getCostSummary, type CostMonthSummary } from "@/api/client"
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+import { DailySpendChart } from "@/components/DailySpendChart"
 
 interface CostDialogProps {
   open: boolean
@@ -20,50 +20,13 @@ function formatCost(v: number): string {
 }
 
 function MonthView({ month }: { month: CostMonthSummary }) {
-  const maxDailyCost = Math.max(...(month.daily_breakdown || []).map((d) => d.cost_usd), 1)
-
   return (
     <div className="space-y-6">
       {/* Daily bar chart */}
       {month.daily_breakdown && month.daily_breakdown.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold mb-2">Daily Spend</h3>
-          <div className="flex items-end gap-[2px]" style={{ height: 80 }}>
-            {month.daily_breakdown.map((day) => {
-              const barHeight = Math.max(Math.round((day.cost_usd / maxDailyCost) * 80), 2)
-              const dateObj = new Date(day.date + "T00:00:00")
-              const dayLabel = dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-              return (
-                <Tooltip key={day.date}>
-                  <TooltipTrigger asChild>
-                    <div className="flex-1 flex flex-col items-center justify-end cursor-default">
-                      <div
-                        className="w-full bg-green-500/60 rounded-t-sm hover:bg-green-400/80 transition-colors"
-                        style={{ height: barHeight }}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <div className="text-xs">
-                      <div className="font-medium">{dayLabel}</div>
-                      <div>{formatCost(day.cost_usd)}</div>
-                      <div className="text-muted-foreground">{day.session_count} session{day.session_count !== 1 ? "s" : ""}</div>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              )
-            })}
-          </div>
-          <div className="flex gap-[2px] mt-0.5">
-            {month.daily_breakdown.map((day) => {
-              const dateObj = new Date(day.date + "T00:00:00")
-              return (
-                <div key={day.date} className="flex-1 text-center">
-                  <span className="text-[9px] text-muted-foreground">{dateObj.getDate()}</span>
-                </div>
-              )
-            })}
-          </div>
+          <DailySpendChart days={month.daily_breakdown} />
         </div>
       )}
 

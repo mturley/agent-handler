@@ -242,6 +242,31 @@ func (db *DB) GetDailyCostForSession(sessionID, date string) (*DailyCost, error)
 	return &dc, nil
 }
 
+// QueryDailyCostForSession returns per-day cost rows for one session within an
+// inclusive date range, oldest first.
+func (db *DB) QueryDailyCostForSession(sessionID, startDate, endDate string) ([]DailyCost, error) {
+	rows, err := db.conn.Query(`
+		SELECT session_id, date, cost_usd, input_tokens, output_tokens
+		FROM daily_cost
+		WHERE session_id = ? AND date >= ? AND date <= ?
+		ORDER BY date ASC
+	`, sessionID, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query daily cost for session: %w", err)
+	}
+	defer rows.Close()
+
+	var results []DailyCost
+	for rows.Next() {
+		var dc DailyCost
+		if err := rows.Scan(&dc.SessionID, &dc.Date, &dc.CostUSD, &dc.InputTokens, &dc.OutputTokens); err != nil {
+			return nil, fmt.Errorf("failed to scan daily cost: %w", err)
+		}
+		results = append(results, dc)
+	}
+	return results, rows.Err()
+}
+
 func (db *DB) QueryDailyCostByDate(startDate, endDate string) ([]DateSummary, error) {
 	rows, err := db.conn.Query(`
 		SELECT date, SUM(cost_usd), COUNT(DISTINCT session_id)
