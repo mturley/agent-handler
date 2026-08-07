@@ -115,6 +115,14 @@ export async function dismissInbox(sessionId: string): Promise<ActionResponse> {
   })
 }
 
+export async function dismissEvent(sessionId: string, eventId: string): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/dismiss-event", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, event_id: eventId }),
+  })
+}
+
 export async function archiveSessions(sessionIds: string[]): Promise<ActionResponse> {
   return fetchJSON<ActionResponse>("/api/actions/archive-sessions", {
     method: "POST",

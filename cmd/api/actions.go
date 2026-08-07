@@ -21,6 +21,11 @@ type dismissInboxRequest struct {
 	SessionID string `json:"session_id"`
 }
 
+type dismissEventRequest struct {
+	SessionID string `json:"session_id"`
+	EventID   string `json:"event_id"`
+}
+
 func (s *Server) handleSwitch(w http.ResponseWriter, r *http.Request) {
 	var req switchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -112,6 +117,34 @@ func (s *Server) handleDismissInbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 	})
+}
+
+func (s *Server) handleDismissEvent(w http.ResponseWriter, r *http.Request) {
+	var req dismissEventRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if req.SessionID == "" || req.EventID == "" {
+		writeError(w, http.StatusBadRequest, "session_id and event_id are required")
+		return
+	}
+
+	writableDB, err := db.Open(db.DefaultPath())
+	if err != nil {
+		s.Logger.Printf("Error opening writable DB: %v", err)
+		writeError(w, http.StatusInternalServerError, "Failed to open database")
+		return
+	}
+	defer writableDB.Close()
+
+	if err := writableDB.DismissEvent(req.SessionID, req.EventID); err != nil {
+		s.Logger.Printf("Error dismissing event %s for %s: %v", req.EventID, req.SessionID, err)
+		writeError(w, http.StatusInternalServerError, "Failed to dismiss event")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
 }
 
 type archiveSessionsRequest struct {
