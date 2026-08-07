@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SessionCard } from "@/components/SessionCard"
 import { InboxContent } from "@/components/InboxContent"
 import { ResourcesContent } from "@/components/ResourcesContent"
+import { AttentionCard } from "@/components/AttentionCard"
+import { useSessions } from "@/hooks/useSessions"
 import { TimelinePage } from "@/pages/TimelinePage"
 import { getSessions, getArchivedSessions, getEvents, getSessionResources, switchSession } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
@@ -51,6 +53,12 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
     document.title = `Handler (${name})`
     return () => { document.title = "Agent Handler" }
   }, [name])
+
+  // Attention summary for OTHER sessions (exclude the one we're viewing).
+  const { awaitingSessions, unreadSessions, reminderSessions } = useSessions()
+  const otherAwaiting = awaitingSessions.filter((s) => s.session_id !== sessionId)
+  const otherUnread = unreadSessions.filter((s) => s.session_id !== sessionId)
+  const otherReminders = reminderSessions.filter((s) => s.session_id !== sessionId)
 
   // Tab badges: last timeline-event time, and per-type resource counts.
   const { data: latestEvents } = useQuery({
@@ -125,6 +133,16 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             sessionName={name}
             scrollClassName="max-h-[40vh]"
             showHeader
+          />
+
+          <AttentionCard
+            awaitingSessions={otherAwaiting}
+            unreadSessions={otherUnread}
+            reminderSessions={otherReminders}
+            cmuxAvailable={cmuxAvailable}
+            onNavigate={(id) => setLocation(`/sessions/${id}`)}
+            onSwitch={handleSwitch}
+            other
           />
 
           <Tabs value={tab} onValueChange={handleTabChange}>

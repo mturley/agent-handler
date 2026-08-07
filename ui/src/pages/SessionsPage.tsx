@@ -19,10 +19,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { switchSession, archiveSessions } from "@/api/client"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
-import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, CircleAlert, Mail, Skull, Loader2, Bell } from "lucide-react"
+import { ChevronRight, ChevronDown, ArrowUp, ArrowDown, Skull, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { formatEventType } from "@/utils/formatLabel"
-import { SessionLinkButton } from "@/components/PeekPreview"
+import { AttentionCard } from "@/components/AttentionCard"
 
 const filterChips: { key: FilterChip; label: string }[] = [
   { key: "active", label: "Active" },
@@ -141,94 +140,14 @@ export function SessionsPage({ cmuxAvailable, onTimelineClick, activeTimelineSes
   return (
     <div className="space-y-4">
       {/* Attention summary — above everything */}
-      {(awaitingSessions.length > 0 || unreadSessions.length > 0 || reminderSessions.length > 0) && (
-        <Card className="border-amber-500/30 bg-amber-500/5">
-          <CardContent className="px-4 py-3 space-y-3">
-            {awaitingSessions.length > 0 && (
-              <div className="flex items-start gap-2.5">
-                <CircleAlert className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-base font-bold text-amber-500">
-                    {awaitingSessions.length} session{awaitingSessions.length !== 1 ? "s" : ""} awaiting approval
-                  </span>
-                  <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
-                    {awaitingSessions.map((s) => (
-                      <SessionLinkButton
-                        key={s.session_id}
-                        sessionId={s.session_id}
-                        sessionName={s.session_name || s.session_id.slice(0, 12)}
-                        cmuxAvailable={cmuxAvailable}
-                        onNavigate={onCardClick ?? (() => {})}
-                        onSwitch={handleSwitch}
-                        highlightColor="amber"
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            {unreadSessions.length > 0 && (
-              <div className="flex items-start gap-2.5">
-                <Mail className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-base font-bold text-blue-400">
-                    {unreadSessions.length} session{unreadSessions.length !== 1 ? "s" : ""} with unread messages
-                  </span>
-                  <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
-                    {unreadSessions.map((s) => {
-                      const breakdown = s.unread_breakdown
-                        ? Object.entries(s.unread_breakdown)
-                            .sort(([a], [b]) => a.localeCompare(b))
-                            .map(([type, count]) => `${count} ${formatEventType(type)}`)
-                            .join(", ")
-                        : ""
-                      return (
-                        <SessionLinkButton
-                          key={s.session_id}
-                          sessionId={s.session_id}
-                          sessionName={s.session_name || s.session_id.slice(0, 12)}
-                          cmuxAvailable={cmuxAvailable}
-                          onNavigate={onCardClick ?? (() => {})}
-                          onSwitch={handleSwitch}
-                          highlightColor="blue"
-                          extra={breakdown ? <span className="text-muted-foreground">({breakdown})</span> : undefined}
-                        />
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-            {reminderSessions.length > 0 && (
-              <div className="flex items-start gap-2.5">
-                <Bell className="h-5 w-5 text-purple-400 shrink-0 mt-0.5" />
-                <div>
-                  <span className="text-base font-bold text-purple-400">
-                    {reminderSessions.length} session{reminderSessions.length !== 1 ? "s" : ""} with reminders
-                  </span>
-                  <div className="flex flex-wrap gap-x-1 gap-y-1 mt-1">
-                    {reminderSessions.map((s) => {
-                      const count = s.unread_breakdown?.reminder || s.unread_count
-                      return (
-                        <SessionLinkButton
-                          key={s.session_id}
-                          sessionId={s.session_id}
-                          sessionName={s.session_name || s.session_id.slice(0, 12)}
-                          cmuxAvailable={cmuxAvailable}
-                          onNavigate={onCardClick ?? (() => {})}
-                          onSwitch={handleSwitch}
-                          highlightColor="purple"
-                          extra={<span className="text-muted-foreground">({count})</span>}
-                        />
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <AttentionCard
+        awaitingSessions={awaitingSessions}
+        unreadSessions={unreadSessions}
+        reminderSessions={reminderSessions}
+        cmuxAvailable={cmuxAvailable}
+        onNavigate={onCardClick ?? (() => {})}
+        onSwitch={handleSwitch}
+      />
 
       {/* Dead sessions alert */}
       {deadSessions.length > 0 && (
