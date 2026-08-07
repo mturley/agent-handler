@@ -2,9 +2,17 @@ import { useState, useCallback } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { getSessionInbox, dismissInbox, dismissEvent } from "@/api/client"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { getSessionInbox, dismissInbox, dismissEvent, addReminder } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
 import { formatEventType } from "@/utils/formatLabel"
@@ -39,6 +47,8 @@ export function InboxContent({
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [confirmDismiss, setConfirmDismiss] = useState(false)
   const [confirmDismissEvent, setConfirmDismissEvent] = useState<string | null>(null)
+  const [reminderOpen, setReminderOpen] = useState(false)
+  const [reminderText, setReminderText] = useState("")
 
   const { data: events = [], isLoading: loading } = useQuery({
     queryKey: queryKeys.inbox(sessionId),
@@ -72,6 +82,21 @@ export function InboxContent({
       toast.error("Failed to dismiss event")
     },
     onSettled: () => setConfirmDismissEvent(null),
+  })
+
+  const addReminderMutation = useMutation({
+    mutationFn: (title: string) => addReminder(sessionId, title),
+    onSuccess: () => {
+      toast.success("Reminder added")
+      queryClient.invalidateQueries({ queryKey: queryKeys.inbox(sessionId) })
+      queryClient.invalidateQueries({ queryKey: ["sessions"] })
+      setReminderOpen(false)
+      setReminderText("")
+    },
+    onError: (e) => {
+      console.error(e)
+      toast.error("Failed to add reminder")
+    },
   })
 
   const toggleExpanded = useCallback((id: string) => {
@@ -181,10 +206,18 @@ export function InboxContent({
         })}
       </ScrollArea>
 
-      {events.length > 0 && (
-      <div className="flex items-center gap-2 justify-end pt-2">
+      <div className="flex items-center gap-2 justify-between pt-2">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1"
+          onClick={() => setReminderOpen(true)}
+        >
+          <Bell className="h-3.5 w-3.5" />
+          Add reminder
+        </Button>
         <div className="flex gap-2 ml-auto">
-          {!confirmDismiss ? (
+          {events.length === 0 ? null : !confirmDismiss ? (
             <Button
               variant="destructive"
               size="sm"
@@ -211,7 +244,37 @@ export function InboxContent({
           )}
         </div>
       </div>
-      )}
+
+      <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add a reminder for {sessionName}</DialogTitle>
+          </DialogHeader>
+          <Input
+            autoFocus
+            placeholder="What should this session be reminded of?"
+            value={reminderText}
+            onChange={(e) => setReminderText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && reminderText.trim()) {
+                addReminderMutation.mutate(reminderText.trim())
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setReminderOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!reminderText.trim() || addReminderMutation.isPending}
+              onClick={() => addReminderMutation.mutate(reminderText.trim())}
+            >
+              Add reminder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

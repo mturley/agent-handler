@@ -123,6 +123,14 @@ export async function dismissEvent(sessionId: string, eventId: string): Promise<
   })
 }
 
+export async function addReminder(sessionId: string, title: string): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/add-reminder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, title }),
+  })
+}
+
 export async function archiveSessions(sessionIds: string[]): Promise<ActionResponse> {
   return fetchJSON<ActionResponse>("/api/actions/archive-sessions", {
     method: "POST",

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mturley/agent-handler/db"
 )
 
@@ -141,6 +142,52 @@ func (s *Server) handleDismissEvent(w http.ResponseWriter, r *http.Request) {
 	if err := writableDB.DismissEvent(req.SessionID, req.EventID); err != nil {
 		s.Logger.Printf("Error dismissing event %s for %s: %v", req.EventID, req.SessionID, err)
 		writeError(w, http.StatusInternalServerError, "Failed to dismiss event")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true})
+}
+
+type addReminderRequest struct {
+	SessionID string `json:"session_id"`
+	Title     string `json:"title"`
+}
+
+func (s *Server) handleAddReminder(w http.ResponseWriter, r *http.Request) {
+	var req addReminderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if req.SessionID == "" || req.Title == "" {
+		writeError(w, http.StatusBadRequest, "session_id and title are required")
+		return
+	}
+
+	writableDB, err := db.Open(db.DefaultPath())
+	if err != nil {
+		s.Logger.Printf("Error opening writable DB: %v", err)
+		writeError(w, http.StatusInternalServerError, "Failed to open database")
+		return
+	}
+	defer writableDB.Close()
+
+	// A reminder targets the session it belongs to (session_id + a session
+	// recipient), mirroring `handler emit --type reminder`.
+	evt := db.Event{
+		ID:        uuid.New().String(),
+		TS:        time.Now().UTC().Format(time.RFC3339),
+		Source:    "web",
+		SessionID: &req.SessionID,
+		Type:      "reminder",
+		Title:     req.Title,
+	}
+	recipients := []db.EventRecipient{
+		{RecipientType: "session", RecipientValue: req.SessionID},
+	}
+	if err := writableDB.InsertEvent(evt, recipients, nil); err != nil {
+		s.Logger.Printf("Error adding reminder for %s: %v", req.SessionID, err)
+		writeError(w, http.StatusInternalServerError, "Failed to add reminder")
 		return
 	}
 
