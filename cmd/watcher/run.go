@@ -104,16 +104,14 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 		}
 		// BotUsernames and CustomFields are non-credential behavior settings,
 		// sourced from the watcher library's config.yaml (best-effort; absent
-		// file yields none). CustomFields falls back to auth.yaml's
-		// jira_custom_fields for back-compat with installs that haven't been
-		// relocated to config.yaml yet.
+		// file yields none). config.yaml is the single source of truth —
+		// `handler watcher auth` and the migration both write custom fields
+		// there, so the poller does not read them from auth.yaml.
 		var botUsernames []string
-		customFields := jc.CustomFields
+		var customFields map[string]string
 		if behaviorCfg, cfgErr := wcfg.LoadConfig(wcfg.ConfigDefaultPath()); cfgErr == nil {
 			botUsernames = behaviorCfg.JiraBotUsernames()
-			if cf := behaviorCfg.JiraCustomFields(); len(cf) > 0 {
-				customFields = cf
-			}
+			customFields = behaviorCfg.JiraCustomFields()
 		}
 		auth := wjira.JiraAuth{
 			URL:          jc.Host,

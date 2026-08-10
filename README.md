@@ -192,7 +192,7 @@ jira:
     git_pull_request: customfield_10875 # Linked PR
 ```
 
-Default custom fields are added automatically during `handler watcher auth`. The field IDs above are common for Jira Cloud but may differ for your instance — check your Jira admin or use the Jira REST API to find the right IDs. (For back-compat, the poller still falls back to a top-level `jira_custom_fields` block in `auth.yaml` if `config.yaml` has none — but new setups and the migration write them to `config.yaml`.)
+Default custom fields are added automatically during `handler watcher auth`. The field IDs above are common for Jira Cloud but may differ for your instance — check your Jira admin or use the Jira REST API to find the right IDs.
 
 ### Management
 
