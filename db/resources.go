@@ -124,53 +124,24 @@ func (db *DB) FindRelatedSessions(sessionID string) ([]Session, error) {
 	return sessions, nil
 }
 
-// ResourceHistory returns all events referencing a resource, ordered by ts DESC.
-//
-// Event *writes* have not yet been repointed to the watcher library (every
-// producer — cmd/emit.go, cmd/api/actions.go, cmd/unregister.go, the
-// watcher/framework.go pollers — still calls db.InsertEvent into handler's
-// own events/event_resources tables; that migration is a separate,
-// not-yet-done task). Reading ONLY via wdb.EventsForResource would make this
-// method permanently return nothing and regress TestResourceHistory, which
-// is outside this task's tracked red-test window. So this reads both
-// sources and merges them, matching the "read from both until writes move"
-// pattern used for the inbox UNION (Task 6). Once event writes move to the
-// watcher library, the handler-table half of this can be deleted.
+// ResourceHistory returns all events referencing a resource, ordered by ts
+// DESC. ResourceHistory is resource-scoped (it joins on the resource's
+// event-linkage table): only github/jira-sourced events ever carry a
+// resource linkage, and those events live exclusively in the watcher
+// library's watcher_events/watcher_event_resources tables post-migration —
+// handler's own events table never has event_resources rows (agent/handler/
+// web events aren't resource-scoped). So this reads watcher_events only.
 func (db *DB) ResourceHistory(resourceType, resourceID string, limit int) ([]Event, error) {
-	rows, err := db.conn.Query(`
-		SELECT DISTINCT e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags
-		FROM events e
-		JOIN event_resources er ON e.id = er.event_id
-		WHERE er.resource_type = ? AND er.resource_id = ?
-	`, resourceType, resourceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query resource history: %w", err)
-	}
-	handlerEvents, err := scanEvents(rows)
-	rows.Close()
+	events, err := wdb.EventsForResource(db.conn, resourceType, resourceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query resource history: %w", err)
 	}
 
-	watcherEvents, err := wdb.EventsForResource(db.conn, resourceType, resourceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query resource history from watcher library: %w", err)
+	// EventsForResource orders ascending; handler's ResourceHistory contract is ts DESC.
+	out := make([]Event, 0, len(events))
+	for i := len(events) - 1; i >= 0; i-- {
+		out = append(out, eventFromWatcher(events[i]))
 	}
-
-	out := make([]Event, 0, len(handlerEvents)+len(watcherEvents))
-	seen := make(map[string]bool, len(handlerEvents))
-	for _, e := range handlerEvents {
-		seen[e.ID] = true
-		out = append(out, e)
-	}
-	for _, e := range watcherEvents {
-		if seen[e.ID] {
-			continue
-		}
-		out = append(out, eventFromWatcher(e))
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].TS > out[j].TS })
-
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
 	}

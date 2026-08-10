@@ -3,6 +3,9 @@ package db
 import (
 	"testing"
 	"time"
+
+	watcher "github.com/mturley/watcher"
+	wdb "github.com/mturley/watcher/db"
 )
 
 func TestLinkAndFindRelated(t *testing.T) {
@@ -108,57 +111,49 @@ func TestLinkAndFindRelated(t *testing.T) {
 
 func TestResourceHistory(t *testing.T) {
 	d := testDB(t)
-	now := time.Now().UTC().Format(time.RFC3339)
 
-	// Seed a session
-	seedSession(t, d, "s1")
+	// ResourceHistory reads watcher_events (via wdb.EventsForResource), since
+	// resource-scoped events (github/jira) live there, not in handler's own
+	// events table. Seed directly through the library's InsertEvent, mirroring
+	// how the other repointed reads in this task are tested against watcher
+	// tables.
+	res := watcher.Resource{Type: "github_pr", ID: "owner/repo#123", URL: "https://github.com/owner/repo/pull/123"}
 
-	// Subscribe s1 to a PR
-	sub := Subscription{
-		ID:           "sub-pr",
-		SessionID:    "s1",
-		ResourceType: "github_pr",
-		ResourceID:   "owner/repo#123",
-		ResourceURL:  strPtr("https://github.com/owner/repo/pull/123"),
-		CreatedAt:    now,
+	older := watcher.Event{
+		ID:     "event-1",
+		TS:     "2026-01-01T00:00:00Z",
+		Source: "github",
+		Type:   "pr_comment",
+		Title:  "New comment on PR #123",
 	}
-	if err := d.Subscribe(sub); err != nil {
-		t.Fatalf("failed to subscribe: %v", err)
-	}
-
-	// Insert an event referencing that PR
-	event := Event{
-		ID:        "event-1",
-		TS:        now,
-		Source:    "github",
-		Type:      "pr_comment",
-		Title:     "New comment on PR #123",
-		Broadcast: false,
-	}
-	resources := []EventResource{
-		{
-			ResourceType: "github_pr",
-			ResourceID:   "owner/repo#123",
-			ResourceURL:  strPtr("https://github.com/owner/repo/pull/123"),
-		},
-	}
-	if err := d.InsertEvent(event, nil, resources); err != nil {
+	if err := wdb.InsertEvent(d.Conn(), older, res); err != nil {
 		t.Fatalf("failed to insert event: %v", err)
 	}
 
-	// Query ResourceHistory for the PR
+	newer := watcher.Event{
+		ID:     "event-2",
+		TS:     "2026-01-02T00:00:00Z",
+		Source: "github",
+		Type:   "pr_comment",
+		Title:  "Another comment on PR #123",
+	}
+	if err := wdb.InsertEvent(d.Conn(), newer, res); err != nil {
+		t.Fatalf("failed to insert event: %v", err)
+	}
+
+	// Query ResourceHistory for the PR — should be ordered ts DESC.
 	history, err := d.ResourceHistory("github_pr", "owner/repo#123", 10)
 	if err != nil {
 		t.Fatalf("ResourceHistory failed: %v", err)
 	}
-	if len(history) != 1 {
-		t.Fatalf("expected 1 event in history, got %d", len(history))
+	if len(history) != 2 {
+		t.Fatalf("expected 2 events in history, got %d", len(history))
 	}
-	if history[0].ID != "event-1" {
-		t.Errorf("expected event-1, got %q", history[0].ID)
+	if history[0].ID != "event-2" || history[1].ID != "event-1" {
+		t.Errorf("expected [event-2, event-1] (ts DESC), got [%s, %s]", history[0].ID, history[1].ID)
 	}
-	if history[0].Title != "New comment on PR #123" {
-		t.Errorf("expected title 'New comment on PR #123', got %q", history[0].Title)
+	if history[0].Title != "Another comment on PR #123" {
+		t.Errorf("expected title 'Another comment on PR #123', got %q", history[0].Title)
 	}
 
 	// Test limit=0 (no limit)
@@ -166,8 +161,17 @@ func TestResourceHistory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResourceHistory with limit=0 failed: %v", err)
 	}
-	if len(historyAll) != 1 {
-		t.Errorf("expected 1 event with no limit, got %d", len(historyAll))
+	if len(historyAll) != 2 {
+		t.Errorf("expected 2 events with no limit, got %d", len(historyAll))
+	}
+
+	// Test limit=1
+	historyLimited, err := d.ResourceHistory("github_pr", "owner/repo#123", 1)
+	if err != nil {
+		t.Fatalf("ResourceHistory with limit=1 failed: %v", err)
+	}
+	if len(historyLimited) != 1 || historyLimited[0].ID != "event-2" {
+		t.Fatalf("expected [event-2] with limit=1, got %+v", historyLimited)
 	}
 }
 
