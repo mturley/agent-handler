@@ -166,7 +166,7 @@ handler watcher install github
 handler watcher install jira
 ```
 
-Watcher credentials (GitHub/Jira tokens, Jira host/email) are stored by the library in `~/.config/watcher/auth.yaml`; `handler watcher auth` writes them there. Non-secret behavior settings (e.g. Jira bot usernames) live alongside it in `~/.config/watcher/config.yaml`.
+Watcher credentials (GitHub/Jira tokens, Jira host/email) are stored by the library in `~/.config/watcher/auth.yaml`; `handler watcher auth` writes them there. Non-secret behavior settings (Jira [custom fields](#jira-custom-fields) and bot usernames) live alongside it in `~/.config/watcher/config.yaml`.
 
 `handler watcher install` creates a scheduled job that runs `handler watcher run <service>` periodically. On macOS this creates a launchd plist; on Linux it adds a cron entry. Both poll at a configurable interval (default: every 2 minutes).
 
@@ -179,19 +179,20 @@ Alternatively, you can skip `handler watcher install` and schedule the watcher r
 
 ### Jira custom fields
 
-Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. They are owned by the watcher library and configured at the top level of `~/.config/watcher/auth.yaml`:
+Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. They are a non-secret behavior setting, owned by the watcher library and configured in `~/.config/watcher/config.yaml` under `jira.custom_fields`:
 
 ```yaml
-jira_custom_fields:
-  blocked: customfield_10517        # Blocked flag
-  blocked_reason: customfield_10483 # Blocked reason (rich text)
-  epic_key: customfield_10014       # Epic link
-  flagged: customfield_10021        # Impediment flag
-  story_points: customfield_10028   # Story points estimate
-  git_pull_request: customfield_10875 # Linked PR
+jira:
+  custom_fields:
+    blocked: customfield_10517        # Blocked flag
+    blocked_reason: customfield_10483 # Blocked reason (rich text)
+    epic_key: customfield_10014       # Epic link
+    flagged: customfield_10021        # Impediment flag
+    story_points: customfield_10028   # Story points estimate
+    git_pull_request: customfield_10875 # Linked PR
 ```
 
-Default custom fields are added automatically during `handler watcher auth`. The field IDs above are common for Jira Cloud but may differ for your instance — check your Jira admin or use the Jira REST API to find the right IDs.
+Default custom fields are added automatically during `handler watcher auth`. The field IDs above are common for Jira Cloud but may differ for your instance — check your Jira admin or use the Jira REST API to find the right IDs. (For back-compat, the poller still falls back to a top-level `jira_custom_fields` block in `auth.yaml` if `config.yaml` has none — but new setups and the migration write them to `config.yaml`.)
 
 ### Management
 
