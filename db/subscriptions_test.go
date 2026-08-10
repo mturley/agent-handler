@@ -48,6 +48,32 @@ func TestUnsubscribeIsUserProtected(t *testing.T) {
 	}
 }
 
+func TestSubscribeForceRevivesUserUnsubscribe(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.Unsubscribe("s1", "pr", "o/r#1"); err != nil { // user tombstone
+		t.Fatalf("Unsubscribe failed: %v", err)
+	}
+
+	// An explicit Subscribe (e.g. `handler subscribe` / /watch) must override
+	// the prior user unwatch.
+	if err := d.Subscribe(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("Subscribe failed: %v", err)
+	}
+
+	subs, err := wdb.ActiveSubscriptions(d.Conn(), handlerSubscriber("s1"), false)
+	if err != nil {
+		t.Fatalf("ActiveSubscriptions failed: %v", err)
+	}
+	if len(subs) != 1 {
+		t.Fatalf("expected explicit Subscribe to force-revive the user-unsubscribed resource, got %+v", subs)
+	}
+}
+
 func TestRestoreSkipsUserUnsubscribed(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "s1")

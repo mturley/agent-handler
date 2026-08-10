@@ -29,12 +29,24 @@ func deref(s *string) string {
 // Subscribe subscribes a session to a resource, storing the subscription in
 // the watcher library's watcher_subscriptions table under handler's
 // subscriber namespace. If an active subscription already exists, its
-// url/lease are refreshed. If a soft-deleted (non-user) subscription exists,
-// it is reinstated. A user tombstone (see Unsubscribe) is left alone.
+// url/lease are refreshed. If a soft-deleted subscription exists — including
+// one the user explicitly unsubscribed from via Unsubscribe — it is force-
+// revived: Subscribe is handler's explicit "(re-)watch this" action, so an
+// explicit re-subscribe always overrides a prior unwatch. (SubscribeIfNew is
+// the passive counterpart that must NOT do this; it still honors a user
+// tombstone.)
 func (db *DB) Subscribe(s Subscription) error {
-	return wdb.Subscribe(db.conn, handlerSubscriber(s.SessionID),
-		watcher.Resource{Type: s.ResourceType, ID: s.ResourceID, URL: deref(s.ResourceURL)},
-		wdb.SubscribeOpts{TTL: sessionLeaseTTL})
+	sub := handlerSubscriber(s.SessionID)
+	r := watcher.Resource{Type: s.ResourceType, ID: s.ResourceID, URL: deref(s.ResourceURL)}
+	// Clear any user tombstone / soft-delete first; a no-op if the resource
+	// isn't currently soft-deleted (or doesn't exist yet).
+	if err := wdb.Reinstate(db.conn, sub, r); err != nil {
+		return fmt.Errorf("failed to clear prior unsubscribe before subscribing: %w", err)
+	}
+	if err := wdb.Subscribe(db.conn, sub, r, wdb.SubscribeOpts{TTL: sessionLeaseTTL}); err != nil {
+		return fmt.Errorf("failed to subscribe: %w", err)
+	}
+	return nil
 }
 
 // SubscribeIfNew creates a subscription only if one doesn't already exist
