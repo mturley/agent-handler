@@ -8,6 +8,7 @@ import (
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
+	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
 
@@ -76,9 +77,9 @@ func runWatching(cmd *cobra.Command, args []string) error {
 				ws.NextRun = nextRun.Format(time.RFC3339)
 			}
 		}
-		ws.HasError = d.HasWatcherError(name)
+		ws.HasError = wdb.HasPollerError(d.Conn(), name)
 		if ws.HasError {
-			if dbStatus, err := d.GetWatcherStatus(name); err == nil && dbStatus != nil {
+			if dbStatus, err := wdb.GetPollerStatus(d.Conn(), name); err == nil && dbStatus != nil {
 				ws.LastErrorMessage = dbStatus.LastErrorMessage
 			}
 		}
@@ -233,9 +234,9 @@ func runWatchingGlobal(d *db.DB) error {
 				ws.NextRun = nextRun.Format(time.RFC3339)
 			}
 		}
-		ws.HasError = d.HasWatcherError(name)
+		ws.HasError = wdb.HasPollerError(d.Conn(), name)
 		if ws.HasError {
-			if dbStatus, err := d.GetWatcherStatus(name); err == nil && dbStatus != nil {
+			if dbStatus, err := wdb.GetPollerStatus(d.Conn(), name); err == nil && dbStatus != nil {
 				ws.LastErrorMessage = dbStatus.LastErrorMessage
 			}
 		}

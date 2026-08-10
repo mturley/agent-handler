@@ -9,6 +9,7 @@ import (
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/discover"
+	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
 
@@ -161,8 +162,8 @@ func runTriage(cmd *cobra.Command, args []string) error {
 
 	// Check watcher errors
 	for _, svc := range []string{"github", "jira"} {
-		if d.HasWatcherError(svc) {
-			ws, err := d.GetWatcherStatus(svc)
+		if wdb.HasPollerError(d.Conn(), svc) {
+			ws, err := wdb.GetPollerStatus(d.Conn(), svc)
 			if err != nil {
 				return fmt.Errorf("failed to get watcher status for %s: %w", svc, err)
 			}

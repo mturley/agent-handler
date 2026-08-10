@@ -8,6 +8,7 @@ import (
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/mturley/agent-handler/watcher"
+	wdb "github.com/mturley/watcher/db"
 )
 
 type resourceSession struct {
@@ -185,14 +186,14 @@ func buildWatcherStatus(database *db.DB, cfg *config.Config, service string) wat
 		HasError:   false,
 	}
 
-	ws, err := database.GetWatcherStatus(service)
+	ws, err := wdb.GetPollerStatus(database.Conn(), service)
 	if err == nil && ws != nil {
 		if ws.LastSuccess != "" {
 			info.LastSuccess = &ws.LastSuccess
 		}
 		if ws.LastError != "" {
 			info.LastError = &ws.LastError
-			info.HasError = database.HasWatcherError(service)
+			info.HasError = wdb.HasPollerError(database.Conn(), service)
 		}
 	}
 

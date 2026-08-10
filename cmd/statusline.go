@@ -20,6 +20,7 @@ import (
 	"github.com/mturley/agent-handler/terminal"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/mturley/agent-handler/worktree"
+	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
 
@@ -813,7 +814,7 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 			if lastRun != nil {
 				ago = fmt.Sprintf(" (%s ago)", formatDuration(time.Since(*lastRun)))
 			}
-			if d.HasWatcherError(svc) {
+			if wdb.HasPollerError(d.Conn(), svc) {
 				services = append(services, fmt.Sprintf("%s✗%s%s %s%s", colorRed, colorReset, colorDim, svc, ago))
 			} else {
 				services = append(services, fmt.Sprintf("%s✓%s%s %s%s", colorGreen, colorReset, colorDim, svc, ago))
