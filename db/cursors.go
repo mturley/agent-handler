@@ -149,15 +149,11 @@ func (db *DB) AutoDeliveredCount(sessionID string) (int, error) {
 
 	// Same inbox scope as the unread queries, plus an upper time bound (events
 	// between the human cursor and the agent cursor). The extra `e.ts <= ?`
-	// placeholder follows all of inboxWhereSQL's placeholders, so agentCursor is
-	// appended after inboxScopeArgs.
-	query := `
-		SELECT COUNT(DISTINCT e.id)` +
-		inboxJoinSQL + `
-		WHERE ` + inboxWhereSQL + `
-		  AND e.ts <= ?
-	`
-	args := append(inboxScopeArgs(session, *humanCursor), agentCursor)
+	// predicate's placeholder follows all of inboxArgs's placeholders, so
+	// agentCursor is appended after inboxArgs.
+	gated := db.watcherMigrationDone()
+	query := inboxSelectPred("SELECT", inboxCountCols, gated, "e.ts <= ?")
+	args := append(inboxArgs(session, *humanCursor, gated), agentCursor)
 	var count int
 	err = db.conn.QueryRow(query, args...).Scan(&count)
 	if err != nil {
