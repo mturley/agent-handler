@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	watcherlib "github.com/mturley/watcher"
 	wcfg "github.com/mturley/watcher/config"
@@ -49,13 +48,6 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 	creds, err := wcfg.Load(wcfg.DefaultPath())
 	if err != nil {
 		return fmt.Errorf("failed to load watcher credentials: %w", err)
-	}
-
-	// Handler config still holds non-credential preferences (e.g. Jira bot
-	// usernames), read best-effort.
-	handlerCfg, err := config.Read(config.DefaultPath())
-	if err != nil {
-		handlerCfg = &config.Config{}
 	}
 
 	// Open database
@@ -110,11 +102,11 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("jira credentials not available: %w", err)
 		}
-		// BotUsernames is a handler-side preference (not a credential), so it
-		// stays in the handler config rather than the library auth.yaml.
+		// BotUsernames is a non-credential behavior setting, sourced from the
+		// watcher library's config.yaml (best-effort; absent file yields none).
 		var botUsernames []string
-		if handlerCfg.Services.Jira != nil {
-			botUsernames = handlerCfg.Services.Jira.BotUsernames
+		if behaviorCfg, cfgErr := wcfg.LoadConfig(wcfg.ConfigDefaultPath()); cfgErr == nil {
+			botUsernames = behaviorCfg.JiraBotUsernames()
 		}
 		auth := wjira.JiraAuth{
 			URL:          jc.Host,
