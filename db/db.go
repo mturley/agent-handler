@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	wdb "github.com/mturley/watcher/db"
 	_ "modernc.org/sqlite"
 )
 
@@ -52,6 +53,13 @@ func Open(path string) (*DB, error) {
 	if err := runMigrations(conn); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	// Create the watcher library's own tables (watcher_*). Disjoint from
+	// handler's runMigrations above, which never touches watcher_* tables.
+	if err := wdb.Migrate(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to run watcher migrate: %w", err)
 	}
 
 	return &DB{conn: conn}, nil
