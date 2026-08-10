@@ -66,6 +66,16 @@ func (db *DB) setWatcherMigrated() error {
 	return nil
 }
 
+// WatcherMigrationDone is the exported form of watcherMigrationDone, for use
+// by package cmd (specifically the `handler setup --migrate-watcher` data
+// migration in cmd/migrate_watcher.go), which cannot call the unexported
+// method directly.
+func (db *DB) WatcherMigrationDone() bool { return db.watcherMigrationDone() }
+
+// SetWatcherMigrated is the exported form of setWatcherMigrated, for use by
+// package cmd's data migration command. Only that command should call this.
+func (db *DB) SetWatcherMigrated() error { return db.setWatcherMigrated() }
+
 // --- legacy single-query path (marker unset) ----------------------------
 
 // inboxJoinSQL is the FROM+JOIN clause for the legacy routed-inbox query.
