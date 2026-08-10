@@ -126,7 +126,18 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 	// db/watcher_bridge.go — that unexported helper is the source of truth
 	// for the prefix; this SQL can't call it directly, so keep them in sync
 	// by hand if that prefix ever changes.
-	expiresAt := time.Now().UTC().Add(sessionLeaseTTL).Format(time.RFC3339)
+	//
+	// expires_at: the watcher library treats a NULL expires_at as a
+	// PERMANENT lease (see db/subscriptions.go's live-subscription
+	// predicates: `expires_at IS NULL OR expires_at > ?`), not as expired.
+	// So an active session's subscriptions get a fresh now+5d lease, while a
+	// non-active session's subscriptions must be stamped with an
+	// already-elapsed timestamp (now) so they immediately read as expired —
+	// writing NULL there would do the opposite of the intent and leave
+	// long-dead sessions' subscriptions polling forever.
+	now := time.Now().UTC()
+	expiresActive := now.Add(sessionLeaseTTL).Format(time.RFC3339)
+	nowExpired := now.Format(time.RFC3339)
 	res, err = tx.Exec(`
 		INSERT INTO watcher_subscriptions (id, subscriber, resource_type, resource_id, resource_url, created_at, expires_at, backfill, deleted_at, unsubscribed_by_user)
 		SELECT
@@ -136,13 +147,13 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 			s.resource_id,
 			s.resource_url,
 			s.created_at,
-			CASE WHEN sess.status = 'active' THEN ? ELSE NULL END,
+			CASE WHEN sess.status = 'active' THEN ? ELSE ? END,
 			0,
 			s.deleted_at,
 			CASE WHEN s.unsubscribed_by = 'user' THEN 1 ELSE 0 END
 		FROM subscriptions s
 		LEFT JOIN sessions sess ON sess.session_id = s.session_id
-	`, expiresAt)
+	`, expiresActive, nowExpired)
 	if err != nil {
 		return report, fmt.Errorf("failed to copy subscriptions: %w", err)
 	}

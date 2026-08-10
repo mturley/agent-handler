@@ -80,7 +80,16 @@ func seedMigrationFixtures(t *testing.T, d *db.DB) {
 		t.Fatalf("seed resource_state: %v", err)
 	}
 
-	// subscriptions: S1 active (no unsubscribe), S2 user-unsubscribed+deleted, S1 normal (second row).
+	// subscriptions:
+	//   sub-1: S1 (active), not unsubscribed -> should end up live (future expires_at).
+	//   sub-2: S2 (archived), user-unsubscribed + deleted -> a tombstone; proves
+	//          nothing about the dangerous orphaned-live case below.
+	//   sub-3: S1 (active), not unsubscribed (second active row).
+	//   sub-4: S2 (archived), deleted_at NULL, unsubscribed_by NULL -- an
+	//          ORPHANED-LIVE subscription (never soft-deleted, session just
+	//          went archived without cleanup ever revoking it). This is the
+	//          dangerous case H1 covers: it must age out (expires_at in the
+	//          past), NOT get a permanent NULL lease.
 	if _, err := conn.Exec(`
 		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at, unsubscribed_by)
 		VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
@@ -98,6 +107,12 @@ func seedMigrationFixtures(t *testing.T, d *db.DB) {
 		VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
 	`, "sub-3", "S1", "jira", "PROJ-2", "", now); err != nil {
 		t.Fatalf("seed subscription sub-3: %v", err)
+	}
+	if _, err := conn.Exec(`
+		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at, unsubscribed_by)
+		VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+	`, "sub-4", "S2", "pr", "example/repo#2", "https://github.com/example/repo/pull/2", now); err != nil {
+		t.Fatalf("seed subscription sub-4: %v", err)
 	}
 
 	// resource_relationships: one row.
@@ -165,11 +180,11 @@ func TestMigrateWatcherData(t *testing.T) {
 	if err := conn.QueryRow(`SELECT COUNT(*) FROM watcher_subscriptions`).Scan(&subCount); err != nil {
 		t.Fatalf("count watcher_subscriptions: %v", err)
 	}
-	if subCount != 3 {
-		t.Errorf("watcher_subscriptions count = %d, want 3", subCount)
+	if subCount != 4 {
+		t.Errorf("watcher_subscriptions count = %d, want 4", subCount)
 	}
-	if report.Subscriptions != 3 {
-		t.Errorf("report.Subscriptions = %d, want 3", report.Subscriptions)
+	if report.Subscriptions != 4 {
+		t.Errorf("report.Subscriptions = %d, want 4", report.Subscriptions)
 	}
 
 	// sub-1 (S1, active session, not unsubscribed): subscriber prefix, no
@@ -198,8 +213,33 @@ func TestMigrateWatcherData(t *testing.T) {
 		t.Errorf("sub-1 expires_at %q not in the future", *expiresAt1)
 	}
 
+	// sub-3 (S1, active session, not unsubscribed, second active row):
+	// non-null expires_at in the future, same as sub-1.
+	var expiresAt3 *string
+	if err := conn.QueryRow(`SELECT expires_at FROM watcher_subscriptions WHERE id = ?`, "sub-3").
+		Scan(&expiresAt3); err != nil {
+		t.Fatalf("query sub-3: %v", err)
+	}
+	if expiresAt3 == nil {
+		t.Fatalf("sub-3 expires_at = nil, want non-null (S1 is active)")
+	}
+	parsedExpiry3, err := time.Parse(time.RFC3339, *expiresAt3)
+	if err != nil {
+		t.Fatalf("sub-3 expires_at %q not RFC3339: %v", *expiresAt3, err)
+	}
+	if !parsedExpiry3.After(time.Now().UTC()) {
+		t.Errorf("sub-3 expires_at %q not in the future", *expiresAt3)
+	}
+
 	// sub-2 (S2, archived session, user-unsubscribed+deleted): subscriber
-	// prefix, unsubscribed_by_user=1, non-null deleted_at, null expires_at.
+	// prefix, unsubscribed_by_user=1, non-null deleted_at. S2 is archived
+	// (non-active), so per H1's fix expires_at must be a non-null,
+	// already-elapsed timestamp (aged out), NOT nil (nil would mean a
+	// PERMANENT lease in the watcher library's live-subscription predicate).
+	// This row is also a deleted tombstone, so it stays excluded from live
+	// queries via deleted_at regardless — but expires_at must still reflect
+	// "not active" correctly, on principle and in case deleted_at is ever
+	// cleared/reinstated.
 	var subscriber2 string
 	var deletedAt2 *string
 	var expiresAt2 *string
@@ -217,8 +257,44 @@ func TestMigrateWatcherData(t *testing.T) {
 	if deletedAt2 == nil {
 		t.Errorf("sub-2 deleted_at = nil, want non-null")
 	}
-	if expiresAt2 != nil {
-		t.Errorf("sub-2 expires_at = %v, want nil (S2 is archived)", *expiresAt2)
+	if expiresAt2 == nil {
+		t.Fatalf("sub-2 expires_at = nil, want non-null aged-out timestamp (S2 is archived; NULL would mean a PERMANENT lease)")
+	}
+	parsedExpiry2, err := time.Parse(time.RFC3339, *expiresAt2)
+	if err != nil {
+		t.Fatalf("sub-2 expires_at %q not RFC3339: %v", *expiresAt2, err)
+	}
+	if parsedExpiry2.After(time.Now().UTC()) {
+		t.Errorf("sub-2 expires_at %q is in the future, want already elapsed (S2 is archived)", *expiresAt2)
+	}
+
+	// sub-4 (S2, archived session, ORPHANED-LIVE: deleted_at NULL,
+	// unsubscribed_by NULL): this is the dangerous case H1 covers. It must
+	// age out via a non-null, already-elapsed expires_at — a NULL here
+	// would make the watcher library treat it as permanently live, so a
+	// long-dead session's subscription would poll GitHub/Jira forever.
+	var subscriber4 string
+	var deletedAt4 *string
+	var expiresAt4 *string
+	if err := conn.QueryRow(`SELECT subscriber, deleted_at, expires_at FROM watcher_subscriptions WHERE id = ?`, "sub-4").
+		Scan(&subscriber4, &deletedAt4, &expiresAt4); err != nil {
+		t.Fatalf("query sub-4: %v", err)
+	}
+	if subscriber4 != "handler:session:S2" {
+		t.Errorf("sub-4 subscriber = %q, want %q", subscriber4, "handler:session:S2")
+	}
+	if deletedAt4 != nil {
+		t.Errorf("sub-4 deleted_at = %v, want nil (not soft-deleted in source)", *deletedAt4)
+	}
+	if expiresAt4 == nil {
+		t.Fatalf("sub-4 expires_at = nil, want non-null aged-out timestamp (S2 is archived; NULL would leave this orphan permanently live)")
+	}
+	parsedExpiry4, err := time.Parse(time.RFC3339, *expiresAt4)
+	if err != nil {
+		t.Fatalf("sub-4 expires_at %q not RFC3339: %v", *expiresAt4, err)
+	}
+	if parsedExpiry4.After(time.Now().UTC()) {
+		t.Errorf("sub-4 expires_at %q is in the future, want already elapsed (orphaned archived session must age out)", *expiresAt4)
 	}
 
 	var relCount int
