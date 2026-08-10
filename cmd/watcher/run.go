@@ -102,17 +102,24 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("jira credentials not available: %w", err)
 		}
-		// BotUsernames is a non-credential behavior setting, sourced from the
-		// watcher library's config.yaml (best-effort; absent file yields none).
+		// BotUsernames and CustomFields are non-credential behavior settings,
+		// sourced from the watcher library's config.yaml (best-effort; absent
+		// file yields none). CustomFields falls back to auth.yaml's
+		// jira_custom_fields for back-compat with installs that haven't been
+		// relocated to config.yaml yet.
 		var botUsernames []string
+		customFields := jc.CustomFields
 		if behaviorCfg, cfgErr := wcfg.LoadConfig(wcfg.ConfigDefaultPath()); cfgErr == nil {
 			botUsernames = behaviorCfg.JiraBotUsernames()
+			if cf := behaviorCfg.JiraCustomFields(); len(cf) > 0 {
+				customFields = cf
+			}
 		}
 		auth := wjira.JiraAuth{
 			URL:          jc.Host,
 			Email:        jc.Email,
 			Token:        jc.Token,
-			CustomFields: jc.CustomFields,
+			CustomFields: customFields,
 			BotUsernames: botUsernames,
 		}
 		return wjira.Poll(d.Conn(), auth, resources, logger)

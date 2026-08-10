@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mturley/agent-handler/config"
@@ -12,6 +13,7 @@ import (
 	watcherPkg "github.com/mturley/agent-handler/watcher"
 	wcfg "github.com/mturley/watcher/config"
 	wdb "github.com/mturley/watcher/db"
+	"gopkg.in/yaml.v3"
 )
 
 // migrateSkipRunningCheck bypasses the "is a watcher scheduler running"
@@ -293,6 +295,13 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 
 	migrateCredentials()
 
+	fmt.Println("\nBehavior config migration (best-effort):")
+	if hcfg, err := config.Read(config.DefaultPath()); err != nil {
+		fmt.Printf("  note: could not read handler config (%v); run 'handler watcher auth' manually if needed.\n", err)
+	} else {
+		migrateBehaviorConfig(hcfg)
+	}
+
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Verify with 'handler health', 'handler watching', and 'handler status'.")
 	fmt.Println("  2. Run 'handler watcher start' to resume the github/jira watchers.")
@@ -380,11 +389,11 @@ func backupDBFile(dbPath string) (string, error) {
 //   - GitHub is the same shape on both sides (Token).
 //   - handler Jira has URL; watcher Jira has Host (same value, different
 //     field/yaml key).
-//   - handler's per-service Jira.CustomFields moves to the watcher config's
-//     top-level JiraCustomFields (not nested under JiraConfig).
-//   - handler's Jira.BotUsernames is NOT copied here — it belongs in the
-//     library's separate config.yaml (behavior config), handled by task 9c,
-//     not in auth.yaml (credentials).
+//   - handler's Jira.CustomFields and Jira.BotUsernames are NOT copied to
+//     auth.yaml here — both are behavior settings, not credentials, and are
+//     seeded into the watcher library's separate config.yaml instead, by
+//     migrateBehaviorConfig (called from runMigrateWatcherAt alongside this
+//     function).
 //   - handler has no Slack config; Slack is skipped entirely.
 func migrateCredentials() {
 	fmt.Println("\nCredential migration (best-effort):")
@@ -421,9 +430,6 @@ func migrateCredentials() {
 				Email: hcfg.Services.Jira.Email,
 				Token: hcfg.Services.Jira.Token,
 			}
-			if len(hcfg.Services.Jira.CustomFields) > 0 {
-				acfg.JiraCustomFields = hcfg.Services.Jira.CustomFields
-			}
 			changed = true
 			fmt.Println("  copied Jira credentials into auth.yaml")
 		} else {
@@ -439,6 +445,83 @@ func migrateCredentials() {
 	if err := acfg.Save(authPath); err != nil {
 		fmt.Printf("  note: failed to save auth.yaml (%v); run 'handler watcher auth' manually.\n", err)
 	}
+}
+
+// migrateBehaviorConfig best-effort seeds Jira behavior settings (custom
+// fields, bot usernames) from handler's own config.yaml into the watcher
+// library's separate behavior config file ("config.yaml"), which is
+// distinct from the credentials-holding auth.yaml handled by
+// migrateCredentials above. It never blocks or fails the migration.
+//
+// It only fills in values that config.yaml doesn't already have — an
+// existing config.yaml entry always wins, so re-running migration (or a
+// human having already customized config.yaml) is never clobbered.
+func migrateBehaviorConfig(hcfg *config.Config) {
+	if hcfg.Services.Jira == nil {
+		fmt.Println("  no Jira behavior settings to migrate")
+		return
+	}
+
+	behaviorPath := wcfg.ConfigDefaultPath()
+	bcfg, err := wcfg.LoadConfig(behaviorPath)
+	if err != nil {
+		fmt.Printf("  note: could not load watcher config.yaml (%v); run 'handler watcher auth' manually if needed.\n", err)
+		return
+	}
+
+	if bcfg.Jira == nil {
+		bcfg.Jira = &wcfg.JiraBehavior{}
+	}
+
+	changed := false
+
+	if len(hcfg.Services.Jira.CustomFields) > 0 && len(bcfg.Jira.CustomFields) == 0 {
+		bcfg.Jira.CustomFields = hcfg.Services.Jira.CustomFields
+		changed = true
+		fmt.Println("  copied Jira custom_fields into config.yaml")
+	}
+
+	if len(hcfg.Services.Jira.BotUsernames) > 0 && len(bcfg.Jira.BotUsernames) == 0 {
+		bcfg.Jira.BotUsernames = hcfg.Services.Jira.BotUsernames
+		changed = true
+		fmt.Println("  copied Jira bot_usernames into config.yaml")
+	}
+
+	if !changed {
+		fmt.Println("  no behavior settings to copy")
+		return
+	}
+
+	if err := writeWatcherBehaviorConfig(bcfg); err != nil {
+		fmt.Printf("  note: failed to save config.yaml (%v); run 'handler watcher auth' manually.\n", err)
+	}
+}
+
+// writeWatcherBehaviorConfig marshals cf to YAML and writes it to the
+// watcher library's behavior config path (wcfg.ConfigDefaultPath()),
+// creating the parent directory if needed. The watcher library has no
+// exported writer for *wcfg.ConfigFile (only LoadConfig), so this does the
+// marshal/write itself. config.yaml holds no credentials, so it is written
+// with 0o644 permissions (matching the library's convention of not
+// enforcing perms on this file, unlike auth.yaml's 0o600).
+//
+// This mirrors writeWatcherBehaviorConfig in cmd/watcher/auth.go — the two
+// call sites live in different packages (cmd vs. cmd/watcher) and the
+// watcher library itself isn't a place to add this, so the small helper is
+// duplicated rather than factored into a new shared package.
+func writeWatcherBehaviorConfig(cf *wcfg.ConfigFile) error {
+	path := wcfg.ConfigDefaultPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("failed to create config dir: %w", err)
+	}
+	data, err := yaml.Marshal(cf)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("failed to write config %s: %w", path, err)
+	}
+	return nil
 }
 
 // init registers the --skip-running-check flag on setupCmd, next to this
