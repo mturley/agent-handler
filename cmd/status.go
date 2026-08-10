@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
@@ -99,10 +98,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 		// Watcher and resource summary
 		fmt.Printf("\n%s─── Watchers ───%s\n", dim, reset)
-		cfg, _ := config.Read(config.DefaultPath())
 		for _, svc := range []string{"github", "jira"} {
 			status := fmt.Sprintf("%s✗ not configured%s", red, reset)
-			if cfg != nil && cfg.IsServiceConfigured(svc) {
+			if serviceConfiguredForWatching(svc) {
 				if watcherPkg.IsInstalled(svc) {
 					lastRun := watcherPkg.LastRunTime(svc)
 					runInfo := "never"

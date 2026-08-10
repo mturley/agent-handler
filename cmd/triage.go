@@ -270,21 +270,18 @@ func runTriage(cmd *cobra.Command, args []string) error {
 
 	// Trigger catch-up for stale resources (best-effort, non-blocking)
 	if len(output.StaleResources) > 0 {
-		cfg, _ := config.Read(config.DefaultPath())
-		if cfg != nil {
-			staleByService := make(map[string][]string)
-			for _, sr := range output.StaleResources {
-				svc := config.ResourceTypeToService(sr.ResourceType)
-				if svc != "" && cfg.IsServiceConfigured(svc) {
-					staleByService[svc] = append(staleByService[svc], sr.ResourceID)
-				}
+		staleByService := make(map[string][]string)
+		for _, sr := range output.StaleResources {
+			svc := config.ResourceTypeToService(sr.ResourceType)
+			if svc != "" && serviceConfiguredForWatching(svc) {
+				staleByService[svc] = append(staleByService[svc], sr.ResourceID)
 			}
-			for svc, resources := range staleByService {
-				resourceList := strings.Join(resources, ",")
-				go func(s, r string) {
-					exec.Command("handler", "watcher", "run", s, "--resources", r).Run()
-				}(svc, resourceList)
-			}
+		}
+		for svc, resources := range staleByService {
+			resourceList := strings.Join(resources, ",")
+			go func(s, r string) {
+				exec.Command("handler", "watcher", "run", s, "--resources", r).Run()
+			}(svc, resourceList)
 		}
 	}
 

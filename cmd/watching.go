@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
 	wdb "github.com/mturley/watcher/db"
@@ -45,9 +44,6 @@ func runWatching(cmd *cobra.Command, args []string) error {
 	// Subscriptions
 	subs, _ := d.ListSubscriptions(sessionID, false)
 
-	// Watcher status
-	cfg, _ := config.Read(config.DefaultPath())
-
 	type watcherStatus struct {
 		Name             string `json:"name"`
 		Configured       bool   `json:"configured"`
@@ -63,9 +59,7 @@ func runWatching(cmd *cobra.Command, args []string) error {
 	var watchers []watcherStatus
 	for _, name := range []string{"github", "jira"} {
 		ws := watcherStatus{Name: name}
-		if cfg != nil {
-			ws.Configured = cfg.IsServiceConfigured(name)
-		}
+		ws.Configured = serviceConfiguredForWatching(name)
 		ws.Installed = watcherPkg.IsInstalled(name)
 		ws.Running = watcherPkg.IsRunning(name)
 		if lastRun := watcherPkg.LastRunTime(name); lastRun != nil {
@@ -207,7 +201,6 @@ func runWatchingGlobal(d *db.DB) error {
 	}
 
 	// Watcher status (same as per-session view)
-	cfg, _ := config.Read(config.DefaultPath())
 	type wsStatus struct {
 		Name             string `json:"name"`
 		Configured       bool   `json:"configured"`
@@ -221,9 +214,7 @@ func runWatchingGlobal(d *db.DB) error {
 	var watchers []wsStatus
 	for _, name := range []string{"github", "jira"} {
 		ws := wsStatus{Name: name}
-		if cfg != nil {
-			ws.Configured = cfg.IsServiceConfigured(name)
-		}
+		ws.Configured = serviceConfiguredForWatching(name)
 		ws.Installed = watcherPkg.IsInstalled(name)
 		ws.Running = watcherPkg.IsRunning(name)
 		if lastRun := watcherPkg.LastRunTime(name); lastRun != nil {

@@ -213,11 +213,10 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 	// Spawn catch-up watcher runs for subscribed resources
 	subs, _ := d.ListSubscriptions(input.SessionID, false)
 	if len(subs) > 0 {
-		cfg, _ := config.Read(config.DefaultPath())
 		resourcesByService := make(map[string][]string)
 		for _, sub := range subs {
 			service := config.ResourceTypeToService(sub.ResourceType)
-			if service != "" && cfg.IsServiceConfigured(service) {
+			if service != "" && serviceConfiguredForWatching(service) {
 				resourcesByService[service] = append(resourcesByService[service], sub.ResourceID)
 			}
 		}
