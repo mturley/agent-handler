@@ -28,12 +28,21 @@ var rootCmd = &cobra.Command{
 	Short: "Agent handler CLI for managing Claude Code agent sessions",
 	Long:  `A CLI tool backed by SQLite for managing Claude Code agent sessions.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "claude" || cmd.Name() == "ui" {
+		// Commands that must run before setup / without a database at all.
+		// (`ui` is intentionally NOT here: it needs a set-up, migrated DB.)
+		if cmd.Name() == "setup" || cmd.Name() == "help" || cmd.Name() == "completion" || cmd.Name() == "claude" {
 			return nil
 		}
 		dbPath := db.DefaultPath()
 		if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 			fmt.Fprintln(os.Stderr, "agent-handler is not set up yet. Run 'handler setup' to configure skills, hooks, and database.")
+			os.Exit(1)
+		}
+		// Refuse to run against an unmigrated legacy database — the schema
+		// changed when handler adopted the watcher library, and commands
+		// would read/write the wrong tables until the data is migrated.
+		if commandGuardedForLegacyDB(cmd.CommandPath()) && legacyUnmigrated() {
+			fmt.Fprintln(os.Stderr, legacyMigrationRequiredMessage)
 			os.Exit(1)
 		}
 		return nil
@@ -65,6 +74,64 @@ func init() {
 	watcher.JSONOutput = &jsonOutput
 	watcher.WatcherCmd.GroupID = "human"
 	rootCmd.AddCommand(watcher.WatcherCmd)
+}
+
+// legacyMigrationRequiredMessage is shown when a handler command is run against
+// a database that still holds unmigrated pre-watcher-library data. It reuses the
+// same wording as the `handler setup` legacy guard (legacyDBError).
+const legacyMigrationRequiredMessage = legacyDBError
+
+// legacyGuardExemptCommands are commands (by full cobra command path) that must
+// run even against an unmigrated legacy database:
+//   - handler setup: runs the migration (and has its own legacy guard for plain
+//     setup).
+//   - handler help/completion: must always work.
+//   - handler claude: launches a Claude session; it does not itself read the
+//     legacy watcher tables (registration happens later via the statusline hook,
+//     which is exempt and shows the migration warning).
+//   - handler statusline: surfaces the migration warning itself; erroring here
+//     would break every session's prompt.
+//   - handler uninstall / handler watcher uninstall: must be usable to tear down
+//     a broken install; neither touches the legacy data.
+//
+// NOTE: `handler ui` is deliberately NOT exempt — the web dashboard's API reads
+// the legacy subscriptions/resource_state tables directly, so it must refuse
+// (and force a migration) rather than silently serve stale data.
+//
+// Matching is by full command path (cmd.CommandPath()), not leaf name, so a
+// future subcommand that happens to reuse a leaf name (e.g. another `status`)
+// is not accidentally exempted.
+var legacyGuardExemptCommands = map[string]bool{
+	"handler setup":             true,
+	"handler help":              true,
+	"handler completion":        true,
+	"handler claude":            true,
+	"handler statusline":        true,
+	"handler uninstall":         true,
+	"handler watcher uninstall": true,
+}
+
+// commandGuardedForLegacyDB reports whether a command with the given full cobra
+// command path should be blocked when the database holds unmigrated legacy data.
+func commandGuardedForLegacyDB(commandPath string) bool {
+	return !legacyGuardExemptCommands[commandPath]
+}
+
+// legacyUnmigrated reports whether the real handler database holds unmigrated
+// legacy watcher data. It is best-effort: if the database can't be opened, it
+// returns false so the command proceeds (and surfaces the real open error
+// itself) rather than being blocked by a transient read failure.
+func legacyUnmigrated() bool {
+	// Read-only open: HasUnmigratedLegacyData only issues SELECTs, and the
+	// caller has already confirmed the DB file exists. Avoids a second full
+	// schema/migration pass (db.Open runs DDL + migrations) on every command,
+	// including the high-frequency statusline hook.
+	d, err := db.OpenReadOnly(db.DefaultPath())
+	if err != nil {
+		return false
+	}
+	defer d.Close()
+	return d.HasUnmigratedLegacyData()
 }
 
 func openDB() (*db.DB, error) {

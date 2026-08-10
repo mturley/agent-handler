@@ -110,6 +110,15 @@ func recordCostSnapshot(wd *db.DB, input *hookInput) {
 }
 
 func runStatusline(cmd *cobra.Command, args []string) error {
+	// The statusline is exempt from the root command's legacy-database guard
+	// (erroring here would break every session's prompt), so it surfaces the
+	// warning itself: if the database still holds unmigrated pre-watcher-library
+	// data, render a single line telling the user to migrate and stop — the rest
+	// of the statusline would read the wrong tables anyway.
+	if legacyUnmigrated() {
+		fmt.Println("⚠ handler: legacy database — run 'handler setup --migrate-watcher'")
+		return nil
+	}
 	if slFromHook {
 		return runStatuslineFromHook(cmd)
 	}
