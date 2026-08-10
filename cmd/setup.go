@@ -48,6 +48,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return runMigrateWatcher()
 	}
 
+	if err := guardLegacyDatabase(); err != nil {
+		return err
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)

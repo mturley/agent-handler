@@ -199,6 +199,38 @@ func mustRowsAffected(res sql.Result) int64 {
 // changes.
 const sessionLeaseTTL = 5 * 24 * time.Hour
 
+// legacyDBError is the message shown when `handler setup` is run against a
+// database that predates the watcher-library migration and hasn't been
+// migrated yet. Kept as a constant so the guard and its test assert the same
+// text.
+const legacyDBError = "Legacy database found. Handler has made breaking changes to its schema as part of adopting a watcher library. Run handler setup --migrate-watcher to perform a migration as part of this update. Handler will not work correctly until you either do this or delete your database and run handler setup again."
+
+// guardLegacyDatabase refuses a normal `handler setup` when the real handler
+// database holds unmigrated legacy watcher data, directing the user to run the
+// migration (or delete the database) first. `handler setup --migrate-watcher`
+// bypasses this (it returns before this is called) since it IS the remedy.
+func guardLegacyDatabase() error {
+	return guardLegacyDatabaseAt(db.DefaultPath())
+}
+
+// guardLegacyDatabaseAt is the testable form of guardLegacyDatabase, pointed at
+// an explicit database path. It returns an error carrying legacyDBError when the
+// database at dbPath has unmigrated legacy data, and nil otherwise (including
+// when the database can't be opened — setup will surface that failure itself
+// when it opens the database for real).
+func guardLegacyDatabaseAt(dbPath string) error {
+	d, err := db.Open(dbPath)
+	if err != nil {
+		return nil
+	}
+	defer d.Close()
+
+	if d.HasUnmigratedLegacyData() {
+		return fmt.Errorf("%s", legacyDBError)
+	}
+	return nil
+}
+
 // runMigrateWatcher runs the production data migration against the real
 // handler database at db.DefaultPath(). It is the entry point wired to
 // `handler setup --migrate-watcher`.
