@@ -637,7 +637,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {
-			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, watcherlib.EventType(eventType).DisplayName()))
+			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, eventDisplayName(eventType)))
 		}
 		breakdownStr := ""
 		if len(breakdownParts) > 0 {
