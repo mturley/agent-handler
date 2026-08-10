@@ -146,3 +146,33 @@ If anything looks wrong after verifying:
    re-run `handler setup --migrate-watcher` from the top of this runbook —
    it's safe to retry against the restored (pre-migration) database, since
    the marker was never set on it.
+
+## Local development against an unreleased watcher library
+
+Handler pins a tagged `github.com/mturley/watcher` version (see `go.mod`).
+When a handler change needs a matching, not-yet-released library change,
+develop the two together with a temporary local `replace` — do NOT commit
+it:
+
+1. Point handler at your local watcher checkout:
+
+   ```
+   go mod edit -replace github.com/mturley/watcher=/Users/mturley/git/watcher
+   ```
+
+2. Make the coupled changes in both repos; build/test handler against the
+   local library.
+
+3. When the library change is ready, commit + tag a new library version
+   (e.g. `v0.2.2`) and push it.
+
+4. Re-pin handler to the released version and drop the replace:
+
+   ```
+   go get github.com/mturley/watcher@v0.2.2
+   go mod edit -dropreplace github.com/mturley/watcher
+   go mod tidy
+   ```
+
+Never commit the `replace` line — a committed replace makes the branch
+unbuildable on any machine without that exact local path.
