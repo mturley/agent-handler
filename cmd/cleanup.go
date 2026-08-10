@@ -108,6 +108,11 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	// Clean up peek_state for archived sessions
 	d.DeletePeekStatesForSessions(toArchive)
 
+	// Revoke subscriptions for archived sessions so they stop being polled.
+	for _, id := range toArchive {
+		_, _ = d.SoftDeleteSubscriptionsForSession(id)
+	}
+
 	if jsonOutput {
 		output := map[string]interface{}{
 			"archived":    archived,

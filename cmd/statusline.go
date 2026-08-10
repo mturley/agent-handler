@@ -148,6 +148,11 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 			wd.BumpLastActive(input.SessionID, now)
 		}
 
+		// Best-effort lease renewal so long-running sessions' subscriptions
+		// don't expire out from under them; a failed renew must not break
+		// the statusline.
+		_ = wd.RenewSubscriptionsForSession(input.SessionID)
+
 		termType, termID, workspaceID := terminal.Detect()
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)

@@ -143,6 +143,14 @@ func (db *DB) SoftDeleteSubscriptionsForSession(sessionID string) (int, error) {
 	return len(active), nil
 }
 
+// RenewSubscriptionsForSession extends the lease on all of a session's
+// active subscriptions, keeping them alive past their TTL. Called from the
+// statusline heartbeat so long-running sessions don't have their
+// subscriptions expire out from under them.
+func (db *DB) RenewSubscriptionsForSession(sessionID string) error {
+	return wdb.Renew(db.conn, handlerSubscriber(sessionID), sessionLeaseTTL)
+}
+
 // RestoreSubscriptionsForSession un-soft-deletes subscriptions for a session
 // that were dropped by the archive/restart lifecycle. Subscriptions the user
 // explicitly removed via /unwatch are NOT restored. There is no library

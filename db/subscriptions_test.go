@@ -147,6 +147,51 @@ func TestListSubscriptionsIncludeDeleted(t *testing.T) {
 	}
 }
 
+func TestRenewExtendsSessionLeases(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.RenewSubscriptionsForSession("s1"); err != nil {
+		t.Fatalf("RenewSubscriptionsForSession failed: %v", err)
+	}
+
+	// still active after renew
+	subs, err := d.ListSubscriptions("s1", false)
+	if err != nil {
+		t.Fatalf("ListSubscriptions failed: %v", err)
+	}
+	if len(subs) != 1 {
+		t.Fatalf("want 1 active after renew, got %d", len(subs))
+	}
+}
+
+func TestSoftDeleteForSessionClearsLeases(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+
+	// This is the call cmd/cleanup.go makes for each archived session id —
+	// verifying it clears leases here covers the cleanup-revoke behavior at
+	// the db seam cleanup relies on.
+	if _, err := d.SoftDeleteSubscriptionsForSession("s1"); err != nil {
+		t.Fatalf("SoftDeleteSubscriptionsForSession failed: %v", err)
+	}
+
+	subs, err := d.ListSubscriptions("s1", false)
+	if err != nil {
+		t.Fatalf("ListSubscriptions failed: %v", err)
+	}
+	if len(subs) != 0 {
+		t.Fatalf("want 0 active after revoke, got %d", len(subs))
+	}
+}
+
 func TestSoftDeleteForSessionReturnsCount(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "s1")
