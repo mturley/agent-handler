@@ -6,7 +6,7 @@ Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inbox
 
 ## Install
 
-Requires Go 1.22+ and Claude Code to already be installed.
+Requires Go 1.25+ and Claude Code to already be installed.
 
 ```bash
 git clone https://github.com/mturley/agent-handler.git
@@ -33,6 +33,18 @@ cd agent-handler
 git pull
 make build && make install
 ```
+
+### Migrating an existing database to the watcher library
+
+The watcher subsystem was extracted into the [`mturley/watcher`](https://github.com/mturley/watcher) library, which stores its data in `watcher_*` tables. If you have an existing install with watcher data (subscriptions, cached resource state, PR/Jira events), that data must be migrated once:
+
+```bash
+handler watcher stop            # stop the watchers first
+handler setup --migrate-watcher # backs up the DB, copies data into the watcher_* tables
+handler watcher start
+```
+
+Until you migrate, `handler setup` will refuse to run against a pre-migration database and tell you to run the migration (or delete your database and start fresh). The migration auto-backs-up your database to `~/.agent-handler/handler.db.backup-<timestamp>` and retains the old tables, so it is reversible — see [docs/watcher-migration-runbook.md](docs/watcher-migration-runbook.md) for the full procedure and rollback steps. Watcher credentials in `~/.agent-handler/config.yaml` are copied to `~/.config/watcher/auth.yaml` as part of the migration.
 
 ## Uninstall
 
@@ -139,6 +151,8 @@ Use `/handler` in a Claude session to turn it into a command center for managing
 
 Watch for external events (PR reviews, Jira comments, CI status) and deliver them to your sessions. Watchers cache current resource state (PR review status, Jira priority, blocked status) for use in triage.
 
+The watcher subsystem — polling, resource state, event storage, and subscription leases — is powered by the reusable [`mturley/watcher`](https://github.com/mturley/watcher) library, which owns its own `watcher_*` tables in handler's SQLite database. handler is one consumer of that library; the credentials and behavior settings it uses live under `~/.config/watcher/` (see below). handler keeps its own scheduling (launchd/cron) and its inbox/session layer on top.
+
 ### Setup
 
 ```bash
@@ -152,6 +166,8 @@ handler watcher install github
 handler watcher install jira
 ```
 
+Watcher credentials (GitHub/Jira tokens, Jira host/email) are stored by the library in `~/.config/watcher/auth.yaml`; `handler watcher auth` writes them there. Non-secret behavior settings (e.g. Jira bot usernames) live alongside it in `~/.config/watcher/config.yaml`.
+
 `handler watcher install` creates a scheduled job that runs `handler watcher run <service>` periodically. On macOS this creates a launchd plist; on Linux it adds a cron entry. Both poll at a configurable interval (default: every 2 minutes).
 
 Alternatively, you can skip `handler watcher install` and schedule the watcher runs yourself with cron or any other scheduler:
@@ -163,18 +179,16 @@ Alternatively, you can skip `handler watcher install` and schedule the watcher r
 
 ### Jira custom fields
 
-Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. Configure them in `~/.agent-handler/config.yaml`:
+Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. They are owned by the watcher library and configured at the top level of `~/.config/watcher/auth.yaml`:
 
 ```yaml
-services:
-  jira:
-    custom_fields:
-      blocked: customfield_10517        # Blocked flag
-      blocked_reason: customfield_10483 # Blocked reason (rich text)
-      epic_key: customfield_10014       # Epic link
-      flagged: customfield_10021        # Impediment flag
-      story_points: customfield_10028   # Story points estimate
-      git_pull_request: customfield_10875 # Linked PR
+jira_custom_fields:
+  blocked: customfield_10517        # Blocked flag
+  blocked_reason: customfield_10483 # Blocked reason (rich text)
+  epic_key: customfield_10014       # Epic link
+  flagged: customfield_10021        # Impediment flag
+  story_points: customfield_10028   # Story points estimate
+  git_pull_request: customfield_10875 # Linked PR
 ```
 
 Default custom fields are added automatically during `handler watcher auth`. The field IDs above are common for Jira Cloud but may differ for your instance — check your Jira admin or use the Jira REST API to find the right IDs.
