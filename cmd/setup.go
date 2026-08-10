@@ -34,14 +34,20 @@ var setupCmd = &cobra.Command{
 }
 
 var setupYes bool
+var setupMigrateWatcher bool
 
 func init() {
 	setupCmd.GroupID = "admin"
 	rootCmd.AddCommand(setupCmd)
 	setupCmd.Flags().BoolVarP(&setupYes, "yes", "y", false, "skip confirmation prompts (non-interactive mode)")
+	setupCmd.Flags().BoolVar(&setupMigrateWatcher, "migrate-watcher", false, "run the one-time watcher data migration instead of the normal install")
 }
 
 func runInstall(cmd *cobra.Command, args []string) error {
+	if setupMigrateWatcher {
+		return runMigrateWatcher()
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return fmt.Errorf("failed to get home directory: %w", err)

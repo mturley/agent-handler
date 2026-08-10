@@ -68,6 +68,22 @@ func (db *DB) pruneDismissedBehindCursor(sessionID string) error {
 	return nil
 }
 
+// MaxEventTS returns the maximum ts among the given events, or "" if the
+// slice is empty. Event ts values are RFC3339 UTC timestamps, which sort
+// correctly with plain string comparison. Callers that advance a cursor
+// after reading a batch of events should advance to this value rather than
+// wall-clock time.Now(), which can skip events written in the same
+// second-granularity tick as the read.
+func MaxEventTS(events []Event) string {
+	max := ""
+	for _, e := range events {
+		if e.TS > max {
+			max = e.TS
+		}
+	}
+	return max
+}
+
 // AdvanceCursor inserts or updates the agent cursor for the given session.
 func (db *DB) AdvanceCursor(sessionID, ts string) error {
 	_, err := db.conn.Exec(`
@@ -149,15 +165,11 @@ func (db *DB) AutoDeliveredCount(sessionID string) (int, error) {
 
 	// Same inbox scope as the unread queries, plus an upper time bound (events
 	// between the human cursor and the agent cursor). The extra `e.ts <= ?`
-	// placeholder follows all of inboxWhereSQL's placeholders, so agentCursor is
-	// appended after inboxScopeArgs.
-	query := `
-		SELECT COUNT(DISTINCT e.id)` +
-		inboxJoinSQL + `
-		WHERE ` + inboxWhereSQL + `
-		  AND e.ts <= ?
-	`
-	args := append(inboxScopeArgs(session, *humanCursor), agentCursor)
+	// predicate's placeholder follows all of inboxArgs's placeholders, so
+	// agentCursor is appended after inboxArgs.
+	gated := db.watcherMigrationDone()
+	query := inboxSelectPred("SELECT", inboxCountCols, gated, "e.ts <= ?")
+	args := append(inboxArgs(session, *humanCursor, gated), agentCursor)
 	var count int
 	err = db.conn.QueryRow(query, args...).Scan(&count)
 	if err != nil {

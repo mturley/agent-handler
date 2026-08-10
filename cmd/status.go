@@ -11,6 +11,7 @@ import (
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
+	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
 
@@ -98,10 +99,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 		// Watcher and resource summary
 		fmt.Printf("\n%s─── Watchers ───%s\n", dim, reset)
-		cfg, _ := config.Read(config.DefaultPath())
 		for _, svc := range []string{"github", "jira"} {
 			status := fmt.Sprintf("%s✗ not configured%s", red, reset)
-			if cfg != nil && cfg.IsServiceConfigured(svc) {
+			if config.ServiceConfiguredForWatching(svc) {
 				if watcherPkg.IsInstalled(svc) {
 					lastRun := watcherPkg.LastRunTime(svc)
 					runInfo := "never"
@@ -119,9 +119,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 						}
 					}
 					if watcherPkg.IsRunning(svc) {
-						if d.HasWatcherError(svc) {
+						if wdb.HasPollerError(d.Conn(), svc) {
 							errMsg := ""
-							if ws, err := d.GetWatcherStatus(svc); err == nil && ws != nil && ws.LastErrorMessage != "" {
+							if ws, err := wdb.GetPollerStatus(d.Conn(), svc); err == nil && ws != nil && ws.LastErrorMessage != "" {
 								errMsg = fmt.Sprintf("\n  %s         %s%s", dim, ws.LastErrorMessage, reset)
 							}
 							status = fmt.Sprintf("%s✗ error%s %s(last run: %s%s)%s%s", red, reset, dim, runInfo, nextInfo, reset, errMsg)

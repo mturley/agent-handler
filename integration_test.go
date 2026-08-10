@@ -10,6 +10,7 @@ import (
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
+	wcfg "github.com/mturley/watcher/config"
 )
 
 func buildHandler(t *testing.T) string {
@@ -26,7 +27,7 @@ func buildHandler(t *testing.T) string {
 func runHandler(t *testing.T, bin string, handlerHome string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
-	cmd.Env = append(os.Environ(), "HANDLER_HOME="+handlerHome)
+	cmd.Env = append(os.Environ(), "HANDLER_HOME="+handlerHome, "WATCHER_HOME="+handlerHome)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -72,6 +73,19 @@ func TestIntegrationLifecycle(t *testing.T) {
 	configPath := filepath.Join(home, "config.yaml")
 	if err := config.Write(configPath, &cfg); err != nil {
 		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Also write the watcher library's shared auth.yaml (the source of
+	// truth serviceConfiguredForWatching consults) so the subscribe guard
+	// and watcher status checks pass.
+	watcherCreds := wcfg.Config{
+		Services: wcfg.Services{
+			GitHub: &wcfg.GitHubConfig{Token: "fake-token"},
+			Jira:   &wcfg.JiraConfig{Token: "fake-token", Host: "fake.atlassian.net", Email: "test@example.com"},
+		},
+	}
+	if err := watcherCreds.Save(filepath.Join(home, "auth.yaml")); err != nil {
+		t.Fatalf("failed to write watcher auth.yaml: %v", err)
 	}
 
 	// Register a session
@@ -302,6 +316,19 @@ func TestIntegrationUnregister(t *testing.T) {
 	configPath := filepath.Join(home, "config.yaml")
 	if err := config.Write(configPath, &cfg); err != nil {
 		t.Fatalf("failed to write config: %v", err)
+	}
+
+	// Also write the watcher library's shared auth.yaml (the source of
+	// truth serviceConfiguredForWatching consults) so the subscribe guard
+	// and watcher status checks pass.
+	watcherCreds := wcfg.Config{
+		Services: wcfg.Services{
+			GitHub: &wcfg.GitHubConfig{Token: "fake-token"},
+			Jira:   &wcfg.JiraConfig{Token: "fake-token", Host: "fake.atlassian.net", Email: "test@example.com"},
+		},
+	}
+	if err := watcherCreds.Save(filepath.Join(home, "auth.yaml")); err != nil {
+		t.Fatalf("failed to write watcher auth.yaml: %v", err)
 	}
 
 	// Register

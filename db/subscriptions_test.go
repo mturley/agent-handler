@@ -2,259 +2,220 @@ package db
 
 import (
 	"testing"
-	"time"
+
+	wdb "github.com/mturley/watcher/db"
 )
 
-func TestSubscribeAndList(t *testing.T) {
+func TestSubscribeAndActive(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "session-sub-test")
+	seedSession(t, d, "s1")
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	sub := Subscription{
-		ID:           "sub-1",
-		SessionID:    "session-sub-test",
-		ResourceType: "pr",
-		ResourceID:   "owner/repo#123",
-		ResourceURL:  strPtr("https://github.com/owner/repo/pull/123"),
-		CreatedAt:    now,
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
 	}
 
-	if err := d.Subscribe(sub); err != nil {
-		t.Fatalf("Subscribe failed: %v", err)
-	}
-
-	subs, err := d.ListSubscriptions("session-sub-test", false)
+	subs, err := wdb.ActiveSubscriptions(d.Conn(), handlerSubscriber("s1"), false)
 	if err != nil {
-		t.Fatalf("ListSubscriptions failed: %v", err)
+		t.Fatalf("ActiveSubscriptions failed: %v", err)
 	}
-
-	if len(subs) != 1 {
-		t.Fatalf("expected 1 subscription, got %d", len(subs))
-	}
-
-	s := subs[0]
-	if s.ID != sub.ID {
-		t.Errorf("ID: got %q, want %q", s.ID, sub.ID)
-	}
-	if s.SessionID != sub.SessionID {
-		t.Errorf("SessionID: got %q, want %q", s.SessionID, sub.SessionID)
-	}
-	if s.ResourceType != sub.ResourceType {
-		t.Errorf("ResourceType: got %q, want %q", s.ResourceType, sub.ResourceType)
-	}
-	if s.ResourceID != sub.ResourceID {
-		t.Errorf("ResourceID: got %q, want %q", s.ResourceID, sub.ResourceID)
-	}
-	if s.ResourceURL == nil || *s.ResourceURL != *sub.ResourceURL {
-		t.Errorf("ResourceURL: got %v, want %v", s.ResourceURL, sub.ResourceURL)
-	}
-	if s.DeletedAt != nil {
-		t.Errorf("DeletedAt: got %v, want nil", s.DeletedAt)
+	if len(subs) != 1 || subs[0].Resource.ID != "o/r#1" {
+		t.Fatalf("got %+v", subs)
 	}
 }
 
-func TestUnsubscribeSoftDeletes(t *testing.T) {
+func TestUnsubscribeIsUserProtected(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "session-unsub-test")
+	seedSession(t, d, "s1")
 
-	now := time.Now().UTC().Format(time.RFC3339)
-	sub := Subscription{
-		ID:           "sub-2",
-		SessionID:    "session-unsub-test",
-		ResourceType: "pr",
-		ResourceID:   "owner/repo#456",
-		CreatedAt:    now,
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
 	}
-
-	if err := d.Subscribe(sub); err != nil {
-		t.Fatalf("Subscribe failed: %v", err)
-	}
-
-	// Unsubscribe
-	if err := d.Unsubscribe("session-unsub-test", "pr", "owner/repo#456"); err != nil {
+	if err := d.Unsubscribe("s1", "pr", "o/r#1"); err != nil {
 		t.Fatalf("Unsubscribe failed: %v", err)
 	}
 
-	// Should have 0 active subscriptions
-	activeSubs, err := d.ListSubscriptions("session-unsub-test", false)
+	// user-unsubscribe must NOT be revived by SubscribeIfNew
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("second SubscribeIfNew failed: %v", err)
+	}
+
+	subs, err := wdb.ActiveSubscriptions(d.Conn(), handlerSubscriber("s1"), false)
+	if err != nil {
+		t.Fatalf("ActiveSubscriptions failed: %v", err)
+	}
+	if len(subs) != 0 {
+		t.Fatalf("user-unsubscribed resource must stay inactive, got %+v", subs)
+	}
+}
+
+func TestSubscribeForceRevivesUserUnsubscribe(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.Unsubscribe("s1", "pr", "o/r#1"); err != nil { // user tombstone
+		t.Fatalf("Unsubscribe failed: %v", err)
+	}
+
+	// An explicit Subscribe (e.g. `handler subscribe` / /watch) must override
+	// the prior user unwatch.
+	if err := d.Subscribe(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("Subscribe failed: %v", err)
+	}
+
+	subs, err := wdb.ActiveSubscriptions(d.Conn(), handlerSubscriber("s1"), false)
+	if err != nil {
+		t.Fatalf("ActiveSubscriptions failed: %v", err)
+	}
+	if len(subs) != 1 {
+		t.Fatalf("expected explicit Subscribe to force-revive the user-unsubscribed resource, got %+v", subs)
+	}
+}
+
+func TestRestoreSkipsUserUnsubscribed(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "keep"}); err != nil {
+		t.Fatalf("SubscribeIfNew keep failed: %v", err)
+	}
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "user-gone"}); err != nil {
+		t.Fatalf("SubscribeIfNew user-gone failed: %v", err)
+	}
+	if err := d.Unsubscribe("s1", "pr", "user-gone"); err != nil { // user tombstone
+		t.Fatalf("Unsubscribe failed: %v", err)
+	}
+	if _, err := d.SoftDeleteSubscriptionsForSession("s1"); err != nil { // session end (non-user revoke of the rest)
+		t.Fatalf("SoftDeleteSubscriptionsForSession failed: %v", err)
+	}
+	n, err := d.RestoreSubscriptionsForSession("s1") // session return
+	if err != nil {
+		t.Fatalf("RestoreSubscriptionsForSession failed: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("expected 1 restored subscription, got %d", n)
+	}
+
+	subs, err := wdb.ActiveSubscriptions(d.Conn(), handlerSubscriber("s1"), false)
+	if err != nil {
+		t.Fatalf("ActiveSubscriptions failed: %v", err)
+	}
+	// "keep" comes back; "user-gone" stays gone
+	if len(subs) != 1 || subs[0].Resource.ID != "keep" {
+		t.Fatalf("restore should revive only non-user subs, got %+v (n=%d)", subs, n)
+	}
+}
+
+func TestListSubscriptionsIncludeDeleted(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#2"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.Unsubscribe("s1", "pr", "o/r#2"); err != nil {
+		t.Fatalf("Unsubscribe failed: %v", err)
+	}
+
+	active, err := d.ListSubscriptions("s1", false)
 	if err != nil {
 		t.Fatalf("ListSubscriptions(false) failed: %v", err)
 	}
-	if len(activeSubs) != 0 {
-		t.Errorf("expected 0 active subscriptions, got %d", len(activeSubs))
+	if len(active) != 1 || active[0].ResourceID != "o/r#1" {
+		t.Fatalf("expected only o/r#1 active, got %+v", active)
 	}
 
-	// Should have 1 total (including deleted)
-	allSubs, err := d.ListSubscriptions("session-unsub-test", true)
+	all, err := d.ListSubscriptions("s1", true)
 	if err != nil {
 		t.Fatalf("ListSubscriptions(true) failed: %v", err)
 	}
-	if len(allSubs) != 1 {
-		t.Errorf("expected 1 total subscription, got %d", len(allSubs))
+	if len(all) != 2 {
+		t.Fatalf("expected 2 subscriptions including deleted, got %+v", all)
 	}
-	if allSubs[0].DeletedAt == nil {
-		t.Error("expected DeletedAt to be set, got nil")
-	}
-}
-
-func TestReinstateSubscription(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "session-reinstate-test")
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	sub := Subscription{
-		ID:           "sub-3",
-		SessionID:    "session-reinstate-test",
-		ResourceType: "pr",
-		ResourceID:   "owner/repo#789",
-		CreatedAt:    now,
-	}
-
-	if err := d.Subscribe(sub); err != nil {
-		t.Fatalf("Subscribe failed: %v", err)
-	}
-
-	// Unsubscribe
-	if err := d.Unsubscribe("session-reinstate-test", "pr", "owner/repo#789"); err != nil {
-		t.Fatalf("Unsubscribe failed: %v", err)
-	}
-
-	// Reinstate
-	if err := d.Reinstate("session-reinstate-test", "pr", "owner/repo#789"); err != nil {
-		t.Fatalf("Reinstate failed: %v", err)
-	}
-
-	// Should have 1 active subscription
-	subs, err := d.ListSubscriptions("session-reinstate-test", false)
-	if err != nil {
-		t.Fatalf("ListSubscriptions failed: %v", err)
-	}
-	if len(subs) != 1 {
-		t.Errorf("expected 1 active subscription after reinstate, got %d", len(subs))
-	}
-	if subs[0].DeletedAt != nil {
-		t.Errorf("expected DeletedAt to be nil after reinstate, got %v", subs[0].DeletedAt)
-	}
-}
-
-func TestSubscribeDeduplicate(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "session-dedup-test")
-
-	now := time.Now().UTC().Format(time.RFC3339)
-	sub1 := Subscription{
-		ID:           "sub-4",
-		SessionID:    "session-dedup-test",
-		ResourceType: "pr",
-		ResourceID:   "owner/repo#100",
-		CreatedAt:    now,
-	}
-
-	if err := d.Subscribe(sub1); err != nil {
-		t.Fatalf("first Subscribe failed: %v", err)
-	}
-
-	// Subscribe again with different ID (should deduplicate)
-	sub2 := Subscription{
-		ID:           "sub-5",
-		SessionID:    "session-dedup-test",
-		ResourceType: "pr",
-		ResourceID:   "owner/repo#100",
-		CreatedAt:    now,
-	}
-
-	if err := d.Subscribe(sub2); err != nil {
-		t.Fatalf("second Subscribe failed: %v", err)
-	}
-
-	// Should only have 1 subscription
-	subs, err := d.ListSubscriptions("session-dedup-test", false)
-	if err != nil {
-		t.Fatalf("ListSubscriptions failed: %v", err)
-	}
-	if len(subs) != 1 {
-		t.Errorf("expected 1 subscription after deduplicate, got %d", len(subs))
-	}
-	// Should be the first one
-	if subs[0].ID != sub1.ID {
-		t.Errorf("expected first subscription ID %q, got %q", sub1.ID, subs[0].ID)
-	}
-}
-
-func activeCount(t *testing.T, d *DB, sessionID string) int {
-	t.Helper()
-	subs, err := d.ListSubscriptions(sessionID, false)
-	if err != nil {
-		t.Fatalf("ListSubscriptions failed: %v", err)
-	}
-	return len(subs)
-}
-
-func TestRestoreDoesNotResurrectUserUnsubscribes(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "sess-restore")
-	now := time.Now().UTC().Format(time.RFC3339)
-
-	// Two subscriptions.
-	for i, id := range []string{"keep", "drop"} {
-		if err := d.Subscribe(Subscription{
-			ID: id, SessionID: "sess-restore", ResourceType: "pr",
-			ResourceID: "owner/repo#" + string(rune('1'+i)), CreatedAt: now,
-		}); err != nil {
-			t.Fatalf("Subscribe %s: %v", id, err)
+	for _, s := range all {
+		if s.SessionID != "s1" {
+			t.Errorf("expected session_id s1, got %q", s.SessionID)
+		}
+		if s.ResourceID == "o/r#2" && s.DeletedAt == nil {
+			t.Errorf("expected o/r#2 to have DeletedAt set, got nil")
 		}
 	}
+}
 
-	// User explicitly unsubscribes from "drop".
-	if err := d.Unsubscribe("sess-restore", "pr", "owner/repo#2"); err != nil {
-		t.Fatalf("Unsubscribe: %v", err)
+func TestRenewExtendsSessionLeases(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
 	}
-	// The lifecycle soft-deletes everything (as happens on archive).
-	if _, err := d.SoftDeleteSubscriptionsForSession("sess-restore"); err != nil {
-		t.Fatalf("SoftDeleteSubscriptionsForSession: %v", err)
-	}
-	if c := activeCount(t, d, "sess-restore"); c != 0 {
-		t.Fatalf("after soft-delete: got %d active, want 0", c)
+	if err := d.RenewSubscriptionsForSession("s1"); err != nil {
+		t.Fatalf("RenewSubscriptionsForSession failed: %v", err)
 	}
 
-	// Reactivation restores lifecycle deletes but NOT the user unsubscribe.
-	if _, err := d.RestoreSubscriptionsForSession("sess-restore"); err != nil {
-		t.Fatalf("RestoreSubscriptionsForSession: %v", err)
-	}
-	subs, err := d.ListSubscriptions("sess-restore", false)
+	// still active after renew
+	subs, err := d.ListSubscriptions("s1", false)
 	if err != nil {
-		t.Fatalf("ListSubscriptions: %v", err)
+		t.Fatalf("ListSubscriptions failed: %v", err)
 	}
-	if len(subs) != 1 || subs[0].ResourceID != "owner/repo#1" {
-		t.Fatalf("expected only owner/repo#1 restored, got %+v", subs)
+	if len(subs) != 1 {
+		t.Fatalf("want 1 active after renew, got %d", len(subs))
 	}
 }
 
-func TestReinstateClearsUserUnsubscribe(t *testing.T) {
+func TestSoftDeleteForSessionClearsLeases(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "sess-reinstate2")
-	now := time.Now().UTC().Format(time.RFC3339)
-	sub := Subscription{
-		ID: "r1", SessionID: "sess-reinstate2", ResourceType: "pr",
-		ResourceID: "owner/repo#9", CreatedAt: now,
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
 	}
-	if err := d.Subscribe(sub); err != nil {
-		t.Fatalf("Subscribe: %v", err)
+
+	// This is the call cmd/cleanup.go makes for each archived session id —
+	// verifying it clears leases here covers the cleanup-revoke behavior at
+	// the db seam cleanup relies on.
+	if _, err := d.SoftDeleteSubscriptionsForSession("s1"); err != nil {
+		t.Fatalf("SoftDeleteSubscriptionsForSession failed: %v", err)
 	}
-	if err := d.Unsubscribe("sess-reinstate2", "pr", "owner/repo#9"); err != nil {
-		t.Fatalf("Unsubscribe: %v", err)
+
+	subs, err := d.ListSubscriptions("s1", false)
+	if err != nil {
+		t.Fatalf("ListSubscriptions failed: %v", err)
 	}
-	// Explicit re-subscribe should clear the user flag...
-	if err := d.Subscribe(sub); err != nil {
-		t.Fatalf("re-Subscribe: %v", err)
+	if len(subs) != 0 {
+		t.Fatalf("want 0 active after revoke, got %d", len(subs))
 	}
-	if c := activeCount(t, d, "sess-reinstate2"); c != 1 {
-		t.Fatalf("after re-subscribe: got %d active, want 1", c)
+}
+
+func TestSoftDeleteForSessionReturnsCount(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
 	}
-	// ...so a subsequent lifecycle delete + restore brings it back.
-	d.SoftDeleteSubscriptionsForSession("sess-reinstate2")
-	d.RestoreSubscriptionsForSession("sess-reinstate2")
-	if c := activeCount(t, d, "sess-reinstate2"); c != 1 {
-		t.Fatalf("after restore: got %d active, want 1 (user flag should have been cleared)", c)
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#2"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+
+	n, err := d.SoftDeleteSubscriptionsForSession("s1")
+	if err != nil {
+		t.Fatalf("SoftDeleteSubscriptionsForSession failed: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("expected 2 soft-deleted, got %d", n)
+	}
+
+	subs, err := wdb.ActiveSubscriptions(d.Conn(), handlerSubscriber("s1"), false)
+	if err != nil {
+		t.Fatalf("ActiveSubscriptions failed: %v", err)
+	}
+	if len(subs) != 0 {
+		t.Fatalf("expected 0 active after soft-delete, got %+v", subs)
 	}
 }

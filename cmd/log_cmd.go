@@ -100,7 +100,7 @@ func runLog(cmd *cobra.Command, args []string) error {
 	// Advance cursor if --since-cursor was used
 	if logSinceCursor && len(events) > 0 {
 		agentOnly, _ := cmd.Flags().GetBool("agent-only")
-		ts := time.Now().UTC().Format(time.RFC3339)
+		ts := db.MaxEventTS(events)
 		if agentOnly {
 			if err := d.AdvanceCursor(sessionID, ts); err != nil {
 				return fmt.Errorf("failed to advance cursor: %w", err)

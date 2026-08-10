@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"fmt"
+
+	wdb "github.com/mturley/watcher/db"
 )
 
 // ResourceState represents cached state of an external resource.
@@ -66,27 +68,31 @@ func (db *DB) DeleteResourceState(resourceType, resourceID string) error {
 
 // ListResourceStatesForSession returns resource states for all active subscriptions of a session.
 func (db *DB) ListResourceStatesForSession(sessionID string) ([]ResourceStateWithSubscription, error) {
-	rows, err := db.conn.Query(`
-		SELECT s.resource_type, s.resource_id, s.resource_url,
-		       COALESCE(rs.state_json, '{}'), COALESCE(rs.resource_updated_at, ''), COALESCE(rs.watcher_updated_at, '')
-		FROM subscriptions s
-		LEFT JOIN resource_state rs ON rs.resource_type = s.resource_type AND rs.resource_id = s.resource_id
-		WHERE s.session_id = ? AND s.deleted_at IS NULL
-		ORDER BY s.created_at
-	`, sessionID)
+	subs, err := wdb.ActiveSubscriptions(db.conn, handlerSubscriber(sessionID), false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list resource states: %w", err)
+		return nil, fmt.Errorf("failed to list active subscriptions: %w", err)
 	}
-	defer rows.Close()
-
-	var results []ResourceStateWithSubscription
-	for rows.Next() {
-		var r ResourceStateWithSubscription
-		if err := rows.Scan(&r.ResourceType, &r.ResourceID, &r.ResourceURL,
-			&r.StateJSON, &r.ResourceUpdatedAt, &r.WatcherUpdatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan resource state: %w", err)
+	results := make([]ResourceStateWithSubscription, 0, len(subs))
+	for _, s := range subs {
+		r := ResourceStateWithSubscription{
+			ResourceType: s.Resource.Type,
+			ResourceID:   s.Resource.ID,
+			StateJSON:    "{}",
+		}
+		if s.Resource.URL != "" {
+			url := s.Resource.URL
+			r.ResourceURL = &url
+		}
+		st, err := wdb.GetResourceState(db.conn, s.Resource.Type, s.Resource.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get resource state for %s/%s: %w", s.Resource.Type, s.Resource.ID, err)
+		}
+		if st != nil {
+			r.StateJSON = st.StateJSON
+			r.ResourceUpdatedAt = st.ResourceUpdatedAt
+			r.WatcherUpdatedAt = st.WatcherUpdatedAt
 		}
 		results = append(results, r)
 	}
-	return results, rows.Err()
+	return results, nil
 }

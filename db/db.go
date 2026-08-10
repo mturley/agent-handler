@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	wdb "github.com/mturley/watcher/db"
 	_ "modernc.org/sqlite"
 )
 
@@ -54,6 +55,13 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	// Create the watcher library's own tables (watcher_*). Disjoint from
+	// handler's runMigrations above, which never touches watcher_* tables.
+	if err := wdb.Migrate(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to run watcher migrate: %w", err)
+	}
+
 	return &DB{conn: conn}, nil
 }
 
@@ -77,6 +85,23 @@ func runMigrations(conn *sql.DB) error {
 	// ADD COLUMN is not idempotent, so only add it when absent.
 	if err := addColumnIfMissing(conn, "subscriptions", "unsubscribed_by", "TEXT"); err != nil {
 		return err
+	}
+
+	// handler_meta holds handler-owned key/value flags. The watcher_migrated
+	// flag gates the inbox UNION's watcher arm: reads stay on the legacy path
+	// until the data-migration command (Task 10) copies events/subscriptions
+	// into the watcher_* tables and sets watcher_migrated=1. This is distinct
+	// from wdb.SchemaVersion, which is >=1 as soon as the watcher tables exist
+	// (before any data is migrated) — gating on it would silently drop events
+	// from inboxes mid-migration.
+	_, err = conn.Exec(`
+		CREATE TABLE IF NOT EXISTS handler_meta (
+			key   TEXT PRIMARY KEY,
+			value TEXT
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create handler_meta table: %w", err)
 	}
 
 	return nil

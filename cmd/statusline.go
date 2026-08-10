@@ -20,6 +20,8 @@ import (
 	"github.com/mturley/agent-handler/terminal"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/mturley/agent-handler/worktree"
+	watcherlib "github.com/mturley/watcher"
+	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
 
@@ -147,6 +149,11 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		} else {
 			wd.BumpLastActive(input.SessionID, now)
 		}
+
+		// Best-effort lease renewal so long-running sessions' subscriptions
+		// don't expire out from under them; a failed renew must not break
+		// the statusline.
+		_ = wd.RenewSubscriptionsForSession(input.SessionID)
 
 		termType, termID, workspaceID := terminal.Detect()
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
@@ -630,7 +637,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {
-			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, watcher.EventType(eventType).DisplayName()))
+			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, eventDisplayName(eventType)))
 		}
 		breakdownStr := ""
 		if len(breakdownParts) > 0 {
@@ -747,15 +754,15 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 	prUnread, jiraUnread := false, false
 	if !global {
 		for eventType := range breakdown {
-			switch watcher.EventType(eventType) {
-			case watcher.EventTypePRComment, watcher.EventTypePRReviewComment, watcher.EventTypePRReviewRequested, watcher.EventTypePRApproved,
-				watcher.EventTypePRClosed, watcher.EventTypePRMerged, watcher.EventTypePRReopened, watcher.EventTypePRNewCommits,
-				watcher.EventTypeCICheckPassed, watcher.EventTypeCICheckFailed:
+			switch watcherlib.EventType(eventType) {
+			case watcherlib.EventTypePRComment, watcherlib.EventTypePRReviewComment, watcherlib.EventTypePRReviewRequested, watcherlib.EventTypePRApproved,
+				watcherlib.EventTypePRClosed, watcherlib.EventTypePRMerged, watcherlib.EventTypePRReopened, watcherlib.EventTypePRNewCommits,
+				watcherlib.EventTypeCICheckPassed, watcherlib.EventTypeCICheckFailed:
 				prUnread = true
-			case watcher.EventTypeJiraComment, watcher.EventTypeJiraStatusChange, watcher.EventTypeJiraAssigned,
-				watcher.EventTypeJiraDescChanged, watcher.EventTypeJiraLabelsChanged:
+			case watcherlib.EventTypeJiraComment, watcherlib.EventTypeJiraStatusChange, watcherlib.EventTypeJiraAssigned,
+				watcherlib.EventTypeJiraDescChanged, watcherlib.EventTypeJiraLabelsChanged:
 				jiraUnread = true
-			case watcher.EventTypeWatcherError:
+			case watcherlib.EventTypeWatcherError:
 				if prCount > 0 {
 					prUnread = true
 				}
@@ -802,13 +809,13 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 	watcherStatus := ""
 	var services []string
 	for _, svc := range []string{"github", "jira"} {
-		if cfg.IsServiceConfigured(svc) && watcher.IsInstalled(svc) {
+		if config.ServiceConfiguredForWatching(svc) && watcher.IsInstalled(svc) {
 			lastRun := watcher.LastRunTime(svc)
 			ago := ""
 			if lastRun != nil {
 				ago = fmt.Sprintf(" (%s ago)", formatDuration(time.Since(*lastRun)))
 			}
-			if d.HasWatcherError(svc) {
+			if wdb.HasPollerError(d.Conn(), svc) {
 				services = append(services, fmt.Sprintf("%s✗%s%s %s%s", colorRed, colorReset, colorDim, svc, ago))
 			} else {
 				services = append(services, fmt.Sprintf("%s✓%s%s %s%s", colorGreen, colorReset, colorDim, svc, ago))

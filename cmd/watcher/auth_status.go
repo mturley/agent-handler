@@ -25,15 +25,9 @@ type authStatus struct {
 }
 
 func runAuthStatus(cmd *cobra.Command, args []string) error {
-	configPath := config.DefaultPath()
-	cfg, err := config.Read(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
-	}
-
 	status := authStatus{
-		GitHub: cfg.IsServiceConfigured("github"),
-		Jira:   cfg.IsServiceConfigured("jira"),
+		GitHub: config.ServiceConfiguredForWatching("github"),
+		Jira:   config.ServiceConfiguredForWatching("jira"),
 	}
 
 	if *JSONOutput {

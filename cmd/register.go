@@ -148,11 +148,10 @@ func runRegister(cmd *cobra.Command, args []string) error {
 	// Spawn background catch-up watcher runs for subscribed resources
 	subs, _ := d.ListSubscriptions(regSessionID, false)
 	if len(subs) > 0 {
-		cfg, _ := config.Read(config.DefaultPath())
 		resourcesByService := make(map[string][]string)
 		for _, sub := range subs {
 			service := config.ResourceTypeToService(sub.ResourceType)
-			if service != "" && cfg.IsServiceConfigured(service) {
+			if service != "" && config.ServiceConfiguredForWatching(service) {
 				resourcesByService[service] = append(resourcesByService[service],
 					sub.ResourceID)
 			}

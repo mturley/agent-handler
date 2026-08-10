@@ -9,6 +9,7 @@ import (
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/discover"
+	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
 
@@ -161,8 +162,8 @@ func runTriage(cmd *cobra.Command, args []string) error {
 
 	// Check watcher errors
 	for _, svc := range []string{"github", "jira"} {
-		if d.HasWatcherError(svc) {
-			ws, err := d.GetWatcherStatus(svc)
+		if wdb.HasPollerError(d.Conn(), svc) {
+			ws, err := wdb.GetPollerStatus(d.Conn(), svc)
 			if err != nil {
 				return fmt.Errorf("failed to get watcher status for %s: %w", svc, err)
 			}
@@ -269,21 +270,18 @@ func runTriage(cmd *cobra.Command, args []string) error {
 
 	// Trigger catch-up for stale resources (best-effort, non-blocking)
 	if len(output.StaleResources) > 0 {
-		cfg, _ := config.Read(config.DefaultPath())
-		if cfg != nil {
-			staleByService := make(map[string][]string)
-			for _, sr := range output.StaleResources {
-				svc := config.ResourceTypeToService(sr.ResourceType)
-				if svc != "" && cfg.IsServiceConfigured(svc) {
-					staleByService[svc] = append(staleByService[svc], sr.ResourceID)
-				}
+		staleByService := make(map[string][]string)
+		for _, sr := range output.StaleResources {
+			svc := config.ResourceTypeToService(sr.ResourceType)
+			if svc != "" && config.ServiceConfiguredForWatching(svc) {
+				staleByService[svc] = append(staleByService[svc], sr.ResourceID)
 			}
-			for svc, resources := range staleByService {
-				resourceList := strings.Join(resources, ",")
-				go func(s, r string) {
-					exec.Command("handler", "watcher", "run", s, "--resources", r).Run()
-				}(svc, resourceList)
-			}
+		}
+		for svc, resources := range staleByService {
+			resourceList := strings.Join(resources, ",")
+			go func(s, r string) {
+				exec.Command("handler", "watcher", "run", s, "--resources", r).Run()
+			}(svc, resourceList)
 		}
 	}
 

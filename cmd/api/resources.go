@@ -8,6 +8,7 @@ import (
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/mturley/agent-handler/watcher"
+	wdb "github.com/mturley/watcher/db"
 )
 
 type resourceSession struct {
@@ -147,15 +148,9 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch watcher status for both github and jira
-	cfg, err := config.Read(config.DefaultPath())
-	if err != nil {
-		s.Logger.Printf("Error reading config: %v", err)
-		cfg = &config.Config{}
-	}
-
 	watchers := map[string]watcherStatusInfo{
-		"github": buildWatcherStatus(s.DB, cfg, "github"),
-		"jira":   buildWatcherStatus(s.DB, cfg, "jira"),
+		"github": buildWatcherStatus(s.DB, "github"),
+		"jira":   buildWatcherStatus(s.DB, "jira"),
 	}
 
 	writeJSON(w, http.StatusOK, resourcesResponse{
@@ -178,21 +173,21 @@ func computeDisplayState(status string, pid int, sessionID, lastPrompt string) s
 }
 
 // buildWatcherStatus builds watcher status info for a service.
-func buildWatcherStatus(database *db.DB, cfg *config.Config, service string) watcherStatusInfo {
+func buildWatcherStatus(database *db.DB, service string) watcherStatusInfo {
 	info := watcherStatusInfo{
-		Configured: cfg.IsServiceConfigured(service),
+		Configured: config.ServiceConfiguredForWatching(service),
 		Installed:  watcher.IsInstalled(service),
 		HasError:   false,
 	}
 
-	ws, err := database.GetWatcherStatus(service)
+	ws, err := wdb.GetPollerStatus(database.Conn(), service)
 	if err == nil && ws != nil {
 		if ws.LastSuccess != "" {
 			info.LastSuccess = &ws.LastSuccess
 		}
 		if ws.LastError != "" {
 			info.LastError = &ws.LastError
-			info.HasError = database.HasWatcherError(service)
+			info.HasError = wdb.HasPollerError(database.Conn(), service)
 		}
 	}
 

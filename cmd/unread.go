@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
@@ -86,7 +85,7 @@ func runUnread(cmd *cobra.Command, args []string) error {
 
 	if ack && len(events) > 0 {
 		agentOnly, _ := cmd.Flags().GetBool("agent-only")
-		ts := time.Now().UTC().Format(time.RFC3339)
+		ts := db.MaxEventTS(events)
 		if agentOnly {
 			d.AdvanceCursor(sessionID, ts)
 		} else {

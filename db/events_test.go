@@ -3,6 +3,9 @@ package db
 import (
 	"testing"
 	"time"
+
+	watcher "github.com/mturley/watcher"
+	wdb "github.com/mturley/watcher/db"
 )
 
 func TestInsertAndQueryEvents(t *testing.T) {
@@ -110,22 +113,23 @@ func TestUnreadViaResourceSubscription(t *testing.T) {
 		t.Fatalf("AdvanceCursor failed: %v", err)
 	}
 
-	// Insert event referencing the subscribed PR
+	// Insert a watcher event referencing the subscribed PR. Resource routing
+	// now lives in the watcher arm of the inbox UNION, so the event goes into
+	// watcher_events (via the library writer) and the read must run on the
+	// UNION path — hence setWatcherMigrated below.
 	eventTS := time.Now().UTC().Format(time.RFC3339)
-	e := Event{
-		ID:        "event-unread-1",
-		TS:        eventTS,
-		Source:    "github",
-		Type:      "pr_comment",
-		Title:     "New comment on PR",
-		Broadcast: false,
+	we := watcher.Event{
+		ID:     "event-unread-1",
+		TS:     eventTS,
+		Source: "github",
+		Type:   watcher.EventTypePRComment,
+		Title:  "New comment on PR",
 	}
-	resources := []EventResource{
-		{ResourceType: "pr", ResourceID: "owner/repo#200"},
+	if err := wdb.InsertEvent(d.conn, we, watcher.Resource{Type: "pr", ID: "owner/repo#200"}); err != nil {
+		t.Fatalf("wdb.InsertEvent failed: %v", err)
 	}
-
-	if err := d.InsertEvent(e, nil, resources); err != nil {
-		t.Fatalf("InsertEvent failed: %v", err)
+	if err := d.setWatcherMigrated(); err != nil {
+		t.Fatalf("setWatcherMigrated failed: %v", err)
 	}
 
 	// Check unread
@@ -138,8 +142,8 @@ func TestUnreadViaResourceSubscription(t *testing.T) {
 		t.Fatalf("expected 1 unread event, got %d", len(unread))
 	}
 
-	if unread[0].ID != e.ID {
-		t.Errorf("unread event ID: got %q, want %q", unread[0].ID, e.ID)
+	if unread[0].ID != we.ID {
+		t.Errorf("unread event ID: got %q, want %q", unread[0].ID, we.ID)
 	}
 }
 

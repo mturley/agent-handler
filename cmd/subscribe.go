@@ -55,11 +55,7 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	// Check if the corresponding service is configured
 	service := config.ResourceTypeToService(resourceType)
 	if service != "" {
-		cfg, err := config.Read(config.DefaultPath())
-		if err != nil {
-			return fmt.Errorf("reading config: %w", err)
-		}
-		if !cfg.IsServiceConfigured(service) {
+		if !config.ServiceConfiguredForWatching(service) {
 			return fmt.Errorf("%s is not configured. Run 'handler watcher auth %s' to set up API access", service, service)
 		}
 	}

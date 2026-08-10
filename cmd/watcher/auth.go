@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mturley/agent-handler/config"
+	wcfg "github.com/mturley/watcher/config"
 	"github.com/spf13/cobra"
 )
 
@@ -19,16 +20,18 @@ var authCmd = &cobra.Command{
 	Short: "Configure authentication for external services",
 	Long: `Configure authentication tokens for external services (GitHub, Jira).
 Run without arguments to configure all services interactively.
-Specify 'github' or 'jira' to configure a specific service.`,
+Specify 'github' or 'jira' to configure a specific service.
+
+Credentials are stored in the watcher library config at ~/.config/watcher/auth.yaml.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAuth,
 }
 
 func runAuth(cmd *cobra.Command, args []string) error {
-	configPath := config.DefaultPath()
-	cfg, err := config.Read(configPath)
+	authPath := wcfg.DefaultPath()
+	cfg, err := wcfg.Load(authPath)
 	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
+		return fmt.Errorf("failed to load credentials: %w", err)
 	}
 
 	// Determine which services to configure
@@ -64,16 +67,16 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	if modified {
-		if err := config.Write(configPath, cfg); err != nil {
-			return fmt.Errorf("failed to write config: %w", err)
+		if err := cfg.Save(authPath); err != nil {
+			return fmt.Errorf("failed to write credentials: %w", err)
 		}
-		fmt.Println("\nConfiguration saved.")
+		fmt.Printf("\nCredentials saved to %s\n", authPath)
 	}
 
 	return nil
 }
 
-func configureGitHub(reader *bufio.Reader, cfg *config.Config) (bool, error) {
+func configureGitHub(reader *bufio.Reader, cfg *wcfg.Config) (bool, error) {
 	fmt.Println("\n=== GitHub Configuration ===")
 
 	// Check if already configured
@@ -118,20 +121,20 @@ func configureGitHub(reader *bufio.Reader, cfg *config.Config) (bool, error) {
 
 	// Save token
 	if cfg.Services.GitHub == nil {
-		cfg.Services.GitHub = &config.GitHubConfig{}
+		cfg.Services.GitHub = &wcfg.GitHubConfig{}
 	}
 	cfg.Services.GitHub.Token = token
 
 	return true, nil
 }
 
-func configureJira(reader *bufio.Reader, cfg *config.Config) (bool, error) {
+func configureJira(reader *bufio.Reader, cfg *wcfg.Config) (bool, error) {
 	fmt.Println("\n=== Jira Configuration ===")
 
 	// Check if already configured
 	if cfg.Services.Jira != nil && cfg.Services.Jira.Token != "" {
 		fmt.Println("Jira is already configured.")
-		displayName, err := config.ValidateJiraToken(cfg.Services.Jira.URL, cfg.Services.Jira.Email, cfg.Services.Jira.Token)
+		displayName, err := config.ValidateJiraToken(cfg.Services.Jira.Host, cfg.Services.Jira.Email, cfg.Services.Jira.Token)
 		if err != nil {
 			fmt.Printf("⚠ Token validation failed: %v\n", err)
 			fmt.Print("Would you like to reconfigure? (y/N): ")
@@ -141,7 +144,7 @@ func configureJira(reader *bufio.Reader, cfg *config.Config) (bool, error) {
 			}
 		} else {
 			fmt.Printf("✓ Valid credentials for: %s\n", displayName)
-			fmt.Printf("  URL: %s\n", cfg.Services.Jira.URL)
+			fmt.Printf("  Host: %s\n", cfg.Services.Jira.Host)
 			fmt.Printf("  Email: %s\n", cfg.Services.Jira.Email)
 			return false, nil
 		}
@@ -186,34 +189,30 @@ func configureJira(reader *bufio.Reader, cfg *config.Config) (bool, error) {
 
 	fmt.Printf("✓ Valid credentials for: %s\n", displayName)
 
-	fmt.Println("")
-	fmt.Println("  Custom Jira fields can be configured in config.yaml under services.jira.custom_fields.")
-	fmt.Println("  Adding custom fields (e.g. priority, blocked status, epic links) provides additional")
-	fmt.Println("  context when the handler session triages work across sessions.")
-	fmt.Println("  See the commented examples in config.yaml for common fields.")
-
-	// Save credentials
+	// Save credentials to the library config shape. The Jira host is stored
+	// under services.jira.host (per the watcher library spec).
 	if cfg.Services.Jira == nil {
-		cfg.Services.Jira = &config.JiraConfig{}
+		cfg.Services.Jira = &wcfg.JiraConfig{}
 	}
-	cfg.Services.Jira.URL = url
+	cfg.Services.Jira.Host = url
 	cfg.Services.Jira.Email = email
 	cfg.Services.Jira.Token = token
 
-	// Add default custom fields if none are configured
-	if len(cfg.Services.Jira.CustomFields) == 0 {
-		cfg.Services.Jira.CustomFields = map[string]string{
-			"blocked":        "customfield_10517",
-			"blocked_reason": "customfield_10483",
-			"epic_key":       "customfield_10014",
-			"flagged":        "customfield_10021",
-			"story_points":   "customfield_10028",
+	// Add default custom fields if none are configured. In the library config
+	// shape these live at the top level under jira_custom_fields.
+	if len(cfg.JiraCustomFields) == 0 {
+		cfg.JiraCustomFields = map[string]string{
+			"blocked":          "customfield_10517",
+			"blocked_reason":   "customfield_10483",
+			"epic_key":         "customfield_10014",
+			"flagged":          "customfield_10021",
+			"story_points":     "customfield_10028",
 			"git_pull_request": "customfield_10875",
 		}
 		fmt.Println("")
 		fmt.Println("  Default custom fields have been added to your config. These are common")
-		fmt.Println("  field IDs for Jira Cloud — adjust them in ~/.agent-handler/config.yaml")
-		fmt.Println("  if your instance uses different field IDs.")
+		fmt.Println("  field IDs for Jira Cloud — adjust them under jira_custom_fields in")
+		fmt.Println("  ~/.config/watcher/auth.yaml if your instance uses different field IDs.")
 	}
 
 	return true, nil

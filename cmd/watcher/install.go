@@ -7,10 +7,25 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mturley/agent-handler/config"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
+	wcfg "github.com/mturley/watcher/config"
 	"github.com/spf13/cobra"
 )
+
+// isServiceConfigured reports whether a service has credentials in the
+// watcher library config (auth.yaml).
+func isServiceConfigured(cfg *wcfg.Config, name string) bool {
+	switch name {
+	case "github":
+		_, err := cfg.GitHub()
+		return err == nil
+	case "jira":
+		_, err := cfg.Jira()
+		return err == nil
+	default:
+		return false
+	}
+}
 
 var defaultIntervals = map[string]time.Duration{
 	"github": 3 * time.Minute,
@@ -41,23 +56,29 @@ func runInstallWatcher(cmd *cobra.Command, args []string) error {
 }
 
 func installAll(cmd *cobra.Command) error {
-	// Run auth first
-	cfg, err := config.Read(config.DefaultPath())
+	// Run auth first, writing credentials to the watcher library config.
+	authPath := wcfg.DefaultPath()
+	cfg, err := wcfg.Load(authPath)
 	if err != nil {
-		cfg = &config.Config{}
+		cfg = &wcfg.Config{}
 	}
 
 	reader := bufio.NewReader(os.Stdin)
-	configureGitHub(reader, cfg)
-	configureJira(reader, cfg)
+	ghChanged, _ := configureGitHub(reader, cfg)
+	jiraChanged, _ := configureJira(reader, cfg)
+	if ghChanged || jiraChanged {
+		if err := cfg.Save(authPath); err != nil {
+			return fmt.Errorf("failed to write credentials: %w", err)
+		}
+	}
 
 	// Re-read config after auth
-	cfg, _ = config.Read(config.DefaultPath())
+	cfg, _ = wcfg.Load(authPath)
 
 	// Install watchers for authenticated services
 	installed := 0
 	for _, name := range knownWatchers {
-		if cfg.IsServiceConfigured(name) {
+		if isServiceConfigured(cfg, name) {
 			if watcherPkg.IsInstalled(name) {
 				fmt.Printf("  ✓ %s watcher already installed\n", name)
 				installed++
@@ -96,12 +117,12 @@ func installSingle(cmd *cobra.Command, name string) error {
 		return fmt.Errorf("unknown watcher: %s (valid: %s)", name, strings.Join(knownWatchers, ", "))
 	}
 
-	cfg, err := config.Read(config.DefaultPath())
+	cfg, err := wcfg.Load(wcfg.DefaultPath())
 	if err != nil {
-		return fmt.Errorf("reading config: %w", err)
+		return fmt.Errorf("reading credentials: %w", err)
 	}
 
-	if !cfg.IsServiceConfigured(name) {
+	if !isServiceConfigured(cfg, name) {
 		return fmt.Errorf("%s is not configured. Run 'handler watcher auth %s' first", name, name)
 	}
 
