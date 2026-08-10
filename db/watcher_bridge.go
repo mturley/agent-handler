@@ -3,6 +3,9 @@ package db
 import (
 	"strings"
 	"time"
+
+	watcher "github.com/mturley/watcher"
+	wdb "github.com/mturley/watcher/db"
 )
 
 // sessionLeaseTTL is how long a session's watcher subscription leases last
@@ -28,4 +31,58 @@ func sessionIDFromSubscriber(subscriber string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimPrefix(subscriber, subscriberPrefix), true
+}
+
+// subFromWatcher maps a watcher-library subscription row into handler's
+// Subscription shape for the given session id. The caller supplies the
+// session id explicitly (rather than deriving it here) so it can be used
+// both when the session id is already known (ListSubscriptions) and when
+// it must first be recovered from the subscriber string (SessionsForResource).
+func subFromWatcher(sessionID string, r wdb.Subscription) Subscription {
+	var url *string
+	if r.Resource.URL != "" {
+		u := r.Resource.URL
+		url = &u
+	}
+	return Subscription{
+		ID:           r.ID,
+		SessionID:    sessionID,
+		ResourceType: r.Resource.Type,
+		ResourceID:   r.Resource.ID,
+		ResourceURL:  url,
+		CreatedAt:    r.CreatedAt,
+		DeletedAt:    r.DeletedAt,
+	}
+}
+
+// isLiveSubscription reports whether a watcher-library subscription row is
+// currently active: not soft-deleted and not lease-expired. SubscribersOf
+// returns rows in any state, so callers that need only live subscribers
+// (e.g. FindRelatedSessions) must filter with this.
+func isLiveSubscription(r wdb.Subscription) bool {
+	if r.DeletedAt != nil {
+		return false
+	}
+	if r.ExpiresAt != nil && *r.ExpiresAt <= time.Now().UTC().Format(time.RFC3339) {
+		return false
+	}
+	return true
+}
+
+// eventFromWatcher maps a watcher-library event into handler's Event shape.
+// Handler-only fields (SessionID, Broadcast) have no equivalent in the
+// library's event model and are left zero-valued.
+func eventFromWatcher(e watcher.Event) Event {
+	return Event{
+		ID:         e.ID,
+		TS:         e.TS,
+		ExternalTS: e.ExternalTS,
+		Source:     e.Source,
+		Type:       string(e.Type),
+		Title:      e.Title,
+		Body:       e.Body,
+		Author:     e.Author,
+		AuthorType: e.AuthorType,
+		Tags:       e.Tags,
+	}
 }

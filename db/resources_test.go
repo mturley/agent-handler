@@ -170,3 +170,20 @@ func TestResourceHistory(t *testing.T) {
 		t.Errorf("expected 1 event with no limit, got %d", len(historyAll))
 	}
 }
+
+func TestSessionsForResourceParsesSessionIDs(t *testing.T) {
+	d := testDB(t)
+	d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"})
+	d.SubscribeIfNew(Subscription{SessionID: "s2", ResourceType: "pr", ResourceID: "o/r#1"})
+	subs, err := d.SessionsForResource("pr", "o/r#1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[string]bool{}
+	for _, s := range subs {
+		ids[s.SessionID] = true
+	}
+	if !ids["s1"] || !ids["s2"] || len(ids) != 2 {
+		t.Fatalf("want s1,s2; got %v", ids)
+	}
+}

@@ -77,36 +77,23 @@ func (db *DB) Reinstate(sessionID, resourceType, resourceID string) error {
 
 // ListSubscriptions returns subscriptions for a session, optionally including soft-deleted ones.
 func (db *DB) ListSubscriptions(sessionID string, includeDeleted bool) ([]Subscription, error) {
-	query := `
-		SELECT id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at
-		FROM subscriptions
-		WHERE session_id = ?
-	`
-	if !includeDeleted {
-		query += " AND deleted_at IS NULL"
+	sub := handlerSubscriber(sessionID)
+	var rows []wdb.Subscription
+	var err error
+	if includeDeleted {
+		rows, err = wdb.AllSubscriptions(db.conn, sub, false)
+	} else {
+		rows, err = wdb.ActiveSubscriptions(db.conn, sub, false)
 	}
-	query += " ORDER BY created_at DESC"
-
-	rows, err := db.conn.Query(query, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
-	defer rows.Close()
 
-	var subs []Subscription
-	for rows.Next() {
-		var s Subscription
-		if err := rows.Scan(&s.ID, &s.SessionID, &s.ResourceType, &s.ResourceID, &s.ResourceURL, &s.CreatedAt, &s.DeletedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan subscription: %w", err)
-		}
-		subs = append(subs, s)
+	out := make([]Subscription, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, subFromWatcher(sessionID, r))
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating subscriptions: %w", err)
-	}
-
-	return subs, nil
+	return out, nil
 }
 
 // SoftDeleteSubscriptionsForBranch soft-deletes all active subscriptions for sessions on a given branch.

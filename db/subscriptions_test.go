@@ -108,6 +108,45 @@ func TestRestoreSkipsUserUnsubscribed(t *testing.T) {
 	}
 }
 
+func TestListSubscriptionsIncludeDeleted(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "s1")
+
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#1"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.SubscribeIfNew(Subscription{SessionID: "s1", ResourceType: "pr", ResourceID: "o/r#2"}); err != nil {
+		t.Fatalf("SubscribeIfNew failed: %v", err)
+	}
+	if err := d.Unsubscribe("s1", "pr", "o/r#2"); err != nil {
+		t.Fatalf("Unsubscribe failed: %v", err)
+	}
+
+	active, err := d.ListSubscriptions("s1", false)
+	if err != nil {
+		t.Fatalf("ListSubscriptions(false) failed: %v", err)
+	}
+	if len(active) != 1 || active[0].ResourceID != "o/r#1" {
+		t.Fatalf("expected only o/r#1 active, got %+v", active)
+	}
+
+	all, err := d.ListSubscriptions("s1", true)
+	if err != nil {
+		t.Fatalf("ListSubscriptions(true) failed: %v", err)
+	}
+	if len(all) != 2 {
+		t.Fatalf("expected 2 subscriptions including deleted, got %+v", all)
+	}
+	for _, s := range all {
+		if s.SessionID != "s1" {
+			t.Errorf("expected session_id s1, got %q", s.SessionID)
+		}
+		if s.ResourceID == "o/r#2" && s.DeletedAt == nil {
+			t.Errorf("expected o/r#2 to have DeletedAt set, got nil")
+		}
+	}
+}
+
 func TestSoftDeleteForSessionReturnsCount(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "s1")
