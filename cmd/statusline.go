@@ -20,6 +20,7 @@ import (
 	"github.com/mturley/agent-handler/terminal"
 	"github.com/mturley/agent-handler/watcher"
 	"github.com/mturley/agent-handler/worktree"
+	watcherlib "github.com/mturley/watcher"
 	wdb "github.com/mturley/watcher/db"
 	"github.com/spf13/cobra"
 )
@@ -636,7 +637,7 @@ func renderInboxLine(d *db.DB, session *db.Session, global bool) (int, string) {
 	} else {
 		var breakdownParts []string
 		for eventType, count := range breakdown {
-			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, watcher.EventType(eventType).DisplayName()))
+			breakdownParts = append(breakdownParts, fmt.Sprintf("%d %s", count, watcherlib.EventType(eventType).DisplayName()))
 		}
 		breakdownStr := ""
 		if len(breakdownParts) > 0 {
@@ -753,15 +754,15 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 	prUnread, jiraUnread := false, false
 	if !global {
 		for eventType := range breakdown {
-			switch watcher.EventType(eventType) {
-			case watcher.EventTypePRComment, watcher.EventTypePRReviewComment, watcher.EventTypePRReviewRequested, watcher.EventTypePRApproved,
-				watcher.EventTypePRClosed, watcher.EventTypePRMerged, watcher.EventTypePRReopened, watcher.EventTypePRNewCommits,
-				watcher.EventTypeCICheckPassed, watcher.EventTypeCICheckFailed:
+			switch watcherlib.EventType(eventType) {
+			case watcherlib.EventTypePRComment, watcherlib.EventTypePRReviewComment, watcherlib.EventTypePRReviewRequested, watcherlib.EventTypePRApproved,
+				watcherlib.EventTypePRClosed, watcherlib.EventTypePRMerged, watcherlib.EventTypePRReopened, watcherlib.EventTypePRNewCommits,
+				watcherlib.EventTypeCICheckPassed, watcherlib.EventTypeCICheckFailed:
 				prUnread = true
-			case watcher.EventTypeJiraComment, watcher.EventTypeJiraStatusChange, watcher.EventTypeJiraAssigned,
-				watcher.EventTypeJiraDescChanged, watcher.EventTypeJiraLabelsChanged:
+			case watcherlib.EventTypeJiraComment, watcherlib.EventTypeJiraStatusChange, watcherlib.EventTypeJiraAssigned,
+				watcherlib.EventTypeJiraDescChanged, watcherlib.EventTypeJiraLabelsChanged:
 				jiraUnread = true
-			case watcher.EventTypeWatcherError:
+			case watcherlib.EventTypeWatcherError:
 				if prCount > 0 {
 					prUnread = true
 				}

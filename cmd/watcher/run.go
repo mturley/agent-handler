@@ -2,13 +2,18 @@ package watcher
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/watcher"
-	"github.com/mturley/agent-handler/watcher/github"
-	"github.com/mturley/agent-handler/watcher/jira"
+	watcherlib "github.com/mturley/watcher"
+	wcfg "github.com/mturley/watcher/config"
+	wdb "github.com/mturley/watcher/db"
+	wgithub "github.com/mturley/watcher/github"
+	wjira "github.com/mturley/watcher/jira"
 	"github.com/spf13/cobra"
 )
 
@@ -40,48 +45,46 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown watcher: %s (must be 'github' or 'jira')", name)
 	}
 
-	// Check service is configured
-	configPath := config.DefaultPath()
-	cfg, err := config.Read(configPath)
+	// Load credentials from the watcher library config (auth.yaml).
+	creds, err := wcfg.Load(wcfg.DefaultPath())
 	if err != nil {
-		return fmt.Errorf("failed to read config: %w", err)
+		return fmt.Errorf("failed to load watcher credentials: %w", err)
 	}
 
-	if !cfg.IsServiceConfigured(name) {
-		return fmt.Errorf("service %q is not configured. Run 'handler watcher auth %s' first", name, name)
+	// Handler config still holds non-credential preferences (e.g. Jira bot
+	// usernames), read best-effort.
+	handlerCfg, err := config.Read(config.DefaultPath())
+	if err != nil {
+		handlerCfg = &config.Config{}
 	}
 
 	// Open database
-	dbPath := db.DefaultPath()
-	d, err := db.Open(dbPath)
+	d, err := db.Open(db.DefaultPath())
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 	defer d.Close()
 
 	// Determine resources to poll
-	var resources []watcher.Resource
+	resourceType := serviceToResourceType(name)
+	var resources []watcherlib.Resource
 	if runResources != "" {
-		// Parse comma-separated resource IDs
-		resourceType := serviceToResourceType(name)
-		resourceIDs := strings.Split(runResources, ",")
-		for _, id := range resourceIDs {
+		// Parse comma-separated resource IDs (catch-up mode)
+		for _, id := range strings.Split(runResources, ",") {
 			id = strings.TrimSpace(id)
 			if id != "" {
-				resources = append(resources, watcher.Resource{
-					ResourceType: resourceType,
-					ResourceID:   id,
+				resources = append(resources, watcherlib.Resource{
+					Type: resourceType,
+					ID:   id,
 				})
 			}
 		}
 	} else {
 		// Get all active resources
-		resourceType := serviceToResourceType(name)
-		activeResources, err := watcher.ActiveResources(d, resourceType)
+		resources, err = wdb.ActiveResources(d.Conn(), resourceType)
 		if err != nil {
 			return fmt.Errorf("failed to get active resources: %w", err)
 		}
-		resources = activeResources
 	}
 
 	if len(resources) == 0 {
@@ -92,14 +95,35 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Polling %d resources for %s watcher...\n", len(resources), name)
 
 	// Open watcher log
-	logger := watcher.OpenLog(name)
+	logger := openLog(name)
 
-	// Run watcher-specific poll
+	// Run watcher-specific poll via the library pollers.
 	switch name {
 	case "github":
-		return github.Poll(d, cfg, resources, logger)
+		gh, err := creds.GitHub()
+		if err != nil {
+			return fmt.Errorf("github credentials not available: %w", err)
+		}
+		return wgithub.Poll(d.Conn(), gh.Token, resources, logger)
 	case "jira":
-		return jira.Poll(d, cfg, resources, logger)
+		jc, err := creds.Jira()
+		if err != nil {
+			return fmt.Errorf("jira credentials not available: %w", err)
+		}
+		// BotUsernames is a handler-side preference (not a credential), so it
+		// stays in the handler config rather than the library auth.yaml.
+		var botUsernames []string
+		if handlerCfg.Services.Jira != nil {
+			botUsernames = handlerCfg.Services.Jira.BotUsernames
+		}
+		auth := wjira.JiraAuth{
+			URL:          jc.Host,
+			Email:        jc.Email,
+			Token:        jc.Token,
+			CustomFields: jc.CustomFields,
+			BotUsernames: botUsernames,
+		}
+		return wjira.Poll(d.Conn(), auth, resources, logger)
 	default:
 		return fmt.Errorf("unknown watcher: %s", name)
 	}
@@ -115,4 +139,20 @@ func serviceToResourceType(service string) string {
 	default:
 		return ""
 	}
+}
+
+// openLog opens an append-only log file for the named watcher, matching the
+// path used by `handler watcher logs`: ~/.agent-handler/data/logs/watcher-<name>.log.
+// Falls back to stderr if the log file cannot be opened.
+func openLog(name string) *log.Logger {
+	logDir := filepath.Join(db.HandlerHome(), "data", "logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return log.New(os.Stderr, fmt.Sprintf("[%s] ", name), log.LstdFlags)
+	}
+	logPath := filepath.Join(logDir, fmt.Sprintf("watcher-%s.log", name))
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return log.New(os.Stderr, fmt.Sprintf("[%s] ", name), log.LstdFlags)
+	}
+	return log.New(logFile, "", log.LstdFlags)
 }
