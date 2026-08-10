@@ -192,7 +192,7 @@ func TestPoll_FirstPoll(t *testing.T) {
 		t.Fatalf("Expected 1 PR, got %d", len(prDataList))
 	}
 
-	_, err = processPR(tempDB, prDataList[0], resources[0], logger)
+	_, err = processPR(tempDB, prDataList[0], resources[0], "test-token", logger)
 	if err != nil {
 		t.Fatalf("Poll failed: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestPoll_SubsequentPoll(t *testing.T) {
 		t.Fatalf("Expected 1 PR, got %d", len(prDataList))
 	}
 
-	_, err = processPR(tempDB, prDataList[0], resources[0], logger)
+	_, err = processPR(tempDB, prDataList[0], resources[0], "test-token", logger)
 	if err != nil {
 		t.Fatalf("Poll failed: %v", err)
 	}
