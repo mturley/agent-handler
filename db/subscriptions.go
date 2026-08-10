@@ -1,8 +1,10 @@
 package db
 
 import (
-	"database/sql"
 	"fmt"
+
+	watcher "github.com/mturley/watcher"
+	wdb "github.com/mturley/watcher/db"
 )
 
 // Subscription represents a session's subscription to a resource.
@@ -16,117 +18,49 @@ type Subscription struct {
 	DeletedAt    *string `json:"deleted_at,omitempty"`
 }
 
-// Subscribe subscribes a session to a resource.
-// If an active subscription already exists, returns nil (dedup).
-// If a soft-deleted subscription exists, reinstates it.
-// Otherwise, inserts a new subscription.
+// deref returns the empty string for a nil pointer, or the pointed-to value.
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// Subscribe subscribes a session to a resource, storing the subscription in
+// the watcher library's watcher_subscriptions table under handler's
+// subscriber namespace. If an active subscription already exists, its
+// url/lease are refreshed. If a soft-deleted (non-user) subscription exists,
+// it is reinstated. A user tombstone (see Unsubscribe) is left alone.
 func (db *DB) Subscribe(s Subscription) error {
-	// Check for existing subscription (active or soft-deleted)
-	var existingID string
-	var deletedAt *string
-	err := db.conn.QueryRow(`
-		SELECT id, deleted_at FROM subscriptions
-		WHERE session_id = ? AND resource_type = ? AND resource_id = ?
-	`, s.SessionID, s.ResourceType, s.ResourceID).Scan(&existingID, &deletedAt)
-
-	if err == nil {
-		// Subscription exists
-		if deletedAt == nil {
-			// Already active, nothing to do
-			return nil
-		}
-		// Soft-deleted, reinstate it
-		return db.Reinstate(s.SessionID, s.ResourceType, s.ResourceID)
-	}
-
-	if err != sql.ErrNoRows {
-		return fmt.Errorf("failed to check for existing subscription: %w", err)
-	}
-
-	// No existing subscription, insert new
-	_, err = db.conn.Exec(`
-		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at)
-		VALUES (?, ?, ?, ?, ?, ?, NULL)
-	`, s.ID, s.SessionID, s.ResourceType, s.ResourceID, s.ResourceURL, s.CreatedAt)
-	if err != nil {
-		return fmt.Errorf("failed to insert subscription: %w", err)
-	}
-	return nil
+	return wdb.Subscribe(db.conn, handlerSubscriber(s.SessionID),
+		watcher.Resource{Type: s.ResourceType, ID: s.ResourceID, URL: deref(s.ResourceURL)},
+		wdb.SubscribeOpts{TTL: sessionLeaseTTL})
 }
 
 // SubscribeIfNew creates a subscription only if one doesn't already exist
-// (active or soft-deleted). Unlike Subscribe, this does NOT reinstate
-// soft-deleted subscriptions — used by auto-registration from .worktree-resources
-// to avoid resurrecting subscriptions that were closed by a watcher.
+// (live). Unlike Subscribe, this does NOT refresh an already-live
+// subscription and does NOT resurrect a user-unsubscribed one — used by
+// auto-registration from .worktree-resources to avoid resurrecting
+// subscriptions that were closed by a watcher or by the user.
 func (db *DB) SubscribeIfNew(s Subscription) error {
-	var count int
-	err := db.conn.QueryRow(`
-		SELECT COUNT(*) FROM subscriptions
-		WHERE session_id = ? AND resource_type = ? AND resource_id = ?
-	`, s.SessionID, s.ResourceType, s.ResourceID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check existing subscription: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
-	_, err = db.conn.Exec(`
-		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at)
-		VALUES (?, ?, ?, ?, ?, ?, NULL)
-	`, s.ID, s.SessionID, s.ResourceType, s.ResourceID, s.ResourceURL, s.CreatedAt)
-	if err != nil {
-		return fmt.Errorf("failed to insert subscription: %w", err)
-	}
-	return nil
+	return wdb.Subscribe(db.conn, handlerSubscriber(s.SessionID),
+		watcher.Resource{Type: s.ResourceType, ID: s.ResourceID, URL: deref(s.ResourceURL)},
+		wdb.SubscribeOpts{TTL: sessionLeaseTTL, IfAbsent: true})
 }
 
-// Unsubscribe soft-deletes a subscription.
-// Returns an error if no active subscription is found.
-// If this was the last active subscription for the resource, also deletes the resource_state row.
+// Unsubscribe soft-deletes a subscription and marks it as user-initiated, so
+// a later Subscribe/SubscribeIfNew will NOT auto-reinstate it — only
+// Reinstate can revive it.
 func (db *DB) Unsubscribe(sessionID, resourceType, resourceID string) error {
-	res, err := db.conn.Exec(`
-		UPDATE subscriptions
-		SET deleted_at = datetime('now'), unsubscribed_by = 'user'
-		WHERE session_id = ? AND resource_type = ? AND resource_id = ? AND deleted_at IS NULL
-	`, sessionID, resourceType, resourceID)
-	if err != nil {
-		return fmt.Errorf("failed to unsubscribe: %w", err)
-	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("no active subscription found for session %q, resource %s/%s", sessionID, resourceType, resourceID)
-	}
-
-	return nil
+	return wdb.UserUnsubscribe(db.conn, handlerSubscriber(sessionID),
+		watcher.Resource{Type: resourceType, ID: resourceID})
 }
 
-// Reinstate clears the deleted_at timestamp for a soft-deleted subscription.
-// Also clears unsubscribed_by, since an explicit re-subscribe overrides a prior
-// user unsubscribe.
+// Reinstate force-revives a subscription regardless of how or why it was
+// removed, clearing both the soft-delete and the user tombstone flag.
 func (db *DB) Reinstate(sessionID, resourceType, resourceID string) error {
-	res, err := db.conn.Exec(`
-		UPDATE subscriptions
-		SET deleted_at = NULL, unsubscribed_by = NULL
-		WHERE session_id = ? AND resource_type = ? AND resource_id = ? AND deleted_at IS NOT NULL
-	`, sessionID, resourceType, resourceID)
-	if err != nil {
-		return fmt.Errorf("failed to reinstate subscription: %w", err)
-	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to check rows affected: %w", err)
-	}
-	if rows == 0 {
-		return fmt.Errorf("no soft-deleted subscription found for session %q, resource %s/%s", sessionID, resourceType, resourceID)
-	}
-
-	return nil
+	return wdb.Reinstate(db.conn, handlerSubscriber(sessionID),
+		watcher.Resource{Type: resourceType, ID: resourceID})
 }
 
 // ListSubscriptions returns subscriptions for a session, optionally including soft-deleted ones.
@@ -166,62 +100,70 @@ func (db *DB) ListSubscriptions(sessionID string, includeDeleted bool) ([]Subscr
 // SoftDeleteSubscriptionsForBranch soft-deletes all active subscriptions for sessions on a given branch.
 // Returns the count of subscriptions soft-deleted.
 func (db *DB) SoftDeleteSubscriptionsForBranch(branch string) (int, error) {
-	res, err := db.conn.Exec(`
-		UPDATE subscriptions
-		SET deleted_at = datetime('now')
-		WHERE session_id IN (SELECT session_id FROM sessions WHERE branch = ?)
-		  AND deleted_at IS NULL
-	`, branch)
+	rows, err := db.conn.Query(`SELECT session_id FROM sessions WHERE branch = ?`, branch)
 	if err != nil {
-		return 0, fmt.Errorf("failed to soft-delete subscriptions for branch %q: %w", branch, err)
+		return 0, fmt.Errorf("failed to look up sessions for branch %q: %w", branch, err)
 	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to check rows affected: %w", err)
+	var sessionIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("failed to scan session id: %w", err)
+		}
+		sessionIDs = append(sessionIDs, id)
 	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return 0, fmt.Errorf("error iterating sessions for branch %q: %w", branch, err)
+	}
+	rows.Close()
 
-	return int(rows), nil
+	total := 0
+	for _, sessionID := range sessionIDs {
+		n, err := db.SoftDeleteSubscriptionsForSession(sessionID)
+		if err != nil {
+			return total, fmt.Errorf("failed to soft-delete subscriptions for session %q: %w", sessionID, err)
+		}
+		total += n
+	}
+	return total, nil
 }
 
 // SoftDeleteSubscriptionsForSession soft-deletes all active subscriptions for a given session.
 // Returns the count of subscriptions soft-deleted.
 func (db *DB) SoftDeleteSubscriptionsForSession(sessionID string) (int, error) {
-	res, err := db.conn.Exec(`
-		UPDATE subscriptions
-		SET deleted_at = datetime('now')
-		WHERE session_id = ? AND deleted_at IS NULL
-	`, sessionID)
+	sub := handlerSubscriber(sessionID)
+	active, err := wdb.ActiveSubscriptions(db.conn, sub, false)
 	if err != nil {
+		return 0, fmt.Errorf("failed to count active subscriptions for session %q: %w", sessionID, err)
+	}
+	if err := wdb.RevokePrefix(db.conn, sub); err != nil {
 		return 0, fmt.Errorf("failed to soft-delete subscriptions for session %q: %w", sessionID, err)
 	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to check rows affected: %w", err)
-	}
-
-	return int(rows), nil
+	return len(active), nil
 }
 
 // RestoreSubscriptionsForSession un-soft-deletes subscriptions for a session
 // that were dropped by the archive/restart lifecycle. Subscriptions the user
-// explicitly removed via /unwatch (unsubscribed_by = 'user') are NOT restored.
+// explicitly removed via /unwatch are NOT restored. There is no library
+// primitive for a bulk "reinstate everything not user-tombstoned", so this
+// composes AllSubscriptions with a per-row Reinstate.
 func (db *DB) RestoreSubscriptionsForSession(sessionID string) (int, error) {
-	res, err := db.conn.Exec(`
-		UPDATE subscriptions
-		SET deleted_at = NULL
-		WHERE session_id = ? AND deleted_at IS NOT NULL
-		  AND (unsubscribed_by IS NULL OR unsubscribed_by != 'user')
-	`, sessionID)
+	sub := handlerSubscriber(sessionID)
+	all, err := wdb.AllSubscriptions(db.conn, sub, false)
 	if err != nil {
-		return 0, fmt.Errorf("failed to restore subscriptions for session %q: %w", sessionID, err)
+		return 0, fmt.Errorf("failed to list subscriptions for session %q: %w", sessionID, err)
 	}
-
-	rows, err := res.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to check rows affected: %w", err)
+	n := 0
+	for _, row := range all {
+		if row.UnsubscribedByUser || row.DeletedAt == nil {
+			continue
+		}
+		if err := wdb.Reinstate(db.conn, sub, row.Resource); err != nil {
+			return n, fmt.Errorf("failed to reinstate subscription %s/%s for session %q: %w", row.Resource.Type, row.Resource.ID, sessionID, err)
+		}
+		n++
 	}
-
-	return int(rows), nil
+	return n, nil
 }
