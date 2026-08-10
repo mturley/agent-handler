@@ -273,7 +273,7 @@ func runTriage(cmd *cobra.Command, args []string) error {
 		staleByService := make(map[string][]string)
 		for _, sr := range output.StaleResources {
 			svc := config.ResourceTypeToService(sr.ResourceType)
-			if svc != "" && serviceConfiguredForWatching(svc) {
+			if svc != "" && config.ServiceConfiguredForWatching(svc) {
 				staleByService[svc] = append(staleByService[svc], sr.ResourceID)
 			}
 		}

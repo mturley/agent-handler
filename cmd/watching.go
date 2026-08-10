@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
 	wdb "github.com/mturley/watcher/db"
@@ -59,7 +60,7 @@ func runWatching(cmd *cobra.Command, args []string) error {
 	var watchers []watcherStatus
 	for _, name := range []string{"github", "jira"} {
 		ws := watcherStatus{Name: name}
-		ws.Configured = serviceConfiguredForWatching(name)
+		ws.Configured = config.ServiceConfiguredForWatching(name)
 		ws.Installed = watcherPkg.IsInstalled(name)
 		ws.Running = watcherPkg.IsRunning(name)
 		if lastRun := watcherPkg.LastRunTime(name); lastRun != nil {
@@ -214,7 +215,7 @@ func runWatchingGlobal(d *db.DB) error {
 	var watchers []wsStatus
 	for _, name := range []string{"github", "jira"} {
 		ws := wsStatus{Name: name}
-		ws.Configured = serviceConfiguredForWatching(name)
+		ws.Configured = config.ServiceConfiguredForWatching(name)
 		ws.Installed = watcherPkg.IsInstalled(name)
 		ws.Running = watcherPkg.IsRunning(name)
 		if lastRun := watcherPkg.LastRunTime(name); lastRun != nil {

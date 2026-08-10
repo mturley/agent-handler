@@ -216,7 +216,7 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 		resourcesByService := make(map[string][]string)
 		for _, sub := range subs {
 			service := config.ResourceTypeToService(sub.ResourceType)
-			if service != "" && serviceConfiguredForWatching(service) {
+			if service != "" && config.ServiceConfiguredForWatching(service) {
 				resourcesByService[service] = append(resourcesByService[service], sub.ResourceID)
 			}
 		}

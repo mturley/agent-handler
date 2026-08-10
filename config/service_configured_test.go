@@ -1,4 +1,4 @@
-package cmd
+package config
 
 import (
 	"testing"
@@ -11,13 +11,13 @@ func TestServiceConfiguredForWatching(t *testing.T) {
 	t.Setenv("WATCHER_HOME", dir)
 
 	// No auth.yaml written yet: nothing should be configured.
-	if serviceConfiguredForWatching("github") {
+	if ServiceConfiguredForWatching("github") {
 		t.Error("expected github to be unconfigured before auth.yaml exists")
 	}
-	if serviceConfiguredForWatching("jira") {
+	if ServiceConfiguredForWatching("jira") {
 		t.Error("expected jira to be unconfigured before auth.yaml exists")
 	}
-	if serviceConfiguredForWatching("bogus") {
+	if ServiceConfiguredForWatching("bogus") {
 		t.Error("expected unknown service to be unconfigured")
 	}
 
@@ -31,13 +31,13 @@ func TestServiceConfiguredForWatching(t *testing.T) {
 		t.Fatalf("failed to save auth.yaml: %v", err)
 	}
 
-	if !serviceConfiguredForWatching("github") {
+	if !ServiceConfiguredForWatching("github") {
 		t.Error("expected github to be configured after writing a token")
 	}
-	if serviceConfiguredForWatching("jira") {
+	if ServiceConfiguredForWatching("jira") {
 		t.Error("expected jira to remain unconfigured (no jira block written)")
 	}
-	if serviceConfiguredForWatching("bogus") {
+	if ServiceConfiguredForWatching("bogus") {
 		t.Error("expected unknown service to remain unconfigured")
 	}
 }

@@ -1,17 +1,17 @@
-package cmd
+package config
 
 import (
 	wcfg "github.com/mturley/watcher/config"
 )
 
-// serviceConfiguredForWatching reports whether credentials for the given
+// ServiceConfiguredForWatching reports whether credentials for the given
 // watcher service ("github"/"jira") are present in the shared watcher auth
 // file (~/.config/watcher/auth.yaml), which is the source of truth the
-// pollers use. This keeps "is this service configured for watching?"
-// checks consistent with what `handler watcher run`/`install` actually
-// read, regardless of whether the (now legacy) ~/.agent-handler/config.yaml
-// has anything configured.
-func serviceConfiguredForWatching(service string) bool {
+// pollers (`handler watcher run`/`install`) actually read. This keeps "is
+// this service configured for watching?" checks consistent across the
+// codebase, regardless of whether the (now legacy) handler
+// ~/.agent-handler/config.yaml has anything configured.
+func ServiceConfiguredForWatching(service string) bool {
 	creds, err := wcfg.Load(wcfg.DefaultPath())
 	if err != nil {
 		return false
