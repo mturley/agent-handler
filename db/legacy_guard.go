@@ -37,23 +37,35 @@ func (db *DB) HasUnmigratedLegacyData() bool {
 // in the given database's schema (via sqlite_master).
 func anyLegacyTableExists(conn *sql.DB) bool {
 	for _, table := range legacyDataTables {
-		var name string
-		err := conn.QueryRow(
-			`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`, table,
-		).Scan(&name)
-		if err == nil {
+		if tableExists(conn, table) {
 			return true
 		}
 	}
 	return false
 }
 
+// tableExists reports whether a table with the given name exists in the
+// database's schema (via sqlite_master).
+func tableExists(conn *sql.DB, name string) bool {
+	var found string
+	err := conn.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`, name,
+	).Scan(&found)
+	return err == nil
+}
+
 // EnsureLegacySubscriptionsColumn brings a pre-2c database's `subscriptions`
 // table current before the migration reads it, by adding the `unsubscribed_by`
 // column when absent. Historically this ran in runMigrations on every Open;
 // Phase 2c moved it here so all legacy-schema knowledge lives alongside the
-// migration path. It is a no-op when the legacy `subscriptions` table is absent
-// (the pragma returns no rows) or the column already exists.
+// migration path. It is a genuine no-op when the legacy `subscriptions` table is
+// absent (a fresh 2c install) or the column already exists — the table-existence
+// guard is required because addColumnIfMissing would otherwise issue an
+// unconditional ALTER TABLE that errors with "no such table" once the pragma
+// finds no rows.
 func EnsureLegacySubscriptionsColumn(conn *sql.DB) error {
+	if !tableExists(conn, "subscriptions") {
+		return nil
+	}
 	return addColumnIfMissing(conn, "subscriptions", "unsubscribed_by", "TEXT")
 }
