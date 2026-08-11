@@ -47,11 +47,10 @@ func insertWatcherEvent(t *testing.T, d *DB, id, resType, resID, ts string, typ 
 	}
 }
 
-// TestInboxUnionReturnsBothArms exercises the gated UNION: with the marker set,
+// TestInboxUnionReturnsBothArms exercises the (now unconditional) UNION:
 // UnreadForSession returns BOTH an agent-routed event and a watcher-routed
-// (subscription) event; with the marker unset it returns only the agent event
-// (legacy path). A dismissed watcher event is excluded even though it lives in
-// watcher_events.
+// (subscription) event. A dismissed watcher event is excluded even though it
+// lives in watcher_events.
 func TestInboxUnionReturnsBothArms(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "s1")
@@ -71,20 +70,7 @@ func TestInboxUnionReturnsBothArms(t *testing.T) {
 	}
 	insertWatcherEvent(t, d, "watch-1", "pr", "o/r#1", watcherTS, watcher.EventTypePRComment)
 
-	// Legacy path (marker unset): only the agent event is routed. The watcher
-	// event lives in watcher_events, which the legacy query never reads.
-	pre, err := d.UnreadForSession("s1")
-	if err != nil {
-		t.Fatalf("UnreadForSession(legacy) failed: %v", err)
-	}
-	if len(pre) != 1 || pre[0].ID != "agent-1" {
-		t.Fatalf("legacy path: want [agent-1], got %+v", pre)
-	}
-
-	// UNION path (marker set): both arms contribute.
-	if err := d.setWatcherMigrated(); err != nil {
-		t.Fatalf("setWatcherMigrated failed: %v", err)
-	}
+	// Both arms contribute.
 	events, err := d.UnreadForSession("s1")
 	if err != nil {
 		t.Fatalf("UnreadForSession(union) failed: %v", err)
