@@ -340,7 +340,7 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 
 	if !skipRunningCheck {
 		if watcherPkg.IsRunning("github") || watcherPkg.IsRunning("jira") {
-			return fmt.Errorf("a watcher scheduler is running; run 'handler watcher stop' before migrating")
+			return fmt.Errorf("a watcher scheduler is running; run 'handler watcher uninstall' before migrating (note: 'handler watcher stop' is itself blocked on a legacy database, so uninstall the scheduler instead)")
 		}
 	}
 
