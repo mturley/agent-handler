@@ -344,6 +344,16 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 		}
 	}
 
+	// Flush the WAL into the main database file before the file-level backup
+	// copies it, so the backup is a consistent snapshot that includes recently
+	// committed pages (backupDBFile copies only the main .db, not the -wal/-shm
+	// sidecars). Best-effort: a checkpoint failure is surfaced but does not
+	// abort the migration — the DB is idle here (watchers uninstalled), so in
+	// practice little or nothing is left uncheckpointed.
+	if err := checkpointWAL(d.Conn()); err != nil {
+		fmt.Printf("  note: WAL checkpoint before backup failed (%v); backup may omit uncheckpointed pages.\n", err)
+	}
+
 	backupPath, err := backupDBFile(dbPath)
 	if err != nil {
 		return fmt.Errorf("failed to back up database before migrating: %w", err)
@@ -450,10 +460,24 @@ func sourceRowCounts(d *db.DB) (sourceCounts, error) {
 	return c, nil
 }
 
+// checkpointWAL flushes the write-ahead log into the main database file via
+// PRAGMA wal_checkpoint(TRUNCATE), so a subsequent file-level copy of the main
+// .db captures all committed data. It is a no-op (no error) on a database not in
+// WAL mode. Returns an error only if the pragma itself fails to execute.
+func checkpointWAL(conn *sql.DB) error {
+	// The pragma returns a result row (busy, log, checkpointed); we don't need
+	// the values, only that it ran. Use Exec so the row is discarded.
+	if _, err := conn.Exec(`PRAGMA wal_checkpoint(TRUNCATE)`); err != nil {
+		return fmt.Errorf("wal_checkpoint failed: %w", err)
+	}
+	return nil
+}
+
 // backupDBFile copies the database file at dbPath to a sibling
 // "<dbpath>.backup-<UTC timestamp>" file, returning the backup's path. It
 // aborts with an error on any copy failure rather than leaving a partial
-// backup behind.
+// backup behind. Callers should checkpointWAL the live connection first so the
+// copied main .db is a consistent snapshot.
 func backupDBFile(dbPath string) (string, error) {
 	backupPath := dbPath + ".backup-" + time.Now().UTC().Format("20060102T150405Z")
 

@@ -760,6 +760,55 @@ func TestRunMigrateWatcherAtFinishesPrior2bMigration(t *testing.T) {
 	}
 }
 
+// The pre-migration backup must be a consistent snapshot even when committed
+// data still lives in the WAL sidecar (not yet checkpointed into the main .db).
+// backupDBFile copies only the main .db file, so runMigrateWatcherAt must
+// checkpoint the WAL first. This test keeps a connection open (so the WAL is not
+// auto-checkpointed on close) through the migration, then opens the BACKUP file
+// fresh and asserts the seeded legacy rows are present in it.
+func TestRunMigrateWatcherAtBackupCapturesWALData(t *testing.T) {
+	isolateHomes(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	d, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	seedMigrationFixtures(t, d)
+	// Deliberately do NOT close d before migrating: on a WAL database, Close
+	// would checkpoint and mask the bug. Keep it open so the seeded rows are
+	// (potentially) still WAL-resident when backupDBFile copies the main .db.
+	t.Cleanup(func() { d.Close() })
+
+	subsBefore := countRows(t, d, "subscriptions")
+	if subsBefore == 0 {
+		t.Fatal("fixture seeded 0 subscriptions; test cannot detect WAL loss")
+	}
+
+	if err := runMigrateWatcherAt(dbPath, true); err != nil {
+		t.Fatalf("runMigrateWatcherAt failed: %v", err)
+	}
+
+	matches, err := filepath.Glob(dbPath + ".backup-*")
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("expected exactly 1 backup file, got %v (err %v)", matches, err)
+	}
+
+	// Open the backup file directly (read-only, its own connection) and confirm
+	// the seeded legacy subscriptions made it into the copied main .db.
+	bconn, err := sql.Open("sqlite", matches[0])
+	if err != nil {
+		t.Fatalf("open backup db: %v", err)
+	}
+	defer bconn.Close()
+	var subsInBackup int
+	if err := bconn.QueryRow(`SELECT COUNT(*) FROM subscriptions`).Scan(&subsInBackup); err != nil {
+		t.Fatalf("count subscriptions in backup: %v", err)
+	}
+	if subsInBackup != subsBefore {
+		t.Fatalf("backup has %d subscriptions, want %d — WAL data was not captured in the backup", subsInBackup, subsBefore)
+	}
+}
+
 func TestRunMigrateWatcherAtCreatesBackup(t *testing.T) {
 	isolateHomes(t)
 	dbPath := filepath.Join(t.TempDir(), "test.db")
