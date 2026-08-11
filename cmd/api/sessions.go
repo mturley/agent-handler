@@ -244,7 +244,7 @@ func (s *Server) handleSessionResources(w http.ResponseWriter, r *http.Request) 
 		// Get resource state metadata
 		var stateJSON string
 		err := s.DB.QueryRow(
-			`SELECT state_json FROM resource_state WHERE resource_type = ? AND resource_id = ?`,
+			`SELECT state_json FROM watcher_resource_state WHERE resource_type = ? AND resource_id = ?`,
 			sub.ResourceType, sub.ResourceID,
 		).Scan(&stateJSON)
 		if err == nil {

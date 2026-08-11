@@ -168,7 +168,7 @@ func (s *Server) fetchEventResources(eventID string) ([]eventResourceInfo, error
 	rows, err := s.DB.Query(
 		`SELECT er.resource_type, er.resource_id, er.resource_url, rs.state_json
 		 FROM event_resources er
-		 LEFT JOIN resource_state rs ON er.resource_type = rs.resource_type AND er.resource_id = rs.resource_id
+		 LEFT JOIN watcher_resource_state rs ON er.resource_type = rs.resource_type AND er.resource_id = rs.resource_id
 		 WHERE er.event_id = ?`,
 		eventID)
 	if err != nil {

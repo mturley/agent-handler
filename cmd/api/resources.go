@@ -112,7 +112,7 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	// Fetch resource state and enrich each entry
 	for resourceKey, entry := range resourceMap {
 		// Fetch resource state
-		state, err := s.DB.GetResourceState(entry.ResourceType, entry.ResourceID)
+		state, err := wdb.GetResourceState(s.DB.Conn(), entry.ResourceType, entry.ResourceID)
 		if err != nil {
 			s.Logger.Printf("Error fetching state for %s: %v", resourceKey, err)
 			continue
