@@ -251,15 +251,26 @@ func (s *Server) handleSessionResources(w http.ResponseWriter, r *http.Request) 
 			res.Metadata = extractResourceMetadata(sub.ResourceType, stateJSON)
 		}
 
-		// Count unreads for this resource since cursor
+		// Count unreads for this resource since cursor. Unions the legacy
+		// events/event_resources tables with the watcher library's
+		// watcher_events/watcher_event_resources, since github/jira events
+		// (and thus most resource-routed events) live only in the latter
+		// post-migration.
 		if cursor != "" {
 			rows, err := s.DB.Query(`
-				SELECT e.type, COUNT(*) FROM events e
-				JOIN event_resources er ON e.id = er.event_id
-				WHERE er.resource_type = ? AND er.resource_id = ? AND e.ts > ?
-				  AND e.type NOT IN ('watch_started', 'watcher_error')
+				SELECT e.type, COUNT(*) FROM (
+					SELECT e.id, e.type FROM events e
+					JOIN event_resources er ON e.id = er.event_id
+					WHERE er.resource_type = ? AND er.resource_id = ? AND e.ts > ?
+					  AND e.type NOT IN ('watch_started', 'watcher_error')
+					UNION ALL
+					SELECT e.id, e.type FROM watcher_events e
+					JOIN watcher_event_resources er ON e.id = er.event_id
+					WHERE er.resource_type = ? AND er.resource_id = ? AND e.ts > ?
+					  AND e.type NOT IN ('watch_started', 'watcher_error')
+				) e
 				GROUP BY e.type
-			`, sub.ResourceType, sub.ResourceID, cursor)
+			`, sub.ResourceType, sub.ResourceID, cursor, sub.ResourceType, sub.ResourceID, cursor)
 			if err == nil {
 				defer rows.Close()
 				types := make(map[string]int)

@@ -53,12 +53,29 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build SQL query
+	// Build SQL query. The FROM is a UNION ALL of two arms projecting the
+	// same 12 columns in the same order: handler's own `events` (agent arm,
+	// has session_id/broadcast/session_name) and the watcher library's
+	// `watcher_events` (github/jira events live only here post-migration;
+	// the table has no session_id/broadcast/session_name, so those are
+	// projected as NULL/0/'' literals). Wrapping it as a subquery aliased
+	// `e` lets every existing filter below (ts, type, source, title/body,
+	// ORDER BY) apply unchanged over the combined set — none of those
+	// columns differ between the arms, and none of the arms contain
+	// placeholders, so the existing `args` ordering is unaffected.
 	query := `
-		SELECT e.id, e.ts, e.source, e.session_id, COALESCE(s.session_name, ''),
+		SELECT e.id, e.ts, e.source, e.session_id, e.session_name,
 		       e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags
-		FROM events e
-		LEFT JOIN sessions s ON e.session_id = s.session_id
+		FROM (
+			SELECT e.id, e.ts, e.source, e.session_id, COALESCE(s.session_name, '') AS session_name,
+			       e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags
+			FROM events e
+			LEFT JOIN sessions s ON e.session_id = s.session_id
+			UNION ALL
+			SELECT e.id, e.ts, e.source, NULL AS session_id, '' AS session_name,
+			       e.type, e.title, e.body, e.author, e.author_type, 0 AS broadcast, e.tags
+			FROM watcher_events e
+		) e
 		WHERE 1=1
 	`
 	args := []interface{}{}
@@ -76,7 +93,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		// it ever changes (same tradeoff already made in
 		// cmd/migrate_watcher.go's legacy-subscriptions copy).
 		query += ` AND (e.session_id = ? OR e.id IN (
-			SELECT er.event_id FROM event_resources er
+			SELECT er.event_id FROM (
+				SELECT event_id, resource_type, resource_id FROM event_resources
+				UNION ALL
+				SELECT event_id, resource_type, resource_id FROM watcher_event_resources
+			) er
 			JOIN watcher_subscriptions sub ON er.resource_type = sub.resource_type AND er.resource_id = sub.resource_id
 			WHERE sub.subscriber = ?
 		))`
@@ -86,10 +107,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		parts := strings.SplitN(resourceFilter, ":", 2)
 		if len(parts) == 2 {
 			query += ` AND e.id IN (
-				SELECT er.event_id FROM event_resources er
-				WHERE er.resource_type = ? AND er.resource_id = ?
+				SELECT event_id FROM event_resources WHERE resource_type = ? AND resource_id = ?
+				UNION ALL
+				SELECT event_id FROM watcher_event_resources WHERE resource_type = ? AND resource_id = ?
 			)`
-			args = append(args, parts[0], parts[1])
+			args = append(args, parts[0], parts[1], parts[0], parts[1])
 		}
 	}
 	if typeFilter != "" {
@@ -174,7 +196,11 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) fetchEventResources(eventID string) ([]eventResourceInfo, error) {
 	rows, err := s.DB.Query(
 		`SELECT er.resource_type, er.resource_id, er.resource_url, rs.state_json
-		 FROM event_resources er
+		 FROM (
+			SELECT event_id, resource_type, resource_id, resource_url FROM event_resources
+			UNION ALL
+			SELECT event_id, resource_type, resource_id, resource_url FROM watcher_event_resources
+		 ) er
 		 LEFT JOIN watcher_resource_state rs ON er.resource_type = rs.resource_type AND er.resource_id = rs.resource_id
 		 WHERE er.event_id = ?`,
 		eventID)
