@@ -107,9 +107,32 @@ func migrateWatcherData(d *db.DB, finishOnly bool) (MigrationReport, error) {
 	return report, nil
 }
 
+// tableExistsTx reports whether a table with the given name exists in the
+// schema visible to tx, via sqlite_master. It mirrors db.TableExists but
+// queries through a transaction rather than a *sql.DB, so copyLegacyDataTx can
+// check for an individually-absent legacy table (see #8: HasUnmigratedLegacyData
+// fires on ANY ONE of the four legacy tables existing, so the copy must
+// tolerate the other three being absent) from inside the same tx/consistent
+// snapshot the copy itself runs in.
+func tableExistsTx(tx *sql.Tx, name string) bool {
+	var found string
+	err := tx.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`, name,
+	).Scan(&found)
+	return err == nil
+}
+
 // copyLegacyDataTx copies the legacy handler tables into the watcher library's
 // watcher_* tables within the given transaction, filling in `report`'s per-table
 // counts. Extracted from migrateWatcherData so the finish path can skip it.
+//
+// events and event_resources are NOT among the four legacy-droppable tables
+// (subscriptions, resource_state, resource_relationships, watcher_status) —
+// they are current tables that always exist (agent/handler events live there
+// too), so their copies below are intentionally left unguarded: an absent
+// events/event_resources table would indicate real corruption, not a partial
+// legacy migration, and should fail loudly rather than be masked as a
+// zero-count skip.
 func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 	// 1. events -> watcher_events (github/jira sourced rows only; agent and
 	// handler-own events stay in the legacy table).
@@ -137,40 +160,53 @@ func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 	}
 	report.EventResources = int(mustRowsAffected(res))
 
-	// 3. resource_state -> watcher_resource_state (direct copy, identical columns).
-	res, err = tx.Exec(`
-		INSERT INTO watcher_resource_state (resource_type, resource_id, state_json, resource_updated_at, watcher_updated_at)
-		SELECT resource_type, resource_id, state_json, resource_updated_at, watcher_updated_at
-		FROM resource_state
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to copy resource_state: %w", err)
+	// 3. resource_state -> watcher_resource_state (direct copy, identical
+	// columns). Guarded: resource_state is one of the four legacy-droppable
+	// tables and may be individually absent (see #8) if this DB was left in a
+	// hand-corrupted partial-legacy state; skip the copy and report 0 rather
+	// than erroring on "no such table".
+	if tableExistsTx(tx, "resource_state") {
+		res, err = tx.Exec(`
+			INSERT INTO watcher_resource_state (resource_type, resource_id, state_json, resource_updated_at, watcher_updated_at)
+			SELECT resource_type, resource_id, state_json, resource_updated_at, watcher_updated_at
+			FROM resource_state
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to copy resource_state: %w", err)
+		}
+		report.ResourceState = int(mustRowsAffected(res))
 	}
-	report.ResourceState = int(mustRowsAffected(res))
 
-	// 4. resource_relationships -> watcher_resource_relationships (direct copy).
-	res, err = tx.Exec(`
-		INSERT INTO watcher_resource_relationships (id, child_type, child_id, child_url, parent_type, parent_id, parent_url, relationship, source, created_at)
-		SELECT id, child_type, child_id, child_url, parent_type, parent_id, parent_url, relationship, source, created_at
-		FROM resource_relationships
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to copy resource_relationships: %w", err)
+	// 4. resource_relationships -> watcher_resource_relationships (direct
+	// copy). Guarded for the same reason as resource_state above.
+	if tableExistsTx(tx, "resource_relationships") {
+		res, err = tx.Exec(`
+			INSERT INTO watcher_resource_relationships (id, child_type, child_id, child_url, parent_type, parent_id, parent_url, relationship, source, created_at)
+			SELECT id, child_type, child_id, child_url, parent_type, parent_id, parent_url, relationship, source, created_at
+			FROM resource_relationships
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to copy resource_relationships: %w", err)
+		}
+		report.Relationships = int(mustRowsAffected(res))
 	}
-	report.Relationships = int(mustRowsAffected(res))
 
-	// 5. handler's legacy watcher_status -> watcher_poller_status (direct copy).
-	res, err = tx.Exec(`
-		INSERT INTO watcher_poller_status (name, last_success, last_error, last_error_message)
-		SELECT name, last_success, last_error, last_error_message
-		FROM watcher_status
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to copy watcher_status: %w", err)
+	// 5. handler's legacy watcher_status -> watcher_poller_status (direct
+	// copy). Guarded for the same reason as resource_state above.
+	if tableExistsTx(tx, "watcher_status") {
+		res, err = tx.Exec(`
+			INSERT INTO watcher_poller_status (name, last_success, last_error, last_error_message)
+			SELECT name, last_success, last_error, last_error_message
+			FROM watcher_status
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to copy watcher_status: %w", err)
+		}
+		report.PollerStatus = int(mustRowsAffected(res))
 	}
-	report.PollerStatus = int(mustRowsAffected(res))
 
-	// 6. subscriptions -> watcher_subscriptions. The subscriber prefix is
+	// 6. subscriptions -> watcher_subscriptions, guarded for the same reason
+	// as resource_state above. The subscriber prefix is
 	// bound as a parameter below via db.HandlerSubscriberPrefix(), the
 	// single source of truth in db/watcher_bridge.go.
 	//
@@ -182,29 +218,31 @@ func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 	// already-elapsed timestamp (now) so they immediately read as expired —
 	// writing NULL there would do the opposite of the intent and leave
 	// long-dead sessions' subscriptions polling forever.
-	now := time.Now().UTC()
-	expiresActive := now.Add(sessionLeaseTTL).Format(time.RFC3339)
-	nowExpired := now.Format(time.RFC3339)
-	res, err = tx.Exec(`
-		INSERT INTO watcher_subscriptions (id, subscriber, resource_type, resource_id, resource_url, created_at, expires_at, backfill, deleted_at, unsubscribed_by_user)
-		SELECT
-			s.id,
-			? || s.session_id,
-			s.resource_type,
-			s.resource_id,
-			s.resource_url,
-			s.created_at,
-			CASE WHEN sess.status = 'active' THEN ? ELSE ? END,
-			0,
-			s.deleted_at,
-			CASE WHEN s.unsubscribed_by = 'user' THEN 1 ELSE 0 END
-		FROM subscriptions s
-		LEFT JOIN sessions sess ON sess.session_id = s.session_id
-	`, db.HandlerSubscriberPrefix(), expiresActive, nowExpired)
-	if err != nil {
-		return fmt.Errorf("failed to copy subscriptions: %w", err)
+	if tableExistsTx(tx, "subscriptions") {
+		now := time.Now().UTC()
+		expiresActive := now.Add(sessionLeaseTTL).Format(time.RFC3339)
+		nowExpired := now.Format(time.RFC3339)
+		res, err = tx.Exec(`
+			INSERT INTO watcher_subscriptions (id, subscriber, resource_type, resource_id, resource_url, created_at, expires_at, backfill, deleted_at, unsubscribed_by_user)
+			SELECT
+				s.id,
+				? || s.session_id,
+				s.resource_type,
+				s.resource_id,
+				s.resource_url,
+				s.created_at,
+				CASE WHEN sess.status = 'active' THEN ? ELSE ? END,
+				0,
+				s.deleted_at,
+				CASE WHEN s.unsubscribed_by = 'user' THEN 1 ELSE 0 END
+			FROM subscriptions s
+			LEFT JOIN sessions sess ON sess.session_id = s.session_id
+		`, db.HandlerSubscriberPrefix(), expiresActive, nowExpired)
+		if err != nil {
+			return fmt.Errorf("failed to copy subscriptions: %w", err)
+		}
+		report.Subscriptions = int(mustRowsAffected(res))
 	}
-	report.Subscriptions = int(mustRowsAffected(res))
 
 	return nil
 }
@@ -439,18 +477,28 @@ type sourceCounts struct {
 func sourceRowCounts(d *db.DB) (sourceCounts, error) {
 	var c sourceCounts
 	conn := d.Conn()
+	// events and event_resources are current tables (not one of the four
+	// legacy-droppable tables) and always exist, so their counts are
+	// unguarded below. The remaining four queries are guarded by table name
+	// so an individually-absent legacy table (see #8) reports 0 instead of
+	// erroring with "no such table".
 	queries := []struct {
 		query string
+		table string // "" means always present; no guard needed
 		dst   *int
 	}{
-		{`SELECT COUNT(*) FROM events WHERE source IN ('github', 'jira')`, &c.Events},
-		{`SELECT COUNT(*) FROM event_resources er JOIN events e ON er.event_id = e.id WHERE e.source IN ('github', 'jira')`, &c.EventResources},
-		{`SELECT COUNT(*) FROM resource_state`, &c.ResourceState},
-		{`SELECT COUNT(*) FROM subscriptions`, &c.Subscriptions},
-		{`SELECT COUNT(*) FROM resource_relationships`, &c.Relationships},
-		{`SELECT COUNT(*) FROM watcher_status`, &c.PollerStatus},
+		{`SELECT COUNT(*) FROM events WHERE source IN ('github', 'jira')`, "", &c.Events},
+		{`SELECT COUNT(*) FROM event_resources er JOIN events e ON er.event_id = e.id WHERE e.source IN ('github', 'jira')`, "", &c.EventResources},
+		{`SELECT COUNT(*) FROM resource_state`, "resource_state", &c.ResourceState},
+		{`SELECT COUNT(*) FROM subscriptions`, "subscriptions", &c.Subscriptions},
+		{`SELECT COUNT(*) FROM resource_relationships`, "resource_relationships", &c.Relationships},
+		{`SELECT COUNT(*) FROM watcher_status`, "watcher_status", &c.PollerStatus},
 	}
 	for _, q := range queries {
+		if q.table != "" && !db.TableExists(conn, q.table) {
+			*q.dst = 0
+			continue
+		}
 		if err := conn.QueryRow(q.query).Scan(q.dst); err != nil {
 			return c, fmt.Errorf("query %q: %w", q.query, err)
 		}

@@ -54,6 +54,14 @@ func tableExists(conn *sql.DB, name string) bool {
 	return err == nil
 }
 
+// TableExists is the exported wrapper around tableExists, for callers outside
+// package db (e.g. cmd/migrate_watcher.go) that need to guard a query against
+// an individually-absent legacy table without depending on the unexported
+// helper directly.
+func TableExists(conn *sql.DB, name string) bool {
+	return tableExists(conn, name)
+}
+
 // EnsureLegacySubscriptionsColumn brings a pre-2c database's `subscriptions`
 // table current before the migration reads it, by adding the `unsubscribed_by`
 // column when absent. Historically this ran in runMigrations on every Open;

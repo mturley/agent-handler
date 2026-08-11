@@ -25,16 +25,14 @@ func testMigrateDB(t *testing.T) *db.DB {
 	return d
 }
 
-// createLegacyTables recreates the four legacy watcher tables and their indexes
-// exactly as the pre-2c db/schema.sql defined them. Phase 2c removed these
-// blocks from schema.sql (fresh installs never create them), so migration/guard
-// tests that need legacy data must create the tables themselves before seeding.
-// This is the single source of the legacy DDL for tests.
-func createLegacyTables(t *testing.T, conn interface {
-	Exec(string, ...interface{}) (sql.Result, error)
-}) {
-	t.Helper()
-	if _, err := conn.Exec(`
+// legacyTableDDL holds the pre-2c CREATE TABLE (+ index) statement for each of
+// the four legacy watcher tables, exactly as the pre-2c db/schema.sql defined
+// them. Phase 2c removed these blocks from schema.sql (fresh installs never
+// create them), so migration/guard tests that need legacy data must create the
+// tables themselves before seeding. This is the single source of the legacy
+// DDL for tests.
+var legacyTableDDL = map[string]string{
+	"subscriptions": `
 		CREATE TABLE IF NOT EXISTS subscriptions (
 		    id TEXT PRIMARY KEY,
 		    session_id TEXT NOT NULL REFERENCES sessions(session_id),
@@ -46,14 +44,16 @@ func createLegacyTables(t *testing.T, conn interface {
 		    unsubscribed_by TEXT
 		);
 		CREATE INDEX IF NOT EXISTS idx_subscriptions_resource ON subscriptions(resource_type, resource_id, deleted_at);
-
+	`,
+	"watcher_status": `
 		CREATE TABLE IF NOT EXISTS watcher_status (
 		    name TEXT PRIMARY KEY,
 		    last_success TEXT,
 		    last_error TEXT,
 		    last_error_message TEXT
 		);
-
+	`,
+	"resource_relationships": `
 		CREATE TABLE IF NOT EXISTS resource_relationships (
 		    id TEXT PRIMARY KEY,
 		    child_type TEXT NOT NULL,
@@ -66,7 +66,8 @@ func createLegacyTables(t *testing.T, conn interface {
 		    source TEXT NOT NULL,
 		    created_at TEXT NOT NULL
 		);
-
+	`,
+	"resource_state": `
 		CREATE TABLE IF NOT EXISTS resource_state (
 		    resource_type TEXT NOT NULL,
 		    resource_id TEXT NOT NULL,
@@ -75,8 +76,34 @@ func createLegacyTables(t *testing.T, conn interface {
 		    watcher_updated_at TEXT NOT NULL,
 		    PRIMARY KEY (resource_type, resource_id)
 		);
-	`); err != nil {
-		t.Fatalf("createLegacyTables: %v", err)
+	`,
+}
+
+// createLegacyTables recreates all four legacy watcher tables and their
+// indexes. See legacyTableDDL for the DDL source.
+func createLegacyTables(t *testing.T, conn interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+}) {
+	t.Helper()
+	createLegacyTablesSubset(t, conn, "subscriptions", "watcher_status", "resource_relationships", "resource_state")
+}
+
+// createLegacyTablesSubset creates only the named legacy watcher tables
+// (each must be a key of legacyTableDDL), for tests exercising a
+// partially-migrated / hand-corrupted database where only some of the four
+// legacy tables are present (see #8).
+func createLegacyTablesSubset(t *testing.T, conn interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+}, tables ...string) {
+	t.Helper()
+	for _, name := range tables {
+		ddl, ok := legacyTableDDL[name]
+		if !ok {
+			t.Fatalf("createLegacyTablesSubset: unknown legacy table %q", name)
+		}
+		if _, err := conn.Exec(ddl); err != nil {
+			t.Fatalf("createLegacyTablesSubset(%s): %v", name, err)
+		}
 	}
 }
 
@@ -403,6 +430,96 @@ func TestMigrateWatcherData(t *testing.T) {
 	}
 	if d.HasUnmigratedLegacyData() {
 		t.Errorf("HasUnmigratedLegacyData() = true after full migration, want false")
+	}
+}
+
+// TestMigrateWatcherDataPartialLegacyTables covers GitHub issue #8:
+// HasUnmigratedLegacyData fires on ANY ONE of the four legacy tables
+// existing, but a hand-corrupted or partially-migrated database may have only
+// a subset of them. The copy and source-count paths must tolerate the
+// individually-absent tables (skip + zero-count) rather than aborting
+// mid-command with "no such table".
+//
+// Only `subscriptions` and `resource_state` are created here;
+// `resource_relationships` and `watcher_status` are deliberately absent.
+func TestMigrateWatcherDataPartialLegacyTables(t *testing.T) {
+	d := testMigrateDB(t)
+	conn := d.Conn()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	createLegacyTablesSubset(t, conn, "subscriptions", "resource_state")
+
+	if _, err := conn.Exec(`
+		INSERT INTO sessions (session_id, harness, repo, branch, status, last_active, registered_at, jsonl_path)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, "S1", "claude", "github.com/example/repo", "main", "active", now, now, "/tmp/s1.jsonl"); err != nil {
+		t.Fatalf("seed session S1: %v", err)
+	}
+
+	if _, err := conn.Exec(`
+		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, resource_url, created_at, deleted_at, unsubscribed_by)
+		VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)
+	`, "sub-1", "S1", "pr", "example/repo#1", "https://github.com/example/repo/pull/1", now); err != nil {
+		t.Fatalf("seed subscription sub-1: %v", err)
+	}
+	if _, err := conn.Exec(`
+		INSERT INTO resource_state (resource_type, resource_id, state_json, resource_updated_at, watcher_updated_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, "pr", "example/repo#1", `{"state":"open"}`, now, now); err != nil {
+		t.Fatalf("seed resource_state: %v", err)
+	}
+
+	if !d.HasUnmigratedLegacyData() {
+		t.Fatalf("HasUnmigratedLegacyData() = false before migration, want true (subscriptions/resource_state present)")
+	}
+
+	preCounts, err := sourceRowCounts(d)
+	if err != nil {
+		t.Fatalf("sourceRowCounts failed: %v", err)
+	}
+	if preCounts.Subscriptions != 1 {
+		t.Errorf("preCounts.Subscriptions = %d, want 1", preCounts.Subscriptions)
+	}
+	if preCounts.ResourceState != 1 {
+		t.Errorf("preCounts.ResourceState = %d, want 1", preCounts.ResourceState)
+	}
+	if preCounts.Relationships != 0 {
+		t.Errorf("preCounts.Relationships = %d, want 0 (table absent)", preCounts.Relationships)
+	}
+	if preCounts.PollerStatus != 0 {
+		t.Errorf("preCounts.PollerStatus = %d, want 0 (table absent)", preCounts.PollerStatus)
+	}
+
+	report, err := migrateWatcherData(d, false)
+	if err != nil {
+		t.Fatalf("migrateWatcherData failed: %v (must not error on individually-absent legacy tables)", err)
+	}
+
+	if report.Subscriptions != 1 {
+		t.Errorf("report.Subscriptions = %d, want 1", report.Subscriptions)
+	}
+	if report.ResourceState != 1 {
+		t.Errorf("report.ResourceState = %d, want 1", report.ResourceState)
+	}
+	if report.Relationships != 0 {
+		t.Errorf("report.Relationships = %d, want 0 (table was absent)", report.Relationships)
+	}
+	if report.PollerStatus != 0 {
+		t.Errorf("report.PollerStatus = %d, want 0 (table was absent)", report.PollerStatus)
+	}
+
+	if got := countRows(t, d, "watcher_subscriptions"); got != 1 {
+		t.Errorf("watcher_subscriptions = %d, want 1", got)
+	}
+	if got := countRows(t, d, "watcher_resource_state"); got != 1 {
+		t.Errorf("watcher_resource_state = %d, want 1", got)
+	}
+
+	if legacyTablesExist(t, d) {
+		t.Errorf("legacy tables still exist after migration, want dropped (including the previously-absent ones, via DROP TABLE IF EXISTS)")
+	}
+	if d.HasUnmigratedLegacyData() {
+		t.Errorf("HasUnmigratedLegacyData() = true after migration, want false")
 	}
 }
 
