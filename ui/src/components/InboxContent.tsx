@@ -132,6 +132,29 @@ export function InboxContent({
           const confirming = confirmDismissEvent === ev.id
           return (
             <div key={ev.id} className="py-2">
+              {confirming ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground flex-1 min-w-0 truncate">
+                    Dismiss “{ev.title}”?
+                  </span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="h-7 shrink-0"
+                    onClick={() => dismissEventMutation.mutate(ev.id)}
+                  >
+                    Confirm
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 shrink-0"
+                    onClick={() => setConfirmDismissEvent(null)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
               <div className="flex items-start gap-2">
                 <button
                   type="button"
@@ -163,38 +186,17 @@ export function InboxContent({
                     {ev.author}
                   </span>
                 )}
-                {!confirming ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0 shrink-0"
-                    title="Dismiss this event"
-                    onClick={() => setConfirmDismissEvent(ev.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                ) : (
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-xs text-muted-foreground">Dismiss?</span>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="h-7"
-                      onClick={() => dismissEventMutation.mutate(ev.id)}
-                    >
-                      Confirm
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7"
-                      onClick={() => setConfirmDismissEvent(null)}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 shrink-0"
+                  title="Dismiss this event"
+                  onClick={() => setConfirmDismissEvent(ev.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
+              )}
               {isExpanded && ev.body && (
                 <pre className="mt-1 ml-6 text-xs text-muted-foreground whitespace-pre-wrap bg-muted/50 rounded p-2">
                   {ev.body}
