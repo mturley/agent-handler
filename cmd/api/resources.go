@@ -43,20 +43,21 @@ type resourcesResponse struct {
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	// Query all active subscriptions across all non-archived sessions, read
 	// from the watcher library's watcher_subscriptions table. That table has
-	// no session_id column — handler's subscriptions are namespaced under a
-	// "handler:session:<id>" subscriber string (see db/watcher_bridge.go's
+	// no session_id column — handler's subscriptions are namespaced under
+	// db.HandlerSubscriberPrefix() (see db/watcher_bridge.go's
 	// handlerSubscriber/sessionIDFromSubscriber), so the session id is
 	// recovered with substr() and the subscriber is restricted to handler's
 	// own prefix to exclude any non-handler subscriber.
+	prefix := db.HandlerSubscriberPrefix()
 	rows, err := s.DB.Query(`
 		SELECT s.resource_type, s.resource_id, s.resource_url,
-		       substr(s.subscriber, length('handler:session:') + 1) AS session_id,
+		       substr(s.subscriber, ?) AS session_id,
 		       sess.session_name, sess.status, sess.pid, sess.last_prompt
 		FROM watcher_subscriptions s
-		INNER JOIN sessions sess ON sess.session_id = substr(s.subscriber, length('handler:session:') + 1)
-		WHERE s.deleted_at IS NULL AND s.subscriber LIKE 'handler:session:%' AND sess.status != 'archived'
+		INNER JOIN sessions sess ON sess.session_id = substr(s.subscriber, ?)
+		WHERE s.deleted_at IS NULL AND s.subscriber LIKE ? AND sess.status != 'archived'
 		ORDER BY s.resource_type, s.resource_id, s.created_at
-	`)
+	`, len(prefix)+1, len(prefix)+1, prefix+"%")
 	if err != nil {
 		s.Logger.Printf("Error querying subscriptions: %v", err)
 		writeError(w, http.StatusInternalServerError, "Failed to query subscriptions")

@@ -170,11 +170,9 @@ func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 	}
 	report.PollerStatus = int(mustRowsAffected(res))
 
-	// 6. subscriptions -> watcher_subscriptions. The subscriber prefix
-	// literal below MUST match handlerSubscriber's subscriberPrefix in
-	// db/watcher_bridge.go — that unexported helper is the source of truth
-	// for the prefix; this SQL can't call it directly, so keep them in sync
-	// by hand if that prefix ever changes.
+	// 6. subscriptions -> watcher_subscriptions. The subscriber prefix is
+	// bound as a parameter below via db.HandlerSubscriberPrefix(), the
+	// single source of truth in db/watcher_bridge.go.
 	//
 	// expires_at: the watcher library treats a NULL expires_at as a
 	// PERMANENT lease (see db/subscriptions.go's live-subscription
@@ -191,7 +189,7 @@ func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 		INSERT INTO watcher_subscriptions (id, subscriber, resource_type, resource_id, resource_url, created_at, expires_at, backfill, deleted_at, unsubscribed_by_user)
 		SELECT
 			s.id,
-			'handler:session:' || s.session_id,
+			? || s.session_id,
 			s.resource_type,
 			s.resource_id,
 			s.resource_url,
@@ -202,7 +200,7 @@ func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 			CASE WHEN s.unsubscribed_by = 'user' THEN 1 ELSE 0 END
 		FROM subscriptions s
 		LEFT JOIN sessions sess ON sess.session_id = s.session_id
-	`, expiresActive, nowExpired)
+	`, db.HandlerSubscriberPrefix(), expiresActive, nowExpired)
 	if err != nil {
 		return fmt.Errorf("failed to copy subscriptions: %w", err)
 	}

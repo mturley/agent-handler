@@ -729,9 +729,9 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 		allSubs, err := d.Query(`
 			SELECT resource_type, COUNT(*) as count
 			FROM watcher_subscriptions
-			WHERE deleted_at IS NULL AND subscriber LIKE 'handler:session:%'
+			WHERE deleted_at IS NULL AND subscriber LIKE ?
 			GROUP BY resource_type
-		`)
+		`, db.HandlerSubscriberPrefix()+"%")
 		if err == nil {
 			defer allSubs.Close()
 			for allSubs.Next() {

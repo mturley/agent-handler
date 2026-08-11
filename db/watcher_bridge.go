@@ -29,6 +29,19 @@ func sessionIDFromSubscriber(subscriber string) (string, bool) {
 	return strings.TrimPrefix(subscriber, subscriberPrefix), true
 }
 
+// HandlerSubscriberPrefix returns the watcher-library subscriber prefix used
+// to namespace handler's own subscriptions. Other packages that can't reach
+// this package's unexported handlerSubscriber/sessionIDFromSubscriber (e.g.
+// cmd/ and cmd/api/) should use this instead of duplicating the literal.
+func HandlerSubscriberPrefix() string { return subscriberPrefix }
+
+// SessionIDFromSubscriber is the exported wrapper around
+// sessionIDFromSubscriber, for callers outside package db that need to
+// recover a session id from a handler subscriber string.
+func SessionIDFromSubscriber(subscriber string) (string, bool) {
+	return sessionIDFromSubscriber(subscriber)
+}
+
 // subFromWatcher maps a watcher-library subscription row into handler's
 // Subscription shape for the given session id. The caller supplies the
 // session id explicitly (rather than deriving it here) so it can be used

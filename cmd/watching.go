@@ -165,17 +165,18 @@ func runWatchingGlobal(d *db.DB) error {
 	}
 
 	// watcher_subscriptions has no session_id column — the session id is
-	// embedded in the "handler:session:<id>" subscriber string (see
-	// db/watcher_bridge.go's handlerSubscriber/sessionIDFromSubscriber), so
-	// it's recovered here with substr() and the subscriber is restricted to
-	// handler's own prefix to exclude any non-handler subscriber.
+	// embedded in the subscriber string under db.HandlerSubscriberPrefix()
+	// (see db/watcher_bridge.go's handlerSubscriber/sessionIDFromSubscriber),
+	// so it's recovered here with substr() and the subscriber is restricted
+	// to handler's own prefix to exclude any non-handler subscriber.
+	prefix := db.HandlerSubscriberPrefix()
 	resRows, err := d.Conn().Query(`
 		SELECT DISTINCT sub.resource_type, sub.resource_id, COALESCE(sub.resource_url, '')
 		FROM watcher_subscriptions sub
-		JOIN sessions s ON s.session_id = substr(sub.subscriber, length('handler:session:') + 1)
-		WHERE sub.deleted_at IS NULL AND sub.subscriber LIKE 'handler:session:%' AND s.status = 'active'
+		JOIN sessions s ON s.session_id = substr(sub.subscriber, ?)
+		WHERE sub.deleted_at IS NULL AND sub.subscriber LIKE ? AND s.status = 'active'
 		ORDER BY sub.resource_type, sub.resource_id
-	`)
+	`, len(prefix)+1, prefix+"%")
 	if err != nil {
 		return fmt.Errorf("failed to query subscriptions: %w", err)
 	}
@@ -189,11 +190,11 @@ func runWatchingGlobal(d *db.DB) error {
 		sessRows, err := d.Conn().Query(`
 			SELECT s.session_id, COALESCE(s.session_name, ''), s.branch, s.last_active
 			FROM watcher_subscriptions sub
-			JOIN sessions s ON s.session_id = substr(sub.subscriber, length('handler:session:') + 1)
+			JOIN sessions s ON s.session_id = substr(sub.subscriber, ?)
 			WHERE sub.resource_type = ? AND sub.resource_id = ?
-				AND sub.deleted_at IS NULL AND sub.subscriber LIKE 'handler:session:%' AND s.status = 'active'
+				AND sub.deleted_at IS NULL AND sub.subscriber LIKE ? AND s.status = 'active'
 			ORDER BY s.last_active DESC
-		`, gs.ResourceType, gs.ResourceID)
+		`, len(prefix)+1, gs.ResourceType, gs.ResourceID, prefix+"%")
 		if err == nil {
 			for sessRows.Next() {
 				var si sessionInfo
