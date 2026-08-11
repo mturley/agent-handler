@@ -68,12 +68,19 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 		args = append(args, before)
 	}
 	if sessionFilter != "" {
+		// watcher_subscriptions has no session_id column — handler's
+		// subscriptions are namespaced under a "handler:session:<id>"
+		// subscriber string (see db/watcher_bridge.go's handlerSubscriber).
+		// That helper is unexported and this is a different package, so the
+		// prefix is duplicated here as a literal; keep it in sync by hand if
+		// it ever changes (same tradeoff already made in
+		// cmd/migrate_watcher.go's legacy-subscriptions copy).
 		query += ` AND (e.session_id = ? OR e.id IN (
 			SELECT er.event_id FROM event_resources er
-			JOIN subscriptions sub ON er.resource_type = sub.resource_type AND er.resource_id = sub.resource_id
-			WHERE sub.session_id = ?
+			JOIN watcher_subscriptions sub ON er.resource_type = sub.resource_type AND er.resource_id = sub.resource_id
+			WHERE sub.subscriber = ?
 		))`
-		args = append(args, sessionFilter, sessionFilter)
+		args = append(args, sessionFilter, "handler:session:"+sessionFilter)
 	}
 	if resourceFilter != "" {
 		parts := strings.SplitN(resourceFilter, ":", 2)

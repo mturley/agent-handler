@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
@@ -61,13 +62,18 @@ func runHealth(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("error iterating session counts: %w", err)
 	}
 
-	// Count total subscriptions (active and deleted)
+	// Count total subscriptions (active and deleted), read from the watcher
+	// library's watcher_subscriptions table. "Active" matches the library's
+	// live-subscription predicate: not soft-deleted and not lease-expired.
 	var totalSubs, activeSubs int
-	err = d.QueryRow("SELECT COUNT(*) FROM subscriptions").Scan(&totalSubs)
+	err = d.QueryRow("SELECT COUNT(*) FROM watcher_subscriptions").Scan(&totalSubs)
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to count subscriptions: %w", err)
 	}
-	err = d.QueryRow("SELECT COUNT(*) FROM subscriptions WHERE deleted_at IS NULL").Scan(&activeSubs)
+	err = d.QueryRow(
+		"SELECT COUNT(*) FROM watcher_subscriptions WHERE deleted_at IS NULL AND (expires_at IS NULL OR expires_at > ?)",
+		time.Now().UTC().Format(time.RFC3339),
+	).Scan(&activeSubs)
 	if err != nil && err != sql.ErrNoRows {
 		return fmt.Errorf("failed to count active subscriptions: %w", err)
 	}

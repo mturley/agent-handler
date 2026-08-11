@@ -724,11 +724,12 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 	var breakdown map[string]int
 
 	if global {
-		// Count all subscriptions across all sessions
+		// Count all subscriptions across all sessions, read from the
+		// watcher library's watcher_subscriptions table.
 		allSubs, err := d.Query(`
 			SELECT resource_type, COUNT(*) as count
-			FROM subscriptions
-			WHERE deleted_at IS NULL
+			FROM watcher_subscriptions
+			WHERE deleted_at IS NULL AND subscriber LIKE 'handler:session:%'
 			GROUP BY resource_type
 		`)
 		if err == nil {
@@ -1151,28 +1152,23 @@ func migrateSubscriptionsFromArchived(d *db.DB, newSessionID, sessionName string
 		return
 	}
 
-	rows, err := d.Conn().Query(`
-		SELECT resource_type, resource_id, resource_url
-		FROM subscriptions
-		WHERE session_id = ?
-		ORDER BY created_at DESC
-	`, archivedID)
+	// Includes soft-deleted subscriptions (includeDeleted=true), matching
+	// the legacy query's lack of a deleted_at filter: the archived session's
+	// full subscription history — not just its currently-live subs — is
+	// carried over to the new session via SubscribeIfNew.
+	archivedSubs, err := d.ListSubscriptions(archivedID, true)
 	if err != nil {
 		return
 	}
-	defer rows.Close()
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	for rows.Next() {
-		var resType, resID string
-		var resURL *string
-		rows.Scan(&resType, &resID, &resURL)
+	for _, sub := range archivedSubs {
 		d.SubscribeIfNew(db.Subscription{
 			ID:           uuid.New().String(),
 			SessionID:    newSessionID,
-			ResourceType: resType,
-			ResourceID:   resID,
-			ResourceURL:  resURL,
+			ResourceType: sub.ResourceType,
+			ResourceID:   sub.ResourceID,
+			ResourceURL:  sub.ResourceURL,
 			CreatedAt:    now,
 		})
 	}

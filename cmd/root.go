@@ -94,9 +94,11 @@ const legacyMigrationRequiredMessage = legacyDBError
 //   - handler uninstall / handler watcher uninstall: must be usable to tear down
 //     a broken install; neither touches the legacy data.
 //
-// NOTE: `handler ui` is deliberately NOT exempt — the web dashboard's API reads
-// the legacy subscriptions/resource_state tables directly, so it must refuse
-// (and force a migration) rather than silently serve stale data.
+// NOTE: `handler ui` is deliberately NOT exempt — on an unmigrated legacy
+// database the watcher-library tables the web dashboard's API reads from
+// (watcher_subscriptions, watcher_resource_state, etc.) are empty or stale,
+// so it must refuse (and force a migration) rather than silently serve
+// incomplete data.
 //
 // Matching is by full command path (cmd.CommandPath()), not leaf name, so a
 // future subcommand that happens to reuse a leaf name (e.g. another `status`)
