@@ -2,14 +2,34 @@
 
 This runbook covers `handler setup --migrate-watcher`, the one-time command
 that copies handler's legacy events/subscriptions/resource data into the
-`watcher` library's own tables (`watcher_*`) and flips the
-`handler_meta.watcher_migrated` marker, switching the inbox onto the new
-read path.
+`watcher` library's own tables (`watcher_*`), **drops the legacy tables**,
+and **purges** the now-duplicated github/jira rows from the legacy `events`
+table — switching handler onto the `watcher_*` tables as its sole source of
+truth for subscriptions, resource state, resource relationships, and
+resource-routed events.
 
-Run this **once**, by hand, against your real `~/.agent-handler/handler.db`.
-It is not run automatically by `handler setup` (that flag must be passed
-explicitly), and it refuses to run twice — a second invocation just prints
-"watcher data already migrated (nothing to do)".
+This is a **one-way structural cleanup**. It is not run automatically by
+`handler setup` (that flag must be passed explicitly). Detection of "needs
+migrating" is purely schema-based: if none of the four legacy tables
+(`subscriptions`, `resource_state`, `resource_relationships`,
+`watcher_status`) exist, a re-run just prints "watcher data already
+migrated (nothing to do)" and does nothing further.
+
+## If you already ran the Phase 2b migration
+
+Phase 2b's version of this command copied data into `watcher_*` but
+**retained** the legacy tables. If you ran it, your database still has the
+legacy tables even though your data already lives in `watcher_*`. Running
+`handler setup --migrate-watcher` again on this (2c) binary detects that
+state — legacy tables present, but the data already copied — and **skips
+the copy** (no double-insert), then finishes the cleanup: it drops the
+legacy tables and purges the leftover github/jira duplicate rows from
+`events`. You only need to run it once more; it prints
+"Detected a prior (Phase 2b) migration" instead of the full pre-migration
+row-count report when this path is taken.
+
+Until you run it, commands are blocked with a "Legacy database found" error
+directing you here.
 
 ## Pre-flight
 
@@ -52,28 +72,43 @@ handler setup --migrate-watcher
 
 This will, in order:
 
-1. Refuse and exit if the migration has already run (checks the marker).
+1. Refuse and exit if the legacy tables are already gone (nothing to do).
 2. Refuse and exit if the github or jira watcher is still running (skip
    this by stopping them first, per Pre-flight above).
 3. Back up the database file to `<dbpath>.backup-<UTC timestamp>` (e.g.
    `~/.agent-handler/handler.db.backup-20260810T170423Z`) and print the
    backup path. Aborts with an error if the backup can't be written —
-   nothing is migrated in that case.
-4. Print pre-migration row counts from the legacy tables.
-5. Copy `events` (source in `github`/`jira` only), `event_resources`,
+   nothing is migrated or dropped in that case. **This backup is the only
+   rollback path** — see Rollback below.
+4. **Full migration** (legacy tables present, no prior Phase 2b run
+   detected): print pre-migration row counts from the legacy tables, then
+   copy `events` (source in `github`/`jira` only), `event_resources`,
    `resource_state`, `resource_relationships`, `subscriptions`, and the
    legacy `watcher_status` table into their `watcher_*` counterparts,
-   preserving original ids and timestamps. The original tables are left
-   in place, untouched, for rollback.
-6. Print a PASS/FAIL table comparing rows inserted per target table
-   against the matching source count.
+   preserving original ids and timestamps, and print a PASS/FAIL table
+   comparing rows inserted per target table against the matching source
+   count. **Finish path** (a prior Phase 2b run already copied the data):
+   skip the copy entirely and go straight to the next step.
+5. **Drop the four legacy tables** (`subscriptions`, `resource_state`,
+   `resource_relationships`, `watcher_status`) in the same transaction as
+   the copy (or immediately, on the finish path). They no longer exist in
+   the database after this step.
+6. **Purge** the github/jira-sourced rows (and their `event_resources`
+   rows) from the legacy `events` table — that data now lives in
+   `watcher_events`/`watcher_event_resources`. Agent/handler-sourced events
+   are untouched. Prints "Purged N migrated github/jira rows from the
+   legacy events table." This step is best-effort: if it fails, the
+   migration prints a warning and continues rather than aborting — the
+   leftover rows are harmless duplicates, and the copy (and any table
+   drops) already succeeded.
 7. Best-effort copy GitHub/Jira credentials from handler's
    `~/.agent-handler/config.yaml` into the watcher library's
    `~/.config/watcher/auth.yaml`, for any service present in the handler
    config but not yet configured in `auth.yaml`. This step never fails the
    migration — if it can't complete, it prints a note to run
    `handler watcher auth` manually.
-8. Set `handler_meta.watcher_migrated = 1`.
+8. Best-effort seed Jira behavior settings (custom fields, bot usernames)
+   into the watcher library's `config.yaml`.
 
 ## Verify
 
@@ -84,11 +119,11 @@ handler status
 handler log --global
 ```
 
-Unread counts should look the same as before the migration — the inbox now
-reads resource-routed events from the `watcher_*` tables (the marker is
-set), while agent-routed events continue to come from handler's own
-tables. Spot-check a session or two that had unread PR/Jira notifications
-before the migration.
+Unread counts should look the same as before the migration — the inbox
+reads resource-routed events from the `watcher_*` tables, while
+agent-routed events continue to come from handler's own `events` table.
+Spot-check a session or two that had unread PR/Jira notifications before
+the migration.
 
 ## Resume the watchers
 
@@ -99,7 +134,10 @@ handler watcher start jira
 
 ## Rollback
 
-If anything looks wrong after verifying:
+Because this migration drops the legacy tables and purges migrated `events`
+rows, **the pre-migration backup file is the only way back** — there is no
+"tables are still there, just downgrade the binary" fallback anymore. If
+anything looks wrong after verifying:
 
 1. Stop the watchers again:
 
@@ -116,24 +154,19 @@ If anything looks wrong after verifying:
    cp ~/.agent-handler/handler.db.backup-<timestamp> ~/.agent-handler/handler.db
    ```
 
-   The old (legacy) tables and query path are retained by design in this
-   phase — the restored database still has everything the pre-migration
-   binary expects, since the migration only ever *added* rows to the
-   `watcher_*` tables and set one marker; it never deleted or rewrote the
-   legacy tables.
+   Restoring the backup brings back the legacy tables and the pre-purge
+   `events` rows together, exactly as they were before the migration ran.
 
 3. Check out the prior handler commit (the one before this migration
-   command shipped), rebuild, and reinstall:
+   command shipped its 2c behavior), rebuild, and reinstall — the restored
+   database only works correctly with a binary that still knows how to read
+   the legacy tables directly:
 
    ```
-   git checkout <pre-2b-commit>
+   git checkout <pre-2c-commit>
    go build ./...
    make install NONINTERACTIVE=1
    ```
-
-   That binary reads the legacy tables directly and doesn't know about the
-   `watcher_migrated` marker, so it works unmodified against the restored
-   database.
 
 4. Resume the watchers:
 
@@ -142,10 +175,11 @@ If anything looks wrong after verifying:
    handler watcher start jira
    ```
 
-5. Once the root cause is understood and fixed, re-build the 2b binary and
+5. Once the root cause is understood and fixed, re-build the 2c binary and
    re-run `handler setup --migrate-watcher` from the top of this runbook —
    it's safe to retry against the restored (pre-migration) database, since
-   the marker was never set on it.
+   the legacy tables are back in place and the schema-based detection will
+   run the full migration path again.
 
 ## Local development against an unreleased watcher library
 
@@ -164,12 +198,12 @@ it:
    local library.
 
 3. When the library change is ready, commit + tag a new library version
-   (e.g. `v0.2.2`) and push it.
+   (e.g. `v0.2.3`) and push it.
 
 4. Re-pin handler to the released version and drop the replace:
 
    ```
-   go get github.com/mturley/watcher@v0.2.2
+   go get github.com/mturley/watcher@v0.2.3
    go mod edit -dropreplace github.com/mturley/watcher
    go mod tidy
    ```

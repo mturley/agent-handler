@@ -211,6 +211,51 @@ func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 	return nil
 }
 
+// purgeMigratedEvents deletes the github/jira-sourced rows from the legacy
+// `events` table (and their event_resources) now that the same data lives in
+// watcher_events/watcher_event_resources (copied by copyLegacyDataTx on a full
+// migration, or already copied by a prior Phase 2b run on the finish path).
+// Agent/handler-sourced events are untouched — only source IN ('github',
+// 'jira') rows are removed. `events` itself is a CURRENT table (shared with
+// agent/handler events), not one of the legacy tables dropped by
+// migrateWatcherData, so this purge is independent of and runs AFTER that
+// transaction commits: a copy failure aborts before this ever runs, so the
+// pre-migration backup is never the only way back, and a purge failure here
+// can't undo an already-successful copy.
+func purgeMigratedEvents(conn *sql.DB) (int64, error) {
+	if _, err := conn.Exec(`
+		DELETE FROM event_resources
+		WHERE event_id IN (SELECT id FROM events WHERE source IN ('github', 'jira'))
+	`); err != nil {
+		return 0, fmt.Errorf("failed to purge migrated event_resources: %w", err)
+	}
+	res, err := conn.Exec(`DELETE FROM events WHERE source IN ('github', 'jira')`)
+	if err != nil {
+		return 0, fmt.Errorf("failed to purge migrated events: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, nil //nolint:nilerr // best-effort row count; the deletes above already succeeded
+	}
+	return n, nil
+}
+
+// purgePostMigration calls purgeMigratedEvents best-effort, on both the full
+// and finish migration paths: the copy has already succeeded (or, on the
+// finish path, was already done by a prior Phase 2b run), so a purge failure
+// here should WARN rather than fail the whole migration — the leftover
+// github/jira rows in `events` are harmless duplicates (reads use
+// watcher_events now), and the pre-migration backup already covers rollback.
+func purgePostMigration(d *db.DB) {
+	n, err := purgeMigratedEvents(d.Conn())
+	if err != nil {
+		fmt.Printf("\nwarning: failed to purge migrated events from the legacy events table: %v\n", err)
+		fmt.Println("  (harmless duplicates; safe to ignore, or purge manually later)")
+		return
+	}
+	fmt.Printf("\nPurged %d migrated github/jira rows from the legacy events table.\n", n)
+}
+
 // mustRowsAffected returns res.RowsAffected(), treating a driver error as 0.
 // SQLite via modernc.org/sqlite always supports RowsAffected, so this is a
 // defensive fallback rather than an expected path.
@@ -312,6 +357,10 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 			return fmt.Errorf("migration failed: %w", err)
 		}
 		fmt.Println("Dropped legacy tables (subscriptions, resource_state, resource_relationships, watcher_status).")
+		// A 2b-migrated DB still has the duplicate github/jira rows in the
+		// legacy `events` table (2b copied but never purged them) — purge them
+		// now so they don't linger forever.
+		purgePostMigration(d)
 	} else {
 		preCounts, err := sourceRowCounts(d)
 		if err != nil {
@@ -338,6 +387,7 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 		printCompare("resource_relationships -> watcher_resource_relationships", report.Relationships, preCounts.Relationships)
 		printCompare("watcher_status -> watcher_poller_status", report.PollerStatus, preCounts.PollerStatus)
 		fmt.Println("\nDropped legacy tables (subscriptions, resource_state, resource_relationships, watcher_status).")
+		purgePostMigration(d)
 	}
 
 	migrateCredentials()

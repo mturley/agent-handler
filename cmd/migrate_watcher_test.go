@@ -579,6 +579,67 @@ func TestMigrateCredentialsDoesNotWriteCustomFieldsToAuth(t *testing.T) {
 	}
 }
 
+// countEventsBySource returns the number of rows in the legacy `events` table
+// matching the given source.
+func countEventsBySource(t *testing.T, d *db.DB, source string) int {
+	t.Helper()
+	var n int
+	if err := d.Conn().QueryRow(`SELECT COUNT(*) FROM events WHERE source = ?`, source).Scan(&n); err != nil {
+		t.Fatalf("count events source=%s: %v", source, err)
+	}
+	return n
+}
+
+// TestRunMigrateWatcherAtPurgesEvents covers the full migration path: after
+// running the command against a legacy DB (marker unset), the github/jira rows
+// in the legacy `events` table must be purged (they now live in
+// watcher_events), while the agent-sourced event remains untouched.
+func TestRunMigrateWatcherAtPurgesEvents(t *testing.T) {
+	isolateHomes(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	d, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	seedMigrationFixtures(t, d)
+	d.Close()
+
+	if err := runMigrateWatcherAt(dbPath, true); err != nil {
+		t.Fatalf("runMigrateWatcherAt failed: %v", err)
+	}
+
+	d2, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen db: %v", err)
+	}
+	defer d2.Close()
+
+	if got := countEventsBySource(t, d2, "github"); got != 0 {
+		t.Errorf("events(source=github) = %d after migration, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "jira"); got != 0 {
+		t.Errorf("events(source=jira) = %d after migration, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "agent"); got != 1 {
+		t.Errorf("events(source=agent) = %d after migration, want 1 (agent events must NOT be purged)", got)
+	}
+	if got := countRows(t, d2, "watcher_events"); got != 2 {
+		t.Errorf("watcher_events = %d after migration, want 2 (copied rows retained)", got)
+	}
+
+	// event_resources for the purged events must also be gone.
+	var orphanResources int
+	if err := d2.Conn().QueryRow(`
+		SELECT COUNT(*) FROM event_resources
+		WHERE event_id IN ('evt-gh-1', 'evt-jira-1')
+	`).Scan(&orphanResources); err != nil {
+		t.Fatalf("count orphan event_resources: %v", err)
+	}
+	if orphanResources != 0 {
+		t.Errorf("event_resources for purged events = %d, want 0", orphanResources)
+	}
+}
+
 func TestRunMigrateWatcherAtDoubleRunRefuses(t *testing.T) {
 	isolateHomes(t)
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -644,6 +705,17 @@ func TestRunMigrateWatcherAtFinishesPrior2bMigration(t *testing.T) {
 	}
 	before := countRows(t, d, "watcher_events")
 	beforeSubs := countRows(t, d, "watcher_subscriptions")
+
+	// The simulated 2b run (migrateWatcherData, called directly above) copied
+	// data into watcher_* but never purged the legacy events table — that's
+	// exactly the state a real 2b-migrated DB is in. Confirm the github/jira
+	// duplicate rows are still present in `events` going into the finish run.
+	if got := countEventsBySource(t, d, "github"); got != 1 {
+		t.Fatalf("precondition: events(source=github) = %d before finish run, want 1 (unpurged 2b duplicate)", got)
+	}
+	if got := countEventsBySource(t, d, "jira"); got != 1 {
+		t.Fatalf("precondition: events(source=jira) = %d before finish run, want 1 (unpurged 2b duplicate)", got)
+	}
 	d.Close()
 
 	// Before the finish run, the retained tables would lock the user out.
@@ -667,6 +739,24 @@ func TestRunMigrateWatcherAtFinishesPrior2bMigration(t *testing.T) {
 	}
 	if d2.HasUnmigratedLegacyData() {
 		t.Errorf("HasUnmigratedLegacyData() = true after finish run, want false (lockout resolved)")
+	}
+
+	// CRITICAL: a 2b-migrated DB (finish path) still has the duplicate
+	// github/jira rows in the legacy events table, and the finish run must
+	// purge them too — otherwise they linger forever since reads now use
+	// watcher_events exclusively.
+	if got := countEventsBySource(t, d2, "github"); got != 0 {
+		t.Errorf("events(source=github) = %d after finish run, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "jira"); got != 0 {
+		t.Errorf("events(source=jira) = %d after finish run, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "agent"); got != 1 {
+		t.Errorf("events(source=agent) = %d after finish run, want 1 (agent events must NOT be purged)", got)
+	}
+	// No double-insert into watcher_events from the purge/finish run.
+	if got := countRows(t, d2, "watcher_events"); got != before {
+		t.Errorf("watcher_events = %d after finish-run purge, want %d (untouched)", got, before)
 	}
 }
 
