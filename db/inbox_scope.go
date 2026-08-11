@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -18,9 +17,8 @@ import (
 //   - it is routed to S — broadcast, addressed to S's session/branch/role, or
 //     references a resource S subscribes to.
 //
-// After the data migration (watcher_migrated=1), resource-routed events live
-// in the watcher_* tables and agent-routed events live in handler's own
-// tables. The inbox is then the UNION of two arms:
+// Resource-routed events live in the watcher_* tables and agent-routed events
+// live in handler's own tables. The inbox is the UNION of two arms:
 //   - AGENT arm: handler's `events`, routed via event_recipients/broadcast/
 //     branch/role. (No subscription/event_resources join — resource routing
 //     moved to the watcher arm.)
@@ -30,17 +28,24 @@ import (
 // dismissed watcher event lives in watcher_events, so the dismissal exclusion
 // must run on the watcher arm too, not only the agent arm.
 //
-// Before the migration (marker unset) reads stay on the legacy single-query
-// path, which still routes resource events through handler's own
-// subscriptions/event_resources tables. Callers supply their own SELECT /
-// GROUP BY / ORDER BY around whichever form inboxSelect emits.
+// Callers supply their own SELECT / GROUP BY / ORDER BY around whichever form
+// inboxSelect emits.
 
 // --- watcher-migration marker -------------------------------------------
 
-// watcherMigrationDone reports whether the handler-owned data migration has
-// run — i.e. whether handler_meta has the row watcher_migrated=1. It defaults
-// to false when the table or row is absent, or the value is anything but "1".
-// This — NOT wdb.SchemaVersion — is the gate for the inbox UNION's watcher arm.
+// watcherMigrationDone reports whether a prior handler-owned data migration
+// left its marker — i.e. whether handler_meta has the row watcher_migrated=1.
+// It defaults to false when the table or row is absent, or the value is
+// anything but "1".
+//
+// The marker is RETIRED as a detection signal (legacy detection is now
+// schema-based; see db/legacy_guard.go, and the inbox UNION is unconditional).
+// It survives here for one purpose only: `handler setup --migrate-watcher`
+// reads it to distinguish a 2b-migrated database (marker set, legacy tables
+// retained) — which only needs the legacy tables dropped — from a truly
+// unmigrated one that needs a full copy. Nothing writes the marker anymore, so
+// there is no setter; on fresh 2c installs handler_meta is never created and
+// this simply returns false.
 func (db *DB) watcherMigrationDone() bool {
 	var value string
 	err := db.conn.QueryRow(
@@ -52,59 +57,13 @@ func (db *DB) watcherMigrationDone() bool {
 	return value == "1"
 }
 
-// setWatcherMigrated marks the data migration complete by upserting
-// handler_meta.watcher_migrated=1. Only the migration command should call this.
-func (db *DB) setWatcherMigrated() error {
-	_, err := db.conn.Exec(`
-		INSERT INTO handler_meta (key, value)
-		VALUES ('watcher_migrated', '1')
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to set watcher_migrated marker: %w", err)
-	}
-	return nil
-}
-
 // WatcherMigrationDone is the exported form of watcherMigrationDone, for use
 // by package cmd (specifically the `handler setup --migrate-watcher` data
 // migration in cmd/migrate_watcher.go), which cannot call the unexported
 // method directly.
 func (db *DB) WatcherMigrationDone() bool { return db.watcherMigrationDone() }
 
-// SetWatcherMigrated is the exported form of setWatcherMigrated, for use by
-// package cmd's data migration command. Only that command should call this.
-func (db *DB) SetWatcherMigrated() error { return db.setWatcherMigrated() }
-
-// --- legacy single-query path (marker unset) ----------------------------
-
-// inboxJoinSQL is the FROM+JOIN clause for the legacy routed-inbox query.
-// It references alias `e` for events and joins recipients, resources, and the
-// session's live subscriptions. Its single bound parameter is the session ID
-// (for the subscription join). Used only when watcherMigrationDone() is false.
-const inboxJoinSQL = `
-	FROM events e
-	LEFT JOIN event_recipients er ON e.id = er.event_id
-	LEFT JOIN event_resources eres ON e.id = eres.event_id
-	LEFT JOIN subscriptions s ON s.resource_type = eres.resource_type AND s.resource_id = eres.resource_id AND s.session_id = ? AND s.deleted_at IS NULL`
-
-// inboxWhereSQL is the WHERE body for the legacy routed-inbox query (without
-// the leading "WHERE"). Its bound parameters, in order, are:
-//   cursor, dismissSessionID, recipientSessionID, branch, repoBranch, role
-// Combined with the join's leading sessionID param, the full ordered arg list
-// is produced by inboxArgs (legacy branch).
-const inboxWhereSQL = `e.ts > ?
-	` + inboxExcludedTypesSQL + `
-	` + dismissedExclusionSQL + `
-	AND (
-	    e.broadcast = 1
-	    OR (er.recipient_type = 'session' AND er.recipient_value = ?)
-	    OR (er.recipient_type = 'branch' AND (er.recipient_value = ? OR er.recipient_value = ?))
-	    OR (er.recipient_type = 'role' AND er.recipient_value = ?)
-	    OR s.id IS NOT NULL
-	)`
-
-// --- UNION path (marker set) --------------------------------------------
+// --- UNION path ----------------------------------------------------------
 
 // agentArmSQL is the agent arm of the inbox UNION: handler's own `events`
 // routed via recipients/broadcast/branch/role. Resource routing is dropped
@@ -136,7 +95,7 @@ const watcherArmFrom = `
 		  ` + inboxExcludedTypesSQL + `
 		  ` + dismissedExclusionSQL
 
-// --- gated builder ------------------------------------------------------
+// --- UNION builder --------------------------------------------------------
 
 // inboxCols describes the column projections for an inbox query. The two arms
 // of the UNION read from different tables (handler `events` vs
@@ -145,47 +104,35 @@ const watcherArmFrom = `
 // project literals). Both arms MUST expose the same output column NAMES so the
 // outer query can order/aggregate uniformly.
 //
-//   - legacy: the SELECT list for the single-query path (references e/eres).
 //   - agent:  the SELECT list for the agent arm (references e/er).
 //   - watcher: the SELECT list for the watcher arm (references e/eres/s).
 //   - outer:  the SELECT list the outer query projects from the UNION subquery
 //             (references the subquery alias `e`). Defaults to a passthrough
 //             when the outer projection is identical to the arms' output.
 type inboxCols struct {
-	legacy  string
 	agent   string
 	watcher string
 	outer   string
 }
 
 // inboxSelect returns the query that projects a session's inbox, starting at
-// the caller's `selectKw` (e.g. "SELECT" or "SELECT DISTINCT"). When gated is
-// true it emits the UNION of the agent and watcher arms wrapped in an outer
-// SELECT; when false it emits the legacy single-query form. Callers append
-// their own GROUP BY / ORDER BY / extra predicates after the returned
+// the caller's `selectKw` (e.g. "SELECT" or "SELECT DISTINCT"). It emits the
+// UNION of the agent and watcher arms wrapped in an outer SELECT. Callers
+// append their own GROUP BY / ORDER BY / extra predicates after the returned
 // fragment.
 //
 // The outer SELECT reuses selectKw so DISTINCT still applies across the UNION
 // (the agent arm's LEFT JOIN on recipients can duplicate an event row); the
 // inner arms use a plain SELECT under UNION ALL.
-func inboxSelect(selectKw string, cols inboxCols, gated bool) string {
-	return inboxSelectPred(selectKw, cols, gated, "")
+func inboxSelect(selectKw string, cols inboxCols) string {
+	return inboxSelectPred(selectKw, cols, "")
 }
 
 // inboxSelectPred is inboxSelect with an extra scalar predicate (without a
-// leading keyword, e.g. "e.type = ?"). It is placed where the form requires:
-// in the legacy path it extends the existing WHERE with "AND <pred>"; in the
-// UNION path it becomes the outer query's "WHERE <pred>". The predicate may
-// reference only columns exposed by the projection (`cols`).
-func inboxSelectPred(selectKw string, cols inboxCols, gated bool, extraPred string) string {
-	if !gated {
-		q := selectKw + ` ` + cols.legacy + inboxJoinSQL + `
-		WHERE ` + inboxWhereSQL
-		if extraPred != "" {
-			q += "\n\t\tAND " + extraPred
-		}
-		return q
-	}
+// leading keyword, e.g. "e.type = ?"). It becomes the outer query's
+// "WHERE <pred>". The predicate may reference only columns exposed by the
+// projection (`cols`).
+func inboxSelectPred(selectKw string, cols inboxCols, extraPred string) string {
 	outer := cols.outer
 	if outer == "" {
 		outer = cols.agent
@@ -205,7 +152,6 @@ func inboxSelectPred(selectKw string, cols inboxCols, gated bool, extraPred stri
 // watcher_events lacks session_id and broadcast, so the watcher arm projects
 // literals for those; the output column names match the agent arm.
 var inboxEventCols = inboxCols{
-	legacy:  "e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags",
 	agent:   "e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags",
 	watcher: "e.id, e.ts, e.external_ts, e.source, NULL AS session_id, e.type, e.title, e.body, e.author, e.author_type, 0 AS broadcast, e.tags",
 	outer:   "e.id, e.ts, e.external_ts, e.source, e.session_id, e.type, e.title, e.body, e.author, e.author_type, e.broadcast, e.tags",
@@ -214,7 +160,6 @@ var inboxEventCols = inboxCols{
 // inboxTypeCountCols powers the "count by type" breakdown. The arms project
 // (type, id); the outer query aggregates COUNT(DISTINCT id) grouped by type.
 var inboxTypeCountCols = inboxCols{
-	legacy:  "e.type, COUNT(DISTINCT e.id) as count",
 	agent:   "e.type, e.id",
 	watcher: "e.type, e.id",
 	outer:   "e.type, COUNT(DISTINCT e.id) as count",
@@ -223,10 +168,7 @@ var inboxTypeCountCols = inboxCols{
 // inboxCountCols powers a scalar COUNT(DISTINCT id). The arms project (id, ts)
 // — ts is carried so callers can add an outer time-bound predicate (e.g.
 // AutoDeliveredCount's "e.ts <= ?") — while the outer query counts DISTINCT id.
-// In the legacy path the aggregate is applied directly (the predicate, if any,
-// extends the WHERE where e.ts is already in scope).
 var inboxCountCols = inboxCols{
-	legacy:  "COUNT(DISTINCT e.id)",
 	agent:   "e.id, e.ts",
 	watcher: "e.id, e.ts",
 	outer:   "COUNT(DISTINCT e.id)",
@@ -238,13 +180,8 @@ var inboxCountCols = inboxCols{
 // agent arm re-adds it (agent events may still *reference* a resource even
 // though resource ROUTING moved to the watcher arm), and the watcher arm reads
 // its already-joined watcher_event_resources. Both arms filter out rows with a
-// NULL resource_type. Placeholders match inboxArgs for the same `gated` value.
-func inboxResourcesSelect(gated bool) string {
-	if !gated {
-		return `SELECT DISTINCT eres.resource_type, eres.resource_id` + inboxJoinSQL + `
-		WHERE ` + inboxWhereSQL + `
-		  AND eres.resource_type IS NOT NULL`
-	}
+// NULL resource_type. Placeholders match inboxArgs.
+func inboxResourcesSelect() string {
 	// Agent arm with the event_resources join re-added.
 	agentResArm := `
 		FROM events e
@@ -267,26 +204,12 @@ func inboxResourcesSelect(gated bool) string {
 	) e`
 }
 
-// inboxArgs returns the argument slice matching whichever form inboxSelect
-// produced for the same `gated` value. Placeholders in the legacy path:
-//   subscription-join sessionID, cursor, dismissSessionID,
-//   recipient sessionID, branch, repoBranch, role
-// Placeholders in the UNION path (agent arm then watcher arm):
+// inboxArgs returns the argument slice matching the query inboxSelect
+// produces. Placeholders, in order (agent arm then watcher arm):
 //   cursor, dismissSessionID, recipient sessionID, branch, repoBranch, role,
 //   subscriber, now, cursor, dismissSessionID
-func inboxArgs(session *Session, cursor string, gated bool) []interface{} {
+func inboxArgs(session *Session, cursor string) []interface{} {
 	repoBranch := session.Repo + ":" + session.Branch
-	if !gated {
-		return []interface{}{
-			session.SessionID, // subscription join
-			cursor,            // e.ts > ?
-			session.SessionID, // dismissal exclusion
-			session.SessionID, // recipient_type = 'session'
-			session.Branch,    // recipient_type = 'branch' (branch)
-			repoBranch,        // recipient_type = 'branch' (repo:branch)
-			session.Role,      // recipient_type = 'role'
-		}
-	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	return []interface{}{
 		// agent arm

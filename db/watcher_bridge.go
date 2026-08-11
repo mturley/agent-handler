@@ -20,10 +20,6 @@ const subscriberPrefix = "handler:session:"
 // sessionIDFromSubscriber; the library never interprets it.
 func handlerSubscriber(sessionID string) string { return subscriberPrefix + sessionID }
 
-// handlerSubscriberPrefix is the prefix matching all handler session
-// subscriptions, for prefix renew/revoke/list operations.
-func handlerSubscriberPrefix() string { return subscriberPrefix }
-
 // sessionIDFromSubscriber recovers the session id from a handler subscriber
 // string, or returns ("", false) if the string is not a handler subscriber.
 func sessionIDFromSubscriber(subscriber string) (string, bool) {

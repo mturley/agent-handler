@@ -22,8 +22,8 @@ func openGuardDB(t *testing.T) (*db.DB, string) {
 	return d, dbPath
 }
 
-// A freshly-created database (all legacy tables exist but are empty, marker
-// unset) must NOT trip the guard.
+// A freshly-created database (no legacy tables — Phase 2c removed them from
+// schema.sql) must NOT trip the guard under schema-based detection.
 func TestGuardLegacyDatabaseFreshDBAllowed(t *testing.T) {
 	_, dbPath := openGuardDB(t)
 	if err := guardLegacyDatabaseAt(dbPath); err != nil {
@@ -31,8 +31,9 @@ func TestGuardLegacyDatabaseFreshDBAllowed(t *testing.T) {
 	}
 }
 
-// A database carrying legacy data with the marker unset must trip the guard,
-// with exactly the legacyDBError message.
+// A database that still carries the legacy tables must trip the guard with
+// exactly the legacyDBError message (schema-based: table presence is the
+// signal).
 func TestGuardLegacyDatabaseRefusesLegacyData(t *testing.T) {
 	d, dbPath := openGuardDB(t)
 	seedMigrationFixtures(t, d)
@@ -49,24 +50,32 @@ func TestGuardLegacyDatabaseRefusesLegacyData(t *testing.T) {
 	}
 }
 
-// Once the migration marker is set, the guard must NOT fire even though the
-// legacy tables still hold their (now-backup) rows.
-func TestGuardLegacyDatabaseMigratedAllowed(t *testing.T) {
+// Once the legacy tables are dropped (as the migration does), the guard must NOT
+// fire even though github/jira rows may still linger in `events` (those are
+// purged separately in Task 7 and are not a detection signal).
+func TestGuardLegacyDatabaseAllowedAfterTablesDropped(t *testing.T) {
 	d, dbPath := openGuardDB(t)
 	seedMigrationFixtures(t, d)
-	if err := d.SetWatcherMigrated(); err != nil {
-		t.Fatalf("SetWatcherMigrated: %v", err)
+
+	// Drop the legacy tables directly (mirrors what the migration does).
+	if _, err := d.Conn().Exec(`
+		DROP TABLE IF EXISTS subscriptions;
+		DROP TABLE IF EXISTS resource_state;
+		DROP TABLE IF EXISTS resource_relationships;
+		DROP TABLE IF EXISTS watcher_status;
+	`); err != nil {
+		t.Fatalf("drop legacy tables: %v", err)
 	}
 
 	if err := guardLegacyDatabaseAt(dbPath); err != nil {
-		t.Fatalf("guardLegacyDatabaseAt on migrated DB = %v, want nil (marker set)", err)
+		t.Fatalf("guardLegacyDatabaseAt after dropping legacy tables = %v, want nil", err)
 	}
 }
 
-// The events table alone (a github/jira event, no legacy subscription/state
-// rows) is enough to trip the guard, since those events are relocated by the
-// migration.
-func TestGuardLegacyDatabaseFiresOnEventsOnly(t *testing.T) {
+// A github/jira event alone (no legacy tables) does NOT trip the guard under
+// schema-based detection: table presence is the only signal now, and a migrated
+// DB legitimately still has github/jira rows in `events` until they are purged.
+func TestGuardLegacyDatabaseIgnoresEventsWithoutTables(t *testing.T) {
 	d, dbPath := openGuardDB(t)
 	if _, err := d.Conn().Exec(`
 		INSERT INTO events (id, ts, source, type, title)
@@ -75,23 +84,7 @@ func TestGuardLegacyDatabaseFiresOnEventsOnly(t *testing.T) {
 		t.Fatalf("seed github event: %v", err)
 	}
 
-	if err := guardLegacyDatabaseAt(dbPath); err == nil {
-		t.Fatalf("guardLegacyDatabaseAt with a github event = nil, want error")
-	}
-}
-
-// An agent-sourced event (not relocated by the migration) does NOT by itself
-// trip the guard — only github/jira events count.
-func TestGuardLegacyDatabaseIgnoresAgentEvents(t *testing.T) {
-	d, dbPath := openGuardDB(t)
-	if _, err := d.Conn().Exec(`
-		INSERT INTO events (id, ts, source, type, title)
-		VALUES ('e1', '2026-01-01T00:00:00Z', 'agent', 'status', 'test')
-	`); err != nil {
-		t.Fatalf("seed agent event: %v", err)
-	}
-
 	if err := guardLegacyDatabaseAt(dbPath); err != nil {
-		t.Fatalf("guardLegacyDatabaseAt with only an agent event = %v, want nil", err)
+		t.Fatalf("guardLegacyDatabaseAt with a github event but no legacy tables = %v, want nil", err)
 	}
 }

@@ -35,9 +35,9 @@ func TestCommandGuardedForLegacyDB(t *testing.T) {
 	}
 }
 
-// legacyUnmigrated reflects the database state: false for a fresh DB, true once
-// legacy data is present with the marker unset, false again after the marker is
-// set.
+// legacyUnmigrated reflects the database state under schema-based detection:
+// false for a fresh DB (no legacy tables), true once a legacy table is present,
+// false again after the legacy tables are dropped (as the migration does).
 func TestLegacyUnmigrated(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HANDLER_HOME", home)
@@ -45,7 +45,7 @@ func TestLegacyUnmigrated(t *testing.T) {
 		t.Fatalf("mkdir data: %v", err)
 	}
 
-	// Fresh DB: no legacy data.
+	// Fresh DB: no legacy tables.
 	d, err := db.Open(db.DefaultPath())
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -54,29 +54,23 @@ func TestLegacyUnmigrated(t *testing.T) {
 		t.Fatal("legacyUnmigrated() = true on a fresh DB, want false")
 	}
 
-	// Seed a legacy subscription -> unmigrated.
-	if _, err := d.Conn().Exec(`
-		INSERT INTO sessions (session_id, harness, repo, branch, status, last_active, registered_at, jsonl_path)
-		VALUES ('S1', 'claude', 'r', 'main', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '/tmp/s1.jsonl')
-	`); err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
-	if _, err := d.Conn().Exec(`
-		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, created_at)
-		VALUES ('sub1', 'S1', 'pr', 'example/repo#1', '2026-01-01T00:00:00Z')
-	`); err != nil {
-		t.Fatalf("seed subscription: %v", err)
-	}
+	// Create a legacy table -> unmigrated (table presence is the signal).
+	createLegacyTables(t, d.Conn())
 	if !legacyUnmigrated() {
-		t.Fatal("legacyUnmigrated() = false with legacy data + marker unset, want true")
+		t.Fatal("legacyUnmigrated() = false with legacy tables present, want true")
 	}
 
-	// Set the marker -> migrated, guard clears.
-	if err := d.SetWatcherMigrated(); err != nil {
-		t.Fatalf("SetWatcherMigrated: %v", err)
+	// Drop the legacy tables (what the migration does) -> migrated, guard clears.
+	if _, err := d.Conn().Exec(`
+		DROP TABLE IF EXISTS subscriptions;
+		DROP TABLE IF EXISTS resource_state;
+		DROP TABLE IF EXISTS resource_relationships;
+		DROP TABLE IF EXISTS watcher_status;
+	`); err != nil {
+		t.Fatalf("drop legacy tables: %v", err)
 	}
 	if legacyUnmigrated() {
-		t.Fatal("legacyUnmigrated() = true after marker set, want false")
+		t.Fatal("legacyUnmigrated() = true after legacy tables dropped, want false")
 	}
 	d.Close()
 }

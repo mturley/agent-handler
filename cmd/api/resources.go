@@ -41,12 +41,20 @@ type resourcesResponse struct {
 }
 
 func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
-	// Query all active subscriptions across all non-archived sessions
+	// Query all active subscriptions across all non-archived sessions, read
+	// from the watcher library's watcher_subscriptions table. That table has
+	// no session_id column — handler's subscriptions are namespaced under a
+	// "handler:session:<id>" subscriber string (see db/watcher_bridge.go's
+	// handlerSubscriber/sessionIDFromSubscriber), so the session id is
+	// recovered with substr() and the subscriber is restricted to handler's
+	// own prefix to exclude any non-handler subscriber.
 	rows, err := s.DB.Query(`
-		SELECT s.resource_type, s.resource_id, s.resource_url, s.session_id, sess.session_name, sess.status, sess.pid, sess.last_prompt
-		FROM subscriptions s
-		INNER JOIN sessions sess ON sess.session_id = s.session_id
-		WHERE s.deleted_at IS NULL AND sess.status != 'archived'
+		SELECT s.resource_type, s.resource_id, s.resource_url,
+		       substr(s.subscriber, length('handler:session:') + 1) AS session_id,
+		       sess.session_name, sess.status, sess.pid, sess.last_prompt
+		FROM watcher_subscriptions s
+		INNER JOIN sessions sess ON sess.session_id = substr(s.subscriber, length('handler:session:') + 1)
+		WHERE s.deleted_at IS NULL AND s.subscriber LIKE 'handler:session:%' AND sess.status != 'archived'
 		ORDER BY s.resource_type, s.resource_id, s.created_at
 	`)
 	if err != nil {
@@ -112,7 +120,7 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 	// Fetch resource state and enrich each entry
 	for resourceKey, entry := range resourceMap {
 		// Fetch resource state
-		state, err := s.DB.GetResourceState(entry.ResourceType, entry.ResourceID)
+		state, err := wdb.GetResourceState(s.DB.Conn(), entry.ResourceType, entry.ResourceID)
 		if err != nil {
 			s.Logger.Printf("Error fetching state for %s: %v", resourceKey, err)
 			continue

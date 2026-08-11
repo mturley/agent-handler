@@ -20,23 +20,12 @@ func TestRunStatuslineLegacyWarning(t *testing.T) {
 		t.Fatalf("mkdir data: %v", err)
 	}
 
-	// Seed a legacy subscription (marker unset) so the guard fires.
+	// Create the legacy tables so schema-based detection trips the guard.
 	d, err := db.Open(db.DefaultPath())
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if _, err := d.Conn().Exec(`
-		INSERT INTO sessions (session_id, harness, repo, branch, status, last_active, registered_at, jsonl_path)
-		VALUES ('S1', 'claude', 'r', 'main', 'active', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', '/tmp/s1.jsonl')
-	`); err != nil {
-		t.Fatalf("seed session: %v", err)
-	}
-	if _, err := d.Conn().Exec(`
-		INSERT INTO subscriptions (id, session_id, resource_type, resource_id, created_at)
-		VALUES ('sub1', 'S1', 'pr', 'example/repo#1', '2026-01-01T00:00:00Z')
-	`); err != nil {
-		t.Fatalf("seed subscription: %v", err)
-	}
+	createLegacyTables(t, d.Conn())
 	d.Close()
 
 	// Capture stdout.

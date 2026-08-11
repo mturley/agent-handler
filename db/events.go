@@ -185,11 +185,10 @@ func (db *DB) UnreadForSession(sessionID string) ([]Event, error) {
 		return nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
-	gated := db.watcherMigrationDone()
-	query := inboxSelect("SELECT DISTINCT", inboxEventCols, gated) + `
+	query := inboxSelect("SELECT DISTINCT", inboxEventCols) + `
 		ORDER BY e.ts ASC`
 
-	rows, err := db.conn.Query(query, inboxArgs(session, cursor, gated)...)
+	rows, err := db.conn.Query(query, inboxArgs(session, cursor)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread events: %w", err)
 	}
@@ -213,10 +212,9 @@ func (db *DB) UnreadEventsOfType(sessionID, eventType string) ([]Event, error) {
 		return nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
-	gated := db.watcherMigrationDone()
-	query := inboxSelectPred("SELECT DISTINCT", inboxEventCols, gated, "e.type = ?") + `
+	query := inboxSelectPred("SELECT DISTINCT", inboxEventCols, "e.type = ?") + `
 		ORDER BY e.ts ASC`
-	args := append(inboxArgs(session, cursor, gated), eventType)
+	args := append(inboxArgs(session, cursor), eventType)
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread events of type %q: %w", eventType, err)
@@ -261,11 +259,10 @@ func (db *DB) UnreadCountForSession(sessionID string) (int, map[string]int, erro
 		return 0, nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
-	gated := db.watcherMigrationDone()
-	query := inboxSelect("SELECT", inboxTypeCountCols, gated) + `
+	query := inboxSelect("SELECT", inboxTypeCountCols) + `
 		GROUP BY e.type`
 
-	rows, err := db.conn.Query(query, inboxArgs(session, cursor, gated)...)
+	rows, err := db.conn.Query(query, inboxArgs(session, cursor)...)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to count unread events: %w", err)
 	}
@@ -304,9 +301,8 @@ func (db *DB) UnreadResourcesForSession(sessionID string) (map[string]bool, erro
 		return nil, fmt.Errorf("session %q not found", sessionID)
 	}
 
-	gated := db.watcherMigrationDone()
-	query := inboxResourcesSelect(gated)
-	rows, err := db.conn.Query(query, inboxArgs(session, cursor, gated)...)
+	query := inboxResourcesSelect()
+	rows, err := db.conn.Query(query, inboxArgs(session, cursor)...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query unread resources: %w", err)
 	}
@@ -362,11 +358,10 @@ func (db *DB) HumanUnreadCountForSession(sessionID string) (int, error) {
 
 	// Uses the human cursor but the same routing/exclusion scope as the agent
 	// unread queries.
-	gated := db.watcherMigrationDone()
-	query := inboxSelect("SELECT", inboxCountCols, gated)
+	query := inboxSelect("SELECT", inboxCountCols)
 
 	var count int
-	err = db.conn.QueryRow(query, inboxArgs(session, cursor, gated)...).Scan(&count)
+	err = db.conn.QueryRow(query, inboxArgs(session, cursor)...).Scan(&count)
 	if err != nil {
 		return 0, err
 	}

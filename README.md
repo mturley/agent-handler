@@ -44,7 +44,7 @@ handler setup --migrate-watcher # backs up the DB, copies data into the watcher_
 handler watcher start
 ```
 
-Until you migrate, `handler setup` will refuse to run against a pre-migration database and tell you to run the migration (or delete your database and start fresh). The migration auto-backs-up your database to `~/.agent-handler/handler.db.backup-<timestamp>` and retains the old tables, so it is reversible — see [docs/watcher-migration-runbook.md](docs/watcher-migration-runbook.md) for the full procedure and rollback steps. Watcher credentials in `~/.agent-handler/config.yaml` are copied to `~/.config/watcher/auth.yaml` as part of the migration.
+Until you migrate, `handler setup` will refuse to run against a pre-migration database and tell you to run the migration (or delete your database and start fresh). The migration is a **one-way structural cleanup**: it auto-backs-up your database to `~/.agent-handler/handler.db.backup-<timestamp>`, copies the legacy data into the `watcher_*` tables, **drops the legacy tables**, and **purges** the now-duplicated github/jira rows from the legacy `events` table. It no longer retains the old tables — the backup is the rollback mechanism. If you already ran an older (Phase 2b) version of this migration that copied data but kept the old tables, running `--migrate-watcher` again finishes the cleanup (no data is re-copied). See [docs/watcher-migration-runbook.md](docs/watcher-migration-runbook.md) for the full procedure, the 2b-adopter finish path, and rollback steps. Watcher credentials in `~/.agent-handler/config.yaml` are copied to `~/.config/watcher/auth.yaml` as part of the migration.
 
 ## Uninstall
 

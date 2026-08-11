@@ -27,16 +27,17 @@ func TestOpen(t *testing.T) {
 		t.Errorf("expected journal_mode=wal, got %s", journalMode)
 	}
 
-	// Verify all 11 tables exist
+	// Verify the current (Phase 2c) tables exist. The legacy watcher tables
+	// (subscriptions, resource_relationships, resource_state, watcher_status)
+	// are intentionally NOT created on fresh installs anymore — they live only
+	// in pre-2c databases, and their data is now in the watcher library's
+	// watcher_* tables.
 	expectedTables := []string{
 		"events",
 		"event_recipients",
 		"event_resources",
 		"sessions",
 		"session_cursors",
-		"subscriptions",
-		"resource_relationships",
-		"resource_state",
 		"cost_snapshots",
 		"cost_adjustments",
 		"daily_cost",
@@ -51,6 +52,46 @@ func TestOpen(t *testing.T) {
 		}
 		if count != 1 {
 			t.Errorf("table %s not found in schema", table)
+		}
+	}
+
+	// The legacy watcher tables must NOT be created on a fresh install.
+	legacyTables := []string{
+		"subscriptions",
+		"resource_relationships",
+		"resource_state",
+		"watcher_status",
+	}
+	for _, table := range legacyTables {
+		var count int
+		query := "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
+		if err := db.Conn().QueryRow(query, table).Scan(&count); err != nil {
+			t.Fatalf("failed to query for legacy table %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Errorf("legacy table %s should NOT exist on a fresh install", table)
+		}
+	}
+
+	// The watcher library's own tables must exist on a fresh install (Open
+	// runs wdb.Migrate) — the single source of truth for subscriptions/
+	// resource state/relationships now that the legacy tables are gone.
+	watcherTables := []string{
+		"watcher_events",
+		"watcher_event_resources",
+		"watcher_resource_state",
+		"watcher_resource_relationships",
+		"watcher_subscriptions",
+		"watcher_poller_status",
+	}
+	for _, table := range watcherTables {
+		var count int
+		query := "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?"
+		if err := db.Conn().QueryRow(query, table).Scan(&count); err != nil {
+			t.Fatalf("failed to query for watcher table %s: %v", table, err)
+		}
+		if count != 1 {
+			t.Errorf("watcher library table %s not found in fresh-install schema", table)
 		}
 	}
 }

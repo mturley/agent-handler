@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,15 +25,89 @@ func testMigrateDB(t *testing.T) *db.DB {
 	return d
 }
 
-// seedMigrationFixtures populates the legacy handler tables with a small,
-// deterministic dataset covering every mapping the migration performs:
-// sessions (active + archived), github/jira/agent events (+resources),
-// resource_state, subscriptions (active/normal, user-unsubscribed+deleted),
-// resource_relationships, and the legacy watcher_status table.
+// createLegacyTables recreates the four legacy watcher tables and their indexes
+// exactly as the pre-2c db/schema.sql defined them. Phase 2c removed these
+// blocks from schema.sql (fresh installs never create them), so migration/guard
+// tests that need legacy data must create the tables themselves before seeding.
+// This is the single source of the legacy DDL for tests.
+func createLegacyTables(t *testing.T, conn interface {
+	Exec(string, ...interface{}) (sql.Result, error)
+}) {
+	t.Helper()
+	if _, err := conn.Exec(`
+		CREATE TABLE IF NOT EXISTS subscriptions (
+		    id TEXT PRIMARY KEY,
+		    session_id TEXT NOT NULL REFERENCES sessions(session_id),
+		    resource_type TEXT NOT NULL,
+		    resource_id TEXT NOT NULL,
+		    resource_url TEXT,
+		    created_at TEXT NOT NULL,
+		    deleted_at TEXT,
+		    unsubscribed_by TEXT
+		);
+		CREATE INDEX IF NOT EXISTS idx_subscriptions_resource ON subscriptions(resource_type, resource_id, deleted_at);
+
+		CREATE TABLE IF NOT EXISTS watcher_status (
+		    name TEXT PRIMARY KEY,
+		    last_success TEXT,
+		    last_error TEXT,
+		    last_error_message TEXT
+		);
+
+		CREATE TABLE IF NOT EXISTS resource_relationships (
+		    id TEXT PRIMARY KEY,
+		    child_type TEXT NOT NULL,
+		    child_id TEXT NOT NULL,
+		    child_url TEXT,
+		    parent_type TEXT NOT NULL,
+		    parent_id TEXT NOT NULL,
+		    parent_url TEXT,
+		    relationship TEXT NOT NULL,
+		    source TEXT NOT NULL,
+		    created_at TEXT NOT NULL
+		);
+
+		CREATE TABLE IF NOT EXISTS resource_state (
+		    resource_type TEXT NOT NULL,
+		    resource_id TEXT NOT NULL,
+		    state_json TEXT NOT NULL,
+		    resource_updated_at TEXT NOT NULL,
+		    watcher_updated_at TEXT NOT NULL,
+		    PRIMARY KEY (resource_type, resource_id)
+		);
+	`); err != nil {
+		t.Fatalf("createLegacyTables: %v", err)
+	}
+}
+
+// legacyTablesExist reports whether all four legacy tables currently exist in
+// the database's schema (via sqlite_master). Used by tests to assert the
+// migration dropped them.
+func legacyTablesExist(t *testing.T, d *db.DB) bool {
+	t.Helper()
+	var count int
+	if err := d.Conn().QueryRow(`
+		SELECT COUNT(*) FROM sqlite_master
+		WHERE type='table'
+		AND name IN ('subscriptions','resource_state','resource_relationships','watcher_status')
+	`).Scan(&count); err != nil {
+		t.Fatalf("legacyTablesExist query: %v", err)
+	}
+	return count > 0
+}
+
+// seedMigrationFixtures creates the legacy tables (removed from schema.sql in
+// Phase 2c) and populates them with a small, deterministic dataset covering
+// every mapping the migration performs: sessions (active + archived),
+// github/jira/agent events (+resources), resource_state, subscriptions
+// (active/normal, user-unsubscribed+deleted), resource_relationships, and the
+// legacy watcher_status table.
 func seedMigrationFixtures(t *testing.T, d *db.DB) {
 	t.Helper()
 	now := time.Now().UTC().Format(time.RFC3339)
 	conn := d.Conn()
+
+	createLegacyTables(t, conn)
 
 	// Sessions: S1 active, S2 archived.
 	if _, err := conn.Exec(`
@@ -138,7 +213,7 @@ func TestMigrateWatcherData(t *testing.T) {
 	d := testMigrateDB(t)
 	seedMigrationFixtures(t, d)
 
-	report, err := migrateWatcherData(d)
+	report, err := migrateWatcherData(d, false)
 	if err != nil {
 		t.Fatalf("migrateWatcherData failed: %v", err)
 	}
@@ -321,28 +396,55 @@ func TestMigrateWatcherData(t *testing.T) {
 		t.Errorf("report.PollerStatus = %d, want 1", report.PollerStatus)
 	}
 
-	if !d.WatcherMigrationDone() {
-		t.Errorf("d.WatcherMigrationDone() = false, want true after migration")
+	// After a full migration the legacy tables are DROPPED (schema-based
+	// detection now signals "migrated" by their absence, not by a marker).
+	if legacyTablesExist(t, d) {
+		t.Errorf("legacy tables still exist after full migration, want dropped")
+	}
+	if d.HasUnmigratedLegacyData() {
+		t.Errorf("HasUnmigratedLegacyData() = true after full migration, want false")
 	}
 }
 
-func TestMigrateWatcherDataRefusesDoubleRun(t *testing.T) {
+// TestMigrateWatcherDataFinishPath covers the Option-B "finish a prior 2b
+// migration" state: legacy tables present but their data already lives in
+// watcher_* (as if 2b copied it). With finishOnly=true the migration must NOT
+// re-copy (no double-insert) and MUST drop the legacy tables.
+func TestMigrateWatcherDataFinishPath(t *testing.T) {
 	d := testMigrateDB(t)
 	seedMigrationFixtures(t, d)
 
-	if _, err := migrateWatcherData(d); err != nil {
-		t.Fatalf("first migrateWatcherData failed: %v", err)
+	// Simulate a 2b-migrated DB: run the full copy once so watcher_* holds the
+	// data, then recreate the legacy tables (2b retained them) so the finish
+	// path has tables to drop without re-copying.
+	if _, err := migrateWatcherData(d, false); err != nil {
+		t.Fatalf("initial full migrate failed: %v", err)
+	}
+	createLegacyTables(t, d.Conn())
+	if !legacyTablesExist(t, d) {
+		t.Fatalf("legacy tables not recreated for finish-path setup")
 	}
 
 	before := countRows(t, d, "watcher_events")
+	beforeSubs := countRows(t, d, "watcher_subscriptions")
 
-	if _, err := migrateWatcherData(d); err == nil {
-		t.Fatalf("second migrateWatcherData succeeded, want error (already migrated)")
+	if _, err := migrateWatcherData(d, true); err != nil {
+		t.Fatalf("finish-path migrateWatcherData failed: %v", err)
 	}
 
-	after := countRows(t, d, "watcher_events")
-	if before != after {
-		t.Errorf("watcher_events count changed on refused re-run: before=%d after=%d", before, after)
+	// No double-copy.
+	if after := countRows(t, d, "watcher_events"); after != before {
+		t.Errorf("watcher_events changed on finish path: before=%d after=%d (double-copy)", before, after)
+	}
+	if after := countRows(t, d, "watcher_subscriptions"); after != beforeSubs {
+		t.Errorf("watcher_subscriptions changed on finish path: before=%d after=%d (double-copy)", beforeSubs, after)
+	}
+	// Tables dropped.
+	if legacyTablesExist(t, d) {
+		t.Errorf("legacy tables still exist after finish path, want dropped")
+	}
+	if d.HasUnmigratedLegacyData() {
+		t.Errorf("HasUnmigratedLegacyData() = true after finish path, want false")
 	}
 }
 
@@ -477,6 +579,67 @@ func TestMigrateCredentialsDoesNotWriteCustomFieldsToAuth(t *testing.T) {
 	}
 }
 
+// countEventsBySource returns the number of rows in the legacy `events` table
+// matching the given source.
+func countEventsBySource(t *testing.T, d *db.DB, source string) int {
+	t.Helper()
+	var n int
+	if err := d.Conn().QueryRow(`SELECT COUNT(*) FROM events WHERE source = ?`, source).Scan(&n); err != nil {
+		t.Fatalf("count events source=%s: %v", source, err)
+	}
+	return n
+}
+
+// TestRunMigrateWatcherAtPurgesEvents covers the full migration path: after
+// running the command against a legacy DB (marker unset), the github/jira rows
+// in the legacy `events` table must be purged (they now live in
+// watcher_events), while the agent-sourced event remains untouched.
+func TestRunMigrateWatcherAtPurgesEvents(t *testing.T) {
+	isolateHomes(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	d, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	seedMigrationFixtures(t, d)
+	d.Close()
+
+	if err := runMigrateWatcherAt(dbPath, true); err != nil {
+		t.Fatalf("runMigrateWatcherAt failed: %v", err)
+	}
+
+	d2, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen db: %v", err)
+	}
+	defer d2.Close()
+
+	if got := countEventsBySource(t, d2, "github"); got != 0 {
+		t.Errorf("events(source=github) = %d after migration, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "jira"); got != 0 {
+		t.Errorf("events(source=jira) = %d after migration, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "agent"); got != 1 {
+		t.Errorf("events(source=agent) = %d after migration, want 1 (agent events must NOT be purged)", got)
+	}
+	if got := countRows(t, d2, "watcher_events"); got != 2 {
+		t.Errorf("watcher_events = %d after migration, want 2 (copied rows retained)", got)
+	}
+
+	// event_resources for the purged events must also be gone.
+	var orphanResources int
+	if err := d2.Conn().QueryRow(`
+		SELECT COUNT(*) FROM event_resources
+		WHERE event_id IN ('evt-gh-1', 'evt-jira-1')
+	`).Scan(&orphanResources); err != nil {
+		t.Fatalf("count orphan event_resources: %v", err)
+	}
+	if orphanResources != 0 {
+		t.Errorf("event_resources for purged events = %d, want 0", orphanResources)
+	}
+}
+
 func TestRunMigrateWatcherAtDoubleRunRefuses(t *testing.T) {
 	isolateHomes(t)
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -491,8 +654,9 @@ func TestRunMigrateWatcherAtDoubleRunRefuses(t *testing.T) {
 		t.Fatalf("first runMigrateWatcherAt failed: %v", err)
 	}
 
-	// Second run should detect the marker and return nil (nothing to do),
-	// not attempt to re-migrate.
+	// After the first run the legacy tables are dropped, so schema-based
+	// detection reports "already migrated" and the second run returns nil
+	// (nothing to do) without re-migrating.
 	if err := runMigrateWatcherAt(dbPath, true); err != nil {
 		t.Fatalf("second runMigrateWatcherAt returned error, want nil (already migrated): %v", err)
 	}
@@ -505,6 +669,94 @@ func TestRunMigrateWatcherAtDoubleRunRefuses(t *testing.T) {
 	count := countRows(t, d2, "watcher_events")
 	if count != 2 {
 		t.Errorf("watcher_events count after double command-run = %d, want 2 (no double-insert)", count)
+	}
+	// The first run must have dropped the legacy tables.
+	if legacyTablesExist(t, d2) {
+		t.Errorf("legacy tables still exist after command run, want dropped")
+	}
+}
+
+// TestRunMigrateWatcherAtFinishesPrior2bMigration exercises the full command
+// path for the Option-B finish case: a DB whose data was already copied into
+// watcher_* AND whose watcher_migrated marker is set (a 2b-migrated DB with the
+// legacy tables retained). Running the command must drop the legacy tables
+// WITHOUT re-copying, resolving the upgrade lockout.
+func TestRunMigrateWatcherAtFinishesPrior2bMigration(t *testing.T) {
+	isolateHomes(t)
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	d, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
+	}
+	seedMigrationFixtures(t, d)
+
+	// Simulate 2b: copy data into watcher_*, set the marker, but RETAIN the
+	// legacy tables (recreate them after the copy dropped them).
+	if _, err := migrateWatcherData(d, false); err != nil {
+		t.Fatalf("simulate 2b copy: %v", err)
+	}
+	createLegacyTables(t, d.Conn())
+	if _, err := d.Conn().Exec(`
+		CREATE TABLE IF NOT EXISTS handler_meta (key TEXT PRIMARY KEY, value TEXT);
+		INSERT INTO handler_meta (key, value) VALUES ('watcher_migrated', '1')
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+	`); err != nil {
+		t.Fatalf("set 2b marker: %v", err)
+	}
+	before := countRows(t, d, "watcher_events")
+	beforeSubs := countRows(t, d, "watcher_subscriptions")
+
+	// The simulated 2b run (migrateWatcherData, called directly above) copied
+	// data into watcher_* but never purged the legacy events table — that's
+	// exactly the state a real 2b-migrated DB is in. Confirm the github/jira
+	// duplicate rows are still present in `events` going into the finish run.
+	if got := countEventsBySource(t, d, "github"); got != 1 {
+		t.Fatalf("precondition: events(source=github) = %d before finish run, want 1 (unpurged 2b duplicate)", got)
+	}
+	if got := countEventsBySource(t, d, "jira"); got != 1 {
+		t.Fatalf("precondition: events(source=jira) = %d before finish run, want 1 (unpurged 2b duplicate)", got)
+	}
+	d.Close()
+
+	// Before the finish run, the retained tables would lock the user out.
+	if err := runMigrateWatcherAt(dbPath, true); err != nil {
+		t.Fatalf("finish-run runMigrateWatcherAt failed: %v", err)
+	}
+
+	d2, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen db: %v", err)
+	}
+	defer d2.Close()
+	if got := countRows(t, d2, "watcher_events"); got != before {
+		t.Errorf("watcher_events = %d after finish run, want %d (no re-copy)", got, before)
+	}
+	if got := countRows(t, d2, "watcher_subscriptions"); got != beforeSubs {
+		t.Errorf("watcher_subscriptions = %d after finish run, want %d (no re-copy)", got, beforeSubs)
+	}
+	if legacyTablesExist(t, d2) {
+		t.Errorf("legacy tables still exist after finish run, want dropped")
+	}
+	if d2.HasUnmigratedLegacyData() {
+		t.Errorf("HasUnmigratedLegacyData() = true after finish run, want false (lockout resolved)")
+	}
+
+	// CRITICAL: a 2b-migrated DB (finish path) still has the duplicate
+	// github/jira rows in the legacy events table, and the finish run must
+	// purge them too — otherwise they linger forever since reads now use
+	// watcher_events exclusively.
+	if got := countEventsBySource(t, d2, "github"); got != 0 {
+		t.Errorf("events(source=github) = %d after finish run, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "jira"); got != 0 {
+		t.Errorf("events(source=jira) = %d after finish run, want 0 (purged)", got)
+	}
+	if got := countEventsBySource(t, d2, "agent"); got != 1 {
+		t.Errorf("events(source=agent) = %d after finish run, want 1 (agent events must NOT be purged)", got)
+	}
+	// No double-insert into watcher_events from the purge/finish run.
+	if got := countRows(t, d2, "watcher_events"); got != before {
+		t.Errorf("watcher_events = %d after finish-run purge, want %d (untouched)", got, before)
 	}
 }
 

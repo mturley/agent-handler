@@ -167,9 +167,8 @@ func (db *DB) AutoDeliveredCount(sessionID string) (int, error) {
 	// between the human cursor and the agent cursor). The extra `e.ts <= ?`
 	// predicate's placeholder follows all of inboxArgs's placeholders, so
 	// agentCursor is appended after inboxArgs.
-	gated := db.watcherMigrationDone()
-	query := inboxSelectPred("SELECT", inboxCountCols, gated, "e.ts <= ?")
-	args := append(inboxArgs(session, *humanCursor, gated), agentCursor)
+	query := inboxSelectPred("SELECT", inboxCountCols, "e.ts <= ?")
+	args := append(inboxArgs(session, *humanCursor), agentCursor)
 	var count int
 	err = db.conn.QueryRow(query, args...).Scan(&count)
 	if err != nil {

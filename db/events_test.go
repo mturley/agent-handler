@@ -114,9 +114,8 @@ func TestUnreadViaResourceSubscription(t *testing.T) {
 	}
 
 	// Insert a watcher event referencing the subscribed PR. Resource routing
-	// now lives in the watcher arm of the inbox UNION, so the event goes into
-	// watcher_events (via the library writer) and the read must run on the
-	// UNION path — hence setWatcherMigrated below.
+	// lives in the watcher arm of the inbox UNION, so the event goes into
+	// watcher_events (via the library writer); the UNION path is unconditional.
 	eventTS := time.Now().UTC().Format(time.RFC3339)
 	we := watcher.Event{
 		ID:     "event-unread-1",
@@ -127,9 +126,6 @@ func TestUnreadViaResourceSubscription(t *testing.T) {
 	}
 	if err := wdb.InsertEvent(d.conn, we, watcher.Resource{Type: "pr", ID: "owner/repo#200"}); err != nil {
 		t.Fatalf("wdb.InsertEvent failed: %v", err)
-	}
-	if err := d.setWatcherMigrated(); err != nil {
-		t.Fatalf("setWatcherMigrated failed: %v", err)
 	}
 
 	// Check unread
