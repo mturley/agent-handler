@@ -76,50 +76,11 @@ CREATE TABLE IF NOT EXISTS dismissed_events (
 
 CREATE INDEX IF NOT EXISTS idx_dismissed_events_session ON dismissed_events(session_id);
 
-
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL REFERENCES sessions(session_id),
-    resource_type TEXT NOT NULL,
-    resource_id TEXT NOT NULL,
-    resource_url TEXT,
-    created_at TEXT NOT NULL,
-    deleted_at TEXT,
-    -- 'user' when the subscription was soft-deleted by an explicit /unwatch, so
-    -- session reactivation won't resurrect deliberate unsubscribes.
-    unsubscribed_by TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_subscriptions_resource ON subscriptions(resource_type, resource_id, deleted_at);
-
-CREATE TABLE IF NOT EXISTS watcher_status (
-    name TEXT PRIMARY KEY,
-    last_success TEXT,
-    last_error TEXT,
-    last_error_message TEXT
-);
-
-CREATE TABLE IF NOT EXISTS resource_relationships (
-    id TEXT PRIMARY KEY,
-    child_type TEXT NOT NULL,
-    child_id TEXT NOT NULL,
-    child_url TEXT,
-    parent_type TEXT NOT NULL,
-    parent_id TEXT NOT NULL,
-    parent_url TEXT,
-    relationship TEXT NOT NULL,
-    source TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS resource_state (
-    resource_type TEXT NOT NULL,
-    resource_id TEXT NOT NULL,
-    state_json TEXT NOT NULL,
-    resource_updated_at TEXT NOT NULL,
-    watcher_updated_at TEXT NOT NULL,
-    PRIMARY KEY (resource_type, resource_id)
-);
+-- NOTE: The legacy watcher tables (subscriptions, watcher_status,
+-- resource_relationships, resource_state) were removed from the fresh schema in
+-- Phase 2c. Their data now lives in the watcher library's watcher_* tables.
+-- `handler setup --migrate-watcher` is the only code that recreates/reads/drops
+-- them, for one-time migration of pre-2c databases.
 
 CREATE TABLE IF NOT EXISTS cost_snapshots (
     session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),

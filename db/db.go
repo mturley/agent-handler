@@ -65,10 +65,26 @@ func Open(path string) (*DB, error) {
 	return &DB{conn: conn}, nil
 }
 
+// runMigrations applies handler-owned schema migrations to the NEW (current)
+// schema on every Open. It is intentionally minimal: the legacy watcher tables
+// (subscriptions, resource_state, resource_relationships, watcher_status) and
+// their historical migrations were removed in Phase 2c. Legacy schema is now
+// touched only once, by `handler setup --migrate-watcher`, which owns the full
+// legacy lifecycle (run legacy migrations -> copy into watcher_* -> drop the
+// legacy tables). Add future NEW-schema migrations here as schema changes land.
+//
+// The handler_meta table (which held the retired watcher_migrated marker) is no
+// longer created here: fresh installs never need it, and legacy-data detection
+// is now schema-based (see db/legacy_guard.go). The marker itself is still read
+// by the migration command to distinguish a 2b-migrated DB (marker set, tables
+// retained) from an unmigrated one — but only where handler_meta already exists,
+// so no creation is required.
 func runMigrations(conn *sql.DB) error {
-	// Safety net for existing databases created before a table was added to
-	// schema.sql. CREATE TABLE IF NOT EXISTS is idempotent.
-	_, err := conn.Exec(`
+	// dismissed_events: per-session explicit event dismissals (current schema).
+	// Also present in schema.sql; CREATE TABLE IF NOT EXISTS in both is
+	// idempotent and matches the existing safety-net pattern for databases
+	// created before a table was added to schema.sql.
+	if _, err := conn.Exec(`
 		CREATE TABLE IF NOT EXISTS dismissed_events (
 			session_id   TEXT NOT NULL,
 			event_id     TEXT NOT NULL,
@@ -76,32 +92,8 @@ func runMigrations(conn *sql.DB) error {
 			PRIMARY KEY (session_id, event_id)
 		);
 		CREATE INDEX IF NOT EXISTS idx_dismissed_events_session ON dismissed_events(session_id);
-	`)
-	if err != nil {
+	`); err != nil {
 		return fmt.Errorf("failed to create dismissed_events table: %w", err)
-	}
-
-	// Add subscriptions.unsubscribed_by for existing databases. ALTER TABLE
-	// ADD COLUMN is not idempotent, so only add it when absent.
-	if err := addColumnIfMissing(conn, "subscriptions", "unsubscribed_by", "TEXT"); err != nil {
-		return err
-	}
-
-	// handler_meta holds handler-owned key/value flags. The watcher_migrated
-	// flag gates the inbox UNION's watcher arm: reads stay on the legacy path
-	// until the data-migration command (Task 10) copies events/subscriptions
-	// into the watcher_* tables and sets watcher_migrated=1. This is distinct
-	// from wdb.SchemaVersion, which is >=1 as soon as the watcher tables exist
-	// (before any data is migrated) — gating on it would silently drop events
-	// from inboxes mid-migration.
-	_, err = conn.Exec(`
-		CREATE TABLE IF NOT EXISTS handler_meta (
-			key   TEXT PRIMARY KEY,
-			value TEXT
-		);
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create handler_meta table: %w", err)
 	}
 
 	return nil

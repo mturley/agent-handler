@@ -1,7 +1,6 @@
 package db
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -34,10 +33,19 @@ import (
 
 // --- watcher-migration marker -------------------------------------------
 
-// watcherMigrationDone reports whether the handler-owned data migration has
-// run — i.e. whether handler_meta has the row watcher_migrated=1. It defaults
-// to false when the table or row is absent, or the value is anything but "1".
-// This — NOT wdb.SchemaVersion — is the gate for the inbox UNION's watcher arm.
+// watcherMigrationDone reports whether a prior handler-owned data migration
+// left its marker — i.e. whether handler_meta has the row watcher_migrated=1.
+// It defaults to false when the table or row is absent, or the value is
+// anything but "1".
+//
+// The marker is RETIRED as a detection signal (legacy detection is now
+// schema-based; see db/legacy_guard.go, and the inbox UNION is unconditional).
+// It survives here for one purpose only: `handler setup --migrate-watcher`
+// reads it to distinguish a 2b-migrated database (marker set, legacy tables
+// retained) — which only needs the legacy tables dropped — from a truly
+// unmigrated one that needs a full copy. Nothing writes the marker anymore, so
+// there is no setter; on fresh 2c installs handler_meta is never created and
+// this simply returns false.
 func (db *DB) watcherMigrationDone() bool {
 	var value string
 	err := db.conn.QueryRow(
@@ -49,29 +57,11 @@ func (db *DB) watcherMigrationDone() bool {
 	return value == "1"
 }
 
-// setWatcherMigrated marks the data migration complete by upserting
-// handler_meta.watcher_migrated=1. Only the migration command should call this.
-func (db *DB) setWatcherMigrated() error {
-	_, err := db.conn.Exec(`
-		INSERT INTO handler_meta (key, value)
-		VALUES ('watcher_migrated', '1')
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to set watcher_migrated marker: %w", err)
-	}
-	return nil
-}
-
 // WatcherMigrationDone is the exported form of watcherMigrationDone, for use
 // by package cmd (specifically the `handler setup --migrate-watcher` data
 // migration in cmd/migrate_watcher.go), which cannot call the unexported
 // method directly.
 func (db *DB) WatcherMigrationDone() bool { return db.watcherMigrationDone() }
-
-// SetWatcherMigrated is the exported form of setWatcherMigrated, for use by
-// package cmd's data migration command. Only that command should call this.
-func (db *DB) SetWatcherMigrated() error { return db.setWatcherMigrated() }
 
 // --- UNION path ----------------------------------------------------------
 

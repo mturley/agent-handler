@@ -33,21 +33,37 @@ type MigrationReport struct {
 	PollerStatus   int
 }
 
-// migrateWatcherData copies handler's legacy events/subscriptions/resource
-// data into the watcher library's watcher_* tables, preserving original
-// ids/timestamps, and sets the watcher_migrated marker on success. It is a
-// pure data copy: no backup, no prompts, no "is a watcher running" guard —
-// those live in runMigrateWatcherAt, which wraps this.
-//
-// It refuses to run (returning an error, without touching any table) if the
-// marker is already set, so a caller can't accidentally double-insert by
-// calling this directly outside the command's own marker check.
-func migrateWatcherData(d *db.DB) (MigrationReport, error) {
-	var report MigrationReport
+// dropLegacyTablesSQL drops the four legacy watcher tables. DROP TABLE also
+// removes each table's associated indexes in SQLite, so no separate DROP INDEX
+// is needed. Ordering is irrelevant (no FKs between them).
+const dropLegacyTablesSQL = `
+	DROP TABLE IF EXISTS subscriptions;
+	DROP TABLE IF EXISTS resource_state;
+	DROP TABLE IF EXISTS resource_relationships;
+	DROP TABLE IF EXISTS watcher_status;
+`
 
-	if d.WatcherMigrationDone() {
-		return report, fmt.Errorf("watcher data already migrated; refusing to run migrateWatcherData again")
-	}
+// migrateWatcherData performs the structural legacy-table migration inside a
+// single transaction, implementing the three-state lifecycle (see
+// runMigrateWatcherAt for the caller-side detection):
+//
+//   - full migration (legacy tables present, watcher_migrated marker UNSET):
+//     copy handler's legacy events/subscriptions/resource data into the
+//     watcher library's watcher_* tables (preserving ids/timestamps), then DROP
+//     the four legacy tables.
+//   - finish a prior 2b migration (legacy tables present, marker SET): the data
+//     was already copied into watcher_* by Phase 2b, so re-copying would
+//     double-insert. SKIP the copy and only DROP the legacy tables to complete
+//     the structural cleanup.
+//
+// The DROP runs in the same transaction as the copy so a DB is never left with
+// data copied but tables un-dropped (or vice versa). It does not touch config,
+// backups, or the running-watcher guard — those live in runMigrateWatcherAt.
+//
+// `finishOnly` selects the finish path (marker was set); the caller determines
+// it. A report with zero copy counts is returned on the finish path.
+func migrateWatcherData(d *db.DB, finishOnly bool) (MigrationReport, error) {
+	var report MigrationReport
 
 	conn := d.Conn()
 
@@ -57,12 +73,44 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 		return report, fmt.Errorf("failed to ensure watcher tables exist: %w", err)
 	}
 
+	// Bring a pre-2c subscriptions table current (adds unsubscribed_by if
+	// missing) before the copy reads that column. No-op on the finish path or
+	// when the column already exists. Run outside the write transaction because
+	// ALTER TABLE issues its own schema change.
+	if err := db.EnsureLegacySubscriptionsColumn(conn); err != nil {
+		return report, fmt.Errorf("failed to ensure legacy subscriptions column: %w", err)
+	}
+
 	tx, err := conn.Begin()
 	if err != nil {
 		return report, fmt.Errorf("failed to start migration transaction: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck // no-op after a successful Commit
 
+	if !finishOnly {
+		if err := copyLegacyDataTx(tx, &report); err != nil {
+			return report, err
+		}
+	}
+
+	// Structural cleanup: drop the legacy tables now that their data lives in
+	// the watcher_* tables. On the finish path this is the only work; on the
+	// full path it commits atomically with the copy above.
+	if _, err := tx.Exec(dropLegacyTablesSQL); err != nil {
+		return report, fmt.Errorf("failed to drop legacy tables: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return report, fmt.Errorf("failed to commit migration transaction: %w", err)
+	}
+
+	return report, nil
+}
+
+// copyLegacyDataTx copies the legacy handler tables into the watcher library's
+// watcher_* tables within the given transaction, filling in `report`'s per-table
+// counts. Extracted from migrateWatcherData so the finish path can skip it.
+func copyLegacyDataTx(tx *sql.Tx, report *MigrationReport) error {
 	// 1. events -> watcher_events (github/jira sourced rows only; agent and
 	// handler-own events stay in the legacy table).
 	res, err := tx.Exec(`
@@ -71,7 +119,7 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 		FROM events WHERE source IN ('github', 'jira')
 	`)
 	if err != nil {
-		return report, fmt.Errorf("failed to copy events: %w", err)
+		return fmt.Errorf("failed to copy events: %w", err)
 	}
 	report.Events = int(mustRowsAffected(res))
 
@@ -85,7 +133,7 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 		WHERE e.source IN ('github', 'jira')
 	`)
 	if err != nil {
-		return report, fmt.Errorf("failed to copy event_resources: %w", err)
+		return fmt.Errorf("failed to copy event_resources: %w", err)
 	}
 	report.EventResources = int(mustRowsAffected(res))
 
@@ -96,7 +144,7 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 		FROM resource_state
 	`)
 	if err != nil {
-		return report, fmt.Errorf("failed to copy resource_state: %w", err)
+		return fmt.Errorf("failed to copy resource_state: %w", err)
 	}
 	report.ResourceState = int(mustRowsAffected(res))
 
@@ -107,19 +155,18 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 		FROM resource_relationships
 	`)
 	if err != nil {
-		return report, fmt.Errorf("failed to copy resource_relationships: %w", err)
+		return fmt.Errorf("failed to copy resource_relationships: %w", err)
 	}
 	report.Relationships = int(mustRowsAffected(res))
 
-	// 5. handler's legacy watcher_status -> watcher_poller_status (direct
-	// copy; the original watcher_status table is left intact for rollback).
+	// 5. handler's legacy watcher_status -> watcher_poller_status (direct copy).
 	res, err = tx.Exec(`
 		INSERT INTO watcher_poller_status (name, last_success, last_error, last_error_message)
 		SELECT name, last_success, last_error, last_error_message
 		FROM watcher_status
 	`)
 	if err != nil {
-		return report, fmt.Errorf("failed to copy watcher_status: %w", err)
+		return fmt.Errorf("failed to copy watcher_status: %w", err)
 	}
 	report.PollerStatus = int(mustRowsAffected(res))
 
@@ -157,30 +204,11 @@ func migrateWatcherData(d *db.DB) (MigrationReport, error) {
 		LEFT JOIN sessions sess ON sess.session_id = s.session_id
 	`, expiresActive, nowExpired)
 	if err != nil {
-		return report, fmt.Errorf("failed to copy subscriptions: %w", err)
+		return fmt.Errorf("failed to copy subscriptions: %w", err)
 	}
 	report.Subscriptions = int(mustRowsAffected(res))
 
-	// Set the marker inside the transaction so a half-migrated DB can never
-	// have it set — either the whole copy + marker commits, or none of it
-	// does. This can't call d.SetWatcherMigrated() (the exported wrapper
-	// added in db/inbox_scope.go for this command): that method runs its
-	// own statement against d.Conn() outside this transaction, which would
-	// deadlock against the open write transaction below. Mirror its SQL
-	// directly on tx instead.
-	if _, err := tx.Exec(`
-		INSERT INTO handler_meta (key, value)
-		VALUES ('watcher_migrated', '1')
-		ON CONFLICT(key) DO UPDATE SET value = excluded.value
-	`); err != nil {
-		return report, fmt.Errorf("failed to set watcher_migrated marker: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return report, fmt.Errorf("failed to commit migration transaction: %w", err)
-	}
-
-	return report, nil
+	return nil
 }
 
 // mustRowsAffected returns res.RowsAffected(), treating a driver error as 0.
@@ -194,11 +222,10 @@ func mustRowsAffected(res sql.Result) int64 {
 	return n
 }
 
-// sessionLeaseTTL note: db.SetWatcherMigrated and friends live in package
-// db; sessionLeaseTTL itself is also defined there (db/watcher_bridge.go)
-// and is not exported, so it is redeclared here for the one place migrate
-// needs it. Keep in sync with db.sessionLeaseTTL (5 days) if that ever
-// changes.
+// sessionLeaseTTL note: sessionLeaseTTL is also defined in package db
+// (db/watcher_bridge.go) and is not exported, so it is redeclared here for the
+// one place migrate needs it. Keep in sync with db.sessionLeaseTTL (5 days) if
+// that ever changes.
 const sessionLeaseTTL = 5 * 24 * time.Hour
 
 // legacyDBError is the message shown when `handler setup` is run against a
@@ -251,10 +278,20 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 	}
 	defer d.Close()
 
-	if d.WatcherMigrationDone() {
+	// Three-state, schema-based lifecycle (see the CRITICAL migration-path
+	// section of the Phase 2c plan and db/legacy_guard.go):
+	//   - legacy tables ABSENT           -> already migrated, nothing to do.
+	//   - tables PRESENT + marker SET     -> a 2b-migrated DB: data already lives
+	//                                        in watcher_*, so finish the cleanup
+	//                                        by dropping the legacy tables only.
+	//   - tables PRESENT + marker UNSET   -> full migration (copy + drop).
+	// Detection is purely structural; the marker is read ONLY to choose
+	// copy-vs-skip, never to gate anything else (it is otherwise retired).
+	if !d.HasUnmigratedLegacyData() {
 		fmt.Println("watcher data already migrated (nothing to do)")
 		return nil
 	}
+	finishOnly := d.WatcherMigrationDone()
 
 	if !skipRunningCheck {
 		if watcherPkg.IsRunning("github") || watcherPkg.IsRunning("jira") {
@@ -268,30 +305,40 @@ func runMigrateWatcherAt(dbPath string, skipRunningCheck bool) error {
 	}
 	fmt.Printf("Backed up database to %s\n", backupPath)
 
-	preCounts, err := sourceRowCounts(d)
-	if err != nil {
-		return fmt.Errorf("failed to read pre-migration row counts: %w", err)
-	}
-	fmt.Println("\nSource row counts:")
-	fmt.Printf("  events (github/jira):     %d\n", preCounts.Events)
-	fmt.Printf("  event_resources:          %d\n", preCounts.EventResources)
-	fmt.Printf("  resource_state:           %d\n", preCounts.ResourceState)
-	fmt.Printf("  subscriptions:            %d\n", preCounts.Subscriptions)
-	fmt.Printf("  resource_relationships:   %d\n", preCounts.Relationships)
-	fmt.Printf("  watcher_status:           %d\n", preCounts.PollerStatus)
+	if finishOnly {
+		fmt.Println("\nDetected a prior (Phase 2b) migration: data already copied into watcher_* tables.")
+		fmt.Println("Finishing migration by dropping the retained legacy tables (no data is re-copied).")
+		if _, err := migrateWatcherData(d, true); err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
+		fmt.Println("Dropped legacy tables (subscriptions, resource_state, resource_relationships, watcher_status).")
+	} else {
+		preCounts, err := sourceRowCounts(d)
+		if err != nil {
+			return fmt.Errorf("failed to read pre-migration row counts: %w", err)
+		}
+		fmt.Println("\nSource row counts:")
+		fmt.Printf("  events (github/jira):     %d\n", preCounts.Events)
+		fmt.Printf("  event_resources:          %d\n", preCounts.EventResources)
+		fmt.Printf("  resource_state:           %d\n", preCounts.ResourceState)
+		fmt.Printf("  subscriptions:            %d\n", preCounts.Subscriptions)
+		fmt.Printf("  resource_relationships:   %d\n", preCounts.Relationships)
+		fmt.Printf("  watcher_status:           %d\n", preCounts.PollerStatus)
 
-	report, err := migrateWatcherData(d)
-	if err != nil {
-		return fmt.Errorf("migration failed: %w", err)
-	}
+		report, err := migrateWatcherData(d, false)
+		if err != nil {
+			return fmt.Errorf("migration failed: %w", err)
+		}
 
-	fmt.Println("\nMigration report (rows inserted vs. source):")
-	printCompare("events -> watcher_events", report.Events, preCounts.Events)
-	printCompare("event_resources -> watcher_event_resources", report.EventResources, preCounts.EventResources)
-	printCompare("resource_state -> watcher_resource_state", report.ResourceState, preCounts.ResourceState)
-	printCompare("subscriptions -> watcher_subscriptions", report.Subscriptions, preCounts.Subscriptions)
-	printCompare("resource_relationships -> watcher_resource_relationships", report.Relationships, preCounts.Relationships)
-	printCompare("watcher_status -> watcher_poller_status", report.PollerStatus, preCounts.PollerStatus)
+		fmt.Println("\nMigration report (rows inserted vs. source):")
+		printCompare("events -> watcher_events", report.Events, preCounts.Events)
+		printCompare("event_resources -> watcher_event_resources", report.EventResources, preCounts.EventResources)
+		printCompare("resource_state -> watcher_resource_state", report.ResourceState, preCounts.ResourceState)
+		printCompare("subscriptions -> watcher_subscriptions", report.Subscriptions, preCounts.Subscriptions)
+		printCompare("resource_relationships -> watcher_resource_relationships", report.Relationships, preCounts.Relationships)
+		printCompare("watcher_status -> watcher_poller_status", report.PollerStatus, preCounts.PollerStatus)
+		fmt.Println("\nDropped legacy tables (subscriptions, resource_state, resource_relationships, watcher_status).")
+	}
 
 	migrateCredentials()
 

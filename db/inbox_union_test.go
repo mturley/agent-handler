@@ -8,23 +8,6 @@ import (
 	wdb "github.com/mturley/watcher/db"
 )
 
-// TestWatcherMigrationMarkerDefaultsFalse verifies the handler-owned gate
-// defaults false and flips true only after setWatcherMigrated. The inbox
-// UNION's watcher arm must gate on THIS marker, not wdb.SchemaVersion (which
-// is already >=1 as soon as the watcher tables exist, before any data moves).
-func TestWatcherMigrationMarkerDefaultsFalse(t *testing.T) {
-	d := testDB(t)
-	if d.watcherMigrationDone() {
-		t.Fatal("marker should default false")
-	}
-	if err := d.setWatcherMigrated(); err != nil {
-		t.Fatal(err)
-	}
-	if !d.watcherMigrationDone() {
-		t.Fatal("marker should be true after set")
-	}
-}
-
 // insertAgentEventForSession inserts a handler event addressed directly to a
 // session via event_recipients (the agent arm's routing).
 func insertAgentEventForSession(t *testing.T, d *DB, id, sessionID, ts string) {
