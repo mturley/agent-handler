@@ -111,14 +111,25 @@ export function InboxContent({
   return (
     <>
       {showHeader && (
-        <h2 className="text-base font-semibold mb-1">
-          Inbox
-          {events.length > 0 && (
-            <span className="text-sm font-normal text-muted-foreground ml-1.5">
-              {events.length} unread
-            </span>
-          )}
-        </h2>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-base font-semibold">
+            Inbox
+            {events.length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-1.5">
+                {events.length} unread
+              </span>
+            )}
+          </h2>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            onClick={() => setReminderOpen(true)}
+          >
+            <Bell className="h-3.5 w-3.5" />
+            Add reminder
+          </Button>
+        </div>
       )}
       <ScrollArea className={cn(scrollClassName)}>
         {loading && (
@@ -208,18 +219,10 @@ export function InboxContent({
         })}
       </ScrollArea>
 
-      <div className="flex items-center gap-2 justify-between pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1"
-          onClick={() => setReminderOpen(true)}
-        >
-          <Bell className="h-3.5 w-3.5" />
-          Add reminder
-        </Button>
+      {events.length > 0 && (
+      <div className="flex items-center gap-2 justify-end pt-2">
         <div className="flex gap-2 ml-auto">
-          {events.length === 0 ? null : !confirmDismiss ? (
+          {!confirmDismiss ? (
             <Button
               variant="destructive"
               size="sm"
@@ -246,6 +249,7 @@ export function InboxContent({
           )}
         </div>
       </div>
+      )}
 
       <Dialog open={reminderOpen} onOpenChange={setReminderOpen}>
         <DialogContent className="max-w-md">

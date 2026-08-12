@@ -89,7 +89,7 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
     queryFn: () => getSessionCost(sessionId),
   })
   const costEnabled = cost?.enabled ?? false
-  const totalCost = session?.true_cost_usd
+  const totalCost = cost?.all_time_cost_usd
   const todayCost = session?.today_cost_usd
   const last30Cost = cost?.total_cost_usd
   const fmtUsd = (v: number) => "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -203,7 +203,7 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
             </TabsContent>
 
             <TabsContent value="resources">
-              <ResourcesContent sessionId={sessionId} scrollClassName="max-h-[60vh]" />
+              <ResourcesContent sessionId={sessionId} scrollClassName="max-h-[60vh]" editable />
             </TabsContent>
 
             {costEnabled && (

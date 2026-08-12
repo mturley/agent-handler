@@ -41,6 +41,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /api/actions/dismiss-inbox", s.handleDismissInbox)
 	mux.HandleFunc("POST /api/actions/dismiss-event", s.handleDismissEvent)
 	mux.HandleFunc("POST /api/actions/add-reminder", s.handleAddReminder)
+	mux.HandleFunc("POST /api/actions/subscribe", s.handleSubscribe)
+	mux.HandleFunc("POST /api/actions/unsubscribe", s.handleUnsubscribe)
 	mux.HandleFunc("POST /api/actions/archive-sessions", s.handleArchiveSessions)
 
 	// Static files with SPA fallback (skip in dev mode — Vite serves them)

@@ -6,7 +6,15 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, options)
   if (!res.ok) {
     const text = await res.text()
-    throw new Error(`${res.status}: ${text}`)
+    // Surface the API's {"error": "..."} message when present.
+    let msg = text
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed && typeof parsed.error === "string") msg = parsed.error
+    } catch {
+      // not JSON — keep raw text
+    }
+    throw new Error(msg || `Request failed (${res.status})`)
   }
   return res.json()
 }
@@ -40,6 +48,7 @@ export async function getSessionResources(sessionId: string): Promise<SessionRes
 export interface SessionCostSummary {
   enabled: boolean
   total_cost_usd: number
+  all_time_cost_usd: number
   days: { date: string; cost_usd: number; session_count: number }[]
 }
 
@@ -138,6 +147,22 @@ export async function addReminder(sessionId: string, title: string): Promise<Act
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionId, title }),
+  })
+}
+
+export async function subscribeResource(sessionId: string, input: string): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, input }),
+  })
+}
+
+export async function unsubscribeResource(sessionId: string, resourceType: string, resourceId: string): Promise<ActionResponse> {
+  return fetchJSON<ActionResponse>("/api/actions/unsubscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId, resource_type: resourceType, resource_id: resourceId }),
   })
 }
 
