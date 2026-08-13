@@ -83,7 +83,10 @@ logic, or DB APIs is **cross-repo work**:
 
 Do NOT attempt to work around a library limitation with a local patch in this
 repo — fix it in the library and re-pin. The library is also consumed by
-`worktree` (planned), so its behavior must stay correct for multiple consumers.
+`worktree` (`~/git/worktree`, now an active consumer — its web UI + resource
+tracking are built on the same library), so its behavior must stay correct for
+multiple consumers. A library change made for one consumer must not break the
+other; after releasing a new tag, re-pin in BOTH repos as needed.
 
 Poller/source bugs (missing event types, dedup false-positives, GraphQL query
 gaps) are library bugs — diagnose and fix them in `~/git/watcher/github/` or
