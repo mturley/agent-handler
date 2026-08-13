@@ -18,6 +18,7 @@ export interface Session {
   needs_input: boolean
   blocked: boolean
   blocked_reason?: string
+  blocked_detail?: string
   pid: number
   status: string
   subscriptions_count: number

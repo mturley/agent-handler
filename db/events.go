@@ -224,22 +224,27 @@ func (db *DB) UnreadEventsOfType(sessionID, eventType string) ([]Event, error) {
 	return scanEvents(rows)
 }
 
-// GetBlockedStatus returns whether a session is blocked and the reason (title of the blocked event).
-func (db *DB) GetBlockedStatus(sessionID string) (bool, string) {
+// GetBlockedStatus returns whether a session is blocked, the reason (title of
+// the blocked event), and its optional body/description (empty when absent).
+func (db *DB) GetBlockedStatus(sessionID string) (blocked bool, reason string, detail string) {
 	var title string
+	var body *string
 	err := db.conn.QueryRow(`
-		SELECT e.title FROM events e
+		SELECT e.title, e.body FROM events e
 		WHERE e.session_id = ? AND e.type = 'blocked'
 		  AND NOT EXISTS (
 		    SELECT 1 FROM events e2
 		    WHERE e2.session_id = ? AND e2.type = 'unblocked' AND e2.ts > e.ts
 		  )
 		ORDER BY e.ts DESC LIMIT 1
-	`, sessionID, sessionID).Scan(&title)
+	`, sessionID, sessionID).Scan(&title, &body)
 	if err != nil {
-		return false, ""
+		return false, "", ""
 	}
-	return true, title
+	if body != nil {
+		detail = *body
+	}
+	return true, title, detail
 }
 
 // UnreadCountForSession returns the total unread count and a breakdown by type.

@@ -174,6 +174,11 @@ export function SessionCard({
             <OctagonAlert className="h-3.5 w-3.5 shrink-0" />
             Blocked{session.blocked_reason ? `: ${session.blocked_reason}` : ""}
           </span>
+          {session.blocked_detail && (
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap ml-[1.125rem] mt-0.5 mb-1.5">
+              {session.blocked_detail}
+            </p>
+          )}
         </div>
       )}
       {(nonReminderCount > 0 || reminderCount > 0) && (

@@ -31,6 +31,7 @@ type enrichedSession struct {
 	NeedsInput         bool           `json:"needs_input"`
 	Blocked            bool           `json:"blocked"`
 	BlockedReason      string         `json:"blocked_reason,omitempty"`
+	BlockedDetail      string         `json:"blocked_detail,omitempty"`
 	PID                int            `json:"pid"`
 	Status             string         `json:"status"`
 	SubscriptionCount     int            `json:"subscriptions_count"`
@@ -421,7 +422,7 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 	}
 
 	// Check blocked status
-	blocked, blockedReason := s.DB.GetBlockedStatus(session.SessionID)
+	blocked, blockedReason, blockedDetail := s.DB.GetBlockedStatus(session.SessionID)
 
 	// Fetch subscriptions count and breakdown by type
 	subscriptionCount := 0
@@ -437,17 +438,15 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		}
 	}
 
-	// Compute cost if available and enabled in config
+	// Compute cost if available and enabled in config. Total is the all-time
+	// accumulated cost from daily_cost — accurate across restarts, unlike the
+	// snapshot's reported cost which resets when the process restarts.
 	var trueCostPtr, todayCostPtr *float64
 	if displayState == "active" || displayState == "idle" {
 		cfg, _ := config.Read(config.DefaultPath())
 		if cfg != nil && cfg.ExperimentalCostDisplay() {
-			if snap, err := s.DB.GetCostSnapshot(session.SessionID); err == nil && snap != nil && snap.ReportedCostUSD > 0 {
-				trueCost := snap.ReportedCostUSD
-				if adj, err := s.DB.GetTotalAdjustment(session.SessionID); err == nil {
-					trueCost += adj
-				}
-				trueCostPtr = &trueCost
+			if total, err := s.DB.SessionTotalCost(session.SessionID); err == nil && total > 0 {
+				trueCostPtr = &total
 				today := time.Now().UTC().Format("2006-01-02")
 				if dc, err := s.DB.GetDailyCostForSession(session.SessionID, today); err == nil && dc != nil {
 					todayCostPtr = &dc.CostUSD
@@ -474,6 +473,7 @@ func (s *Server) enrichSession(session db.Session) enrichedSession {
 		NeedsInput:         needsInput,
 		Blocked:            blocked,
 		BlockedReason:      blockedReason,
+		BlockedDetail:      blockedDetail,
 		PID:                session.PID,
 		Status:             session.Status,
 		CWD:                  session.CWD,
