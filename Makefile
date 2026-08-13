@@ -9,7 +9,6 @@ build-cli:
 	go build -o $(BIN_DIR)/$(BINARY_NAME) .
 	@echo ""
 	@echo "Built $(BIN_DIR)/$(BINARY_NAME)"
-	@echo "Run 'make install' to install."
 
 build-web:
 	@if [ ! -f ui/package.json ]; then echo "Error: ui/package.json not found. Run from the repo root." && exit 1; fi
@@ -18,17 +17,7 @@ build-web:
 
 build: build-web build-cli
 
-install:
-	@test -f $(BIN_DIR)/$(BINARY_NAME) || (echo "Error: $(BIN_DIR)/$(BINARY_NAME) not found. Run 'make build' or 'make build-cli' first." && exit 1)
-ifndef NONINTERACTIVE
-	@if [ ! -d ui/dist ] || [ -z "$$(ls -A ui/dist 2>/dev/null)" ]; then \
-		echo "Warning: Web UI not built — handler ui will not work."; \
-		echo "Run 'make build' for a full build, or 'make build-cli' for CLI-only."; \
-		printf "Continue? [y/N] "; \
-		read answer; \
-		case "$$answer" in [yY]*) ;; *) echo "Aborted."; exit 1;; esac; \
-	fi
-endif
+install: build
 	@cp $(BIN_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/.$(BINARY_NAME).tmp
 	@chmod 755 $(INSTALL_DIR)/.$(BINARY_NAME).tmp
 	@mv $(INSTALL_DIR)/.$(BINARY_NAME).tmp $(INSTALL_DIR)/$(BINARY_NAME)

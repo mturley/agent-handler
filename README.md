@@ -11,8 +11,7 @@ Requires Go 1.25+ and Claude Code to already be installed.
 ```bash
 git clone https://github.com/mturley/agent-handler.git
 cd agent-handler
-make build
-make install # Copies `handler` binary to /usr/local/bin and runs `handler setup`
+make install # Builds, copies `handler` binary to /usr/local/bin, and runs `handler setup`
 ```
 
 `handler setup` creates a directory at `~/.agent-handler/`, copies skill and hook files there, and configures Claude Code hooks and skills automatically. It will show you what it does and ask for confirmation before proceeding. If you skip any of its steps (e.g. there are issues authenticating the watchers), run `handler setup` again to retry.
@@ -31,7 +30,7 @@ A more convenient install/update script will come soon.
 ```bash
 cd agent-handler
 git pull
-make build && make install
+make install
 ```
 
 ### Migrating an existing database to the watcher library

@@ -3,12 +3,12 @@
 ## Build and Install
 
 ```bash
-make build      # builds to bin/handler
-make install    # atomically installs binary, runs non-interactive setup
+make build      # builds web UI + bin/handler
+make install    # builds first, then atomically installs binary and runs setup
 make clean      # removes bin/
 ```
 
-`make install` uses atomic rename so it's safe to run while handler is actively running. Use `NONINTERACTIVE=1 make install` to skip confirmation prompts and watcher setup. Always use `NONINTERACTIVE=1` when installing from a Claude session.
+`make install` runs `make build` first, then uses atomic rename so it's safe to run while handler is actively running. Use `NONINTERACTIVE=1 make install` to skip confirmation prompts and watcher setup. Always use `NONINTERACTIVE=1` when installing from a Claude session.
 
 **NEVER copy the binary directly with `cp`.** Always use `make install` — it handles atomic rename and setup. Direct `cp` corrupts the binary if it's replaced while running (handler is invoked by hooks every few seconds).
 
@@ -56,21 +56,45 @@ When adding or removing cmux keyboard shortcut actions:
 - Update the statusline rendering in `cmd/statusline.go` — `renderAwaitingLine()` shows the awaiting shortcut in context, and `renderCmuxShortcutsLine()` shows a summary at the bottom. Both read shortcuts dynamically from `GetCmuxShortcuts()`, but the display text is hardcoded and must be updated to describe new actions.
 - Update the setup summary in `cmd/setup.go` (the cmux actions section of the "will do" list)
 
-## Watchers
+## Watchers (watcher library)
 
-External event watchers poll GitHub and Jira APIs for changes to subscribed resources. They run as one-shot commands scheduled via launchd (macOS) or cron (Linux).
+External event watchers poll GitHub and Jira APIs for changes to subscribed
+resources, emitting events into the watcher DB. They run as one-shot commands
+scheduled via launchd (macOS) or cron (Linux).
+
+**The polling engine, schema, DB layer, and per-source pollers live in a
+separate library — `github.com/mturley/watcher` — NOT in this repo.** Handler
+is a *consumer* of that library. As of Phase 2b, the old in-tree
+`watcher/github/` and `watcher/jira/` packages no longer exist here; handler
+pins a released version of the library (see `go.mod`) and calls into it.
+
+### IMPORTANT: cross-repo coordination
+
+**The watcher library is maintained locally at `~/git/watcher`** (module
+`github.com/mturley/watcher`, GitHub `mturley/watcher`). Any handler change
+that requires new or changed poller behavior, schema, event types, dedup
+logic, or DB APIs is **cross-repo work**:
+
+1. Make the change in `~/git/watcher`, with tests (`go test ./...` there).
+2. Commit and cut a new library release tag (e.g. `v0.2.5`) and push it.
+3. In this repo, re-pin the new version: `go get github.com/mturley/watcher@vX.Y.Z`
+   (or edit `go.mod` + `go mod tidy`), then rebuild/re-test.
+4. Rebuild and reinstall handler (`NONINTERACTIVE=1 make install`).
+
+Do NOT attempt to work around a library limitation with a local patch in this
+repo — fix it in the library and re-pin. The library is also consumed by
+`worktree` (planned), so its behavior must stay correct for multiple consumers.
+
+Poller/source bugs (missing event types, dedup false-positives, GraphQL query
+gaps) are library bugs — diagnose and fix them in `~/git/watcher/github/` or
+`~/git/watcher/jira/`.
+
+### Local handler-side watcher glue
 
 - `config/` — Config file read/write and token validation
-- `watcher/` — Shared framework (active resources, cursors, dedup) and scheduler
-- `watcher/github/` — GitHub PR watcher using GraphQL API
-- `watcher/jira/` — Jira issue watcher using REST API
-
-When adding new watcher types:
-- Create a new package under `watcher/<name>/`
-- Add the service to `config.Config` and `config.IsServiceConfigured`
-- Add the resource type mapping in `config.ResourceTypeToService`
-- Add the service to `cmd/watcher/auth.go` prompts
-- Add the service to `cmd/watcher/run.go` switch statement
+- `watcher/scheduler.go` — thin glue that resolves active resources and invokes
+  the library's pollers (the shared framework concepts now live in the library;
+  this directory only wires handler's config/DB into it)
 
 ## Handler Session
 
