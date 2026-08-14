@@ -196,12 +196,14 @@ func runCostSession(d *db.DB, sessionID string) error {
 		return fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	snap, err := d.GetCostSnapshot(sessionID)
+	epoch, err := d.GetCostEpochState(sessionID)
 	if err != nil {
 		return err
 	}
 
-	adjustment, err := d.GetTotalAdjustment(sessionID)
+	// Total is the all-time accumulated cost from daily_cost — accurate across
+	// restarts, unlike the epoch's current reported cost which resets on restart.
+	totalCost, err := d.SessionTotalCost(sessionID)
 	if err != nil {
 		return err
 	}
@@ -213,12 +215,11 @@ func runCostSession(d *db.DB, sessionID string) error {
 		result := map[string]interface{}{
 			"session_id":   sessionID,
 			"session_name": session.SessionName,
-			"adjustment":   adjustment,
+			"total_cost":   totalCost,
 		}
-		if snap != nil {
-			result["reported_cost"] = snap.ReportedCostUSD
-			result["true_cost"] = snap.ReportedCostUSD + adjustment
-			result["model"] = snap.Model
+		if epoch != nil {
+			result["reported_cost"] = epoch.LastObservedCost
+			result["model"] = epoch.Model
 		}
 		if todayCost != nil {
 			result["today_cost"] = todayCost.CostUSD
@@ -232,14 +233,11 @@ func runCostSession(d *db.DB, sessionID string) error {
 	}
 	fmt.Printf("Session: %s\n", name)
 
-	if snap != nil {
-		trueCost := snap.ReportedCostUSD + adjustment
-		fmt.Printf("  True cost:     $%.2f\n", trueCost)
-		fmt.Printf("  Reported cost: $%.2f\n", snap.ReportedCostUSD)
-		if adjustment > 0 {
-			fmt.Printf("  Adjustments:   $%.2f (restart resets)\n", adjustment)
+	if totalCost > 0 || epoch != nil {
+		fmt.Printf("  Total cost:    $%.2f\n", totalCost)
+		if epoch != nil {
+			fmt.Printf("  Model:         %s\n", epoch.Model)
 		}
-		fmt.Printf("  Model:         %s\n", snap.Model)
 	} else {
 		fmt.Println("  No cost data recorded yet")
 	}
