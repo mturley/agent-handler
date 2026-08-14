@@ -56,7 +56,7 @@ func (s *Server) handleSessionCost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now().UTC()
+	now := time.Now() // local — cost is attributed to daily_cost by local date
 	end := now.Format("2006-01-02")
 	start := now.AddDate(0, 0, -29).Format("2006-01-02") // last 30 days inclusive
 
@@ -88,7 +88,8 @@ func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	now := time.Now().UTC()
+	// Local time throughout — cost is attributed to daily_cost by local date.
+	now := time.Now()
 	today := now.Format("2006-01-02")
 
 	todayCost, _, _, _ := s.DB.QueryTotalCost(today, today)
@@ -96,7 +97,7 @@ func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
 
 	months := make([]monthSummary, 6)
 	for i := 0; i < 6; i++ {
-		m := time.Date(now.Year(), now.Month()-time.Month(i), 1, 0, 0, 0, 0, time.UTC)
+		m := time.Date(now.Year(), now.Month()-time.Month(i), 1, 0, 0, 0, 0, time.Local)
 		months[i] = s.buildMonthSummary(m)
 	}
 
@@ -111,7 +112,7 @@ func (s *Server) handleCost(w http.ResponseWriter, r *http.Request) {
 func (s *Server) buildMonthSummary(t time.Time) monthSummary {
 	label := t.Format("January")
 	monthStart := t.Format("2006-01") + "-01"
-	nextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.UTC)
+	nextMonth := time.Date(t.Year(), t.Month()+1, 1, 0, 0, 0, 0, time.Local)
 	monthEnd := nextMonth.Format("2006-01-02")
 
 	monthCost, _, _, _ := s.DB.QueryTotalCost(monthStart, monthEnd)
