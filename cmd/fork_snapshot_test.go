@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -44,5 +45,48 @@ func TestCopyTranscriptMissingSource(t *testing.T) {
 	_, _, err := copyTranscript(filepath.Join(t.TempDir(), "nope.jsonl"))
 	if err == nil {
 		t.Fatal("expected error for missing source, got nil")
+	}
+}
+
+func TestParsePreCompactInput(t *testing.T) {
+	raw := `{
+	  "session_id": "dcbed3d2-1b23-4af8-aa1e-61d5d9b7dd99",
+	  "transcript_path": "/x/y/dcbed3d2.jsonl",
+	  "cwd": "/x",
+	  "hook_event_name": "PreCompact",
+	  "trigger": "manual",
+	  "custom_instructions": null
+	}`
+	in, err := parsePreCompactInput(strings.NewReader(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if in.SessionID != "dcbed3d2-1b23-4af8-aa1e-61d5d9b7dd99" {
+		t.Fatalf("session_id: %q", in.SessionID)
+	}
+	if in.TranscriptPath != "/x/y/dcbed3d2.jsonl" {
+		t.Fatalf("transcript_path: %q", in.TranscriptPath)
+	}
+	if in.Trigger != "manual" {
+		t.Fatalf("trigger: %q", in.Trigger)
+	}
+	if in.CustomInstructions != nil {
+		t.Fatalf("custom_instructions should be nil, got %v", *in.CustomInstructions)
+	}
+}
+
+func TestBuildSnapshotBody(t *testing.T) {
+	body := buildSnapshotBody("newuuid-1234", "auth-work-precompact", "auto", nil)
+	if !strings.Contains(body, "claude --resume newuuid-1234 --name auth-work-precompact") {
+		t.Fatalf("body missing resume command:\n%s", body)
+	}
+	if !strings.Contains(body, "auto") {
+		t.Fatalf("body missing trigger:\n%s", body)
+	}
+
+	ci := "focus on the DB layer"
+	body = buildSnapshotBody("id2", "n-precompact-2", "manual", &ci)
+	if !strings.Contains(body, ci) {
+		t.Fatalf("body missing custom instructions:\n%s", body)
 	}
 }
