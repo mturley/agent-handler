@@ -97,18 +97,29 @@ func (db *DB) RecordCostTick(sessionID string, pid int, model, now, localDate st
 	}
 
 	// Attribute only positive increments. A dip (recalculation noise) contributes
-	// nothing; the next climb is measured from the dipped value.
-	if costDelta > 0 {
-		if _, err := tx.Exec(`
-			INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
-			VALUES (?, ?, ?, ?, ?)
-			ON CONFLICT(session_id, date) DO UPDATE SET
-				cost_usd = daily_cost.cost_usd + excluded.cost_usd,
-				input_tokens = daily_cost.input_tokens + excluded.input_tokens,
-				output_tokens = daily_cost.output_tokens + excluded.output_tokens
-		`, sessionID, localDate, costDelta, inputDelta, outputDelta); err != nil {
-			return fmt.Errorf("failed to upsert daily cost: %w", err)
-		}
+	// nothing to the accumulated cost; the next climb is measured from the
+	// dipped value. Clamp negative deltas to zero, and always upsert (even a
+	// zero-delta tick) so a daily_cost row exists once a session has ticked
+	// within an epoch, distinguishing "observed, no cost yet" from "never
+	// observed".
+	if costDelta < 0 {
+		costDelta = 0
+	}
+	if inputDelta < 0 {
+		inputDelta = 0
+	}
+	if outputDelta < 0 {
+		outputDelta = 0
+	}
+	if _, err := tx.Exec(`
+		INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(session_id, date) DO UPDATE SET
+			cost_usd = daily_cost.cost_usd + excluded.cost_usd,
+			input_tokens = daily_cost.input_tokens + excluded.input_tokens,
+			output_tokens = daily_cost.output_tokens + excluded.output_tokens
+	`, sessionID, localDate, costDelta, inputDelta, outputDelta); err != nil {
+		return fmt.Errorf("failed to upsert daily cost: %w", err)
 	}
 
 	return tx.Commit()
