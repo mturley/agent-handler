@@ -36,6 +36,16 @@ Do not use `--broadcast` unless the user specifically asks to broadcast or messa
 
 Emit `blocked` whenever you are waiting on something external. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report.
 
+## Pre-compaction snapshots
+
+Before your context is compacted, the PreCompact hook automatically forks the
+session transcript (a verbatim copy to a new session ID) and emits a
+`pre_compact_snapshot` event. The event body contains a copy-pasteable
+`claude --resume <id> --name <name>` command that reopens the session in its
+full **pre-compaction** state — useful for rewinding to before a compaction or
+recovering detail the summary dropped. This happens automatically for both
+manual (`/compact`) and automatic compactions; you don't need to do anything.
+
 ## Watching resources
 
 **Immediately after creating or opening a PR or Jira issue, run `/watch` to subscribe to it.** Do not wait for the user to ask — this is automatic. This enables watchers to deliver updates (reviews, comments, status changes) to your inbox.
