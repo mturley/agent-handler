@@ -179,8 +179,10 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	trueCost := input.Cost.TotalCostUSD
 	todayCost := 0.0
 	if cfg.ExperimentalCostDisplay() && input.Cost.TotalCostUSD > 0 {
-		if adj, err := d.GetTotalAdjustment(input.SessionID); err == nil {
-			trueCost += adj
+		// Total is the all-time accumulated cost from daily_cost — accurate across
+		// restarts, unlike the hook-reported cost which resets per epoch.
+		if total, err := d.SessionTotalCost(input.SessionID); err == nil {
+			trueCost = total
 		}
 		today := time.Now().UTC().Format("2006-01-02")
 		if dc, err := d.GetDailyCostForSession(input.SessionID, today); err == nil && dc != nil {
