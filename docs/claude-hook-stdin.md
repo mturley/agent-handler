@@ -294,6 +294,36 @@ Received when a Claude session closes.
 
 Note: `prompt_id` may or may not be present depending on whether the session had any turns. SessionEnd does NOT include cost or token data.
 
+## PreCompact
+
+Received immediately before context compaction runs. The hook is synchronous —
+compaction waits for it to exit before proceeding, and the on-disk transcript
+still holds the full pre-compaction history at this point. (Verified 2026-08-14.)
+
+```json
+{
+  "session_id": "dcbed3d2-1b23-4af8-aa1e-61d5d9b7dd99",
+  "transcript_path": "/Users/mturley/.claude/projects/-Users-mturley-tmp-x/dcbed3d2-1b23-4af8-aa1e-61d5d9b7dd99.jsonl",
+  "cwd": "/Users/mturley/tmp/x",
+  "prompt_id": "8bd8c7cc-8a7d-4140-819d-37f97ad329aa",
+  "hook_event_name": "PreCompact",
+  "trigger": "manual",
+  "custom_instructions": null
+}
+```
+
+### Additional fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `trigger` | string | What caused compaction: `"manual"` (user ran `/compact`) or `"auto"` (context limit reached). |
+| `custom_instructions` | string \| null | Text argument passed to `/compact` (e.g. `/compact focus on the DB layer`); `null` when none was given or on auto-compaction. |
+
+Note: unlike `PostCompact`, PreCompact fires *before* the transcript is
+rewritten, so `transcript_path` still points at the complete pre-compaction
+history. agent-handler's PreCompact hook uses this to fork the transcript
+(see `handler fork-snapshot`).
+
 ## PostCompact
 
 Received after context window compression (auto or manual).
