@@ -82,27 +82,12 @@ type hookInput struct {
 	} `json:"cost"`
 }
 
-// costActiveWindow is how recently a session must have received a prompt for its
-// cost changes to count as real work. Cost accrues rapidly during a turn (one
-// prompt triggers many API calls), so the window must cover a full turn. Beyond
-// it, cost changes are background drift (Claude Code recalculates total_cost_usd
-// on idle sessions) and are not attributed to daily cost.
-const costActiveWindow = 60 * time.Minute
-
 func recordCostSnapshot(wd *db.DB, input *hookInput) {
-	nowT := time.Now().UTC()
-	now := nowT.Format(time.RFC3339)
-	today := nowT.Format("2006-01-02")
-
-	active := false
-	if s, err := wd.GetSession(input.SessionID); err == nil && s != nil && s.LastPrompt != "" {
-		if lp, err := time.Parse(time.RFC3339, s.LastPrompt); err == nil {
-			active = nowT.Sub(lp) <= costActiveWindow
-		}
-	}
-
+	nowT := time.Now()
+	now := nowT.UTC().Format(time.RFC3339)
+	localDate := nowT.Format("2006-01-02") // machine local date for day attribution
 	wd.RecordCostTick(
-		input.SessionID, input.Model.ID, now, today, active,
+		input.SessionID, claudePID(), input.Model.ID, now, localDate,
 		input.Cost.TotalCostUSD,
 		input.ContextWindow.TotalInputTokens,
 		input.ContextWindow.TotalOutputTokens,
@@ -207,6 +192,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	var gitStatus *gitpkg.Status
 	var awaitingNames []string
 	var unreadSessionNames []string
+	var reminderSessionNames []string
 	var wg sync.WaitGroup
 
 	// Git status (only for non-handler sessions)
@@ -225,17 +211,22 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		awaitingNames = scanAwaitingApproval(d, session.SessionID)
 	}()
 
-	// Scan for sessions with unread messages
+	// Scan for other sessions with unread messages / reminders
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		unreads := findSessionsWithUnreads(d, session.SessionID)
-		for _, s := range unreads {
-			name := s.SessionName
-			if name == "" {
-				name = s.SessionID[:8]
+		unreads, reminders := classifySessionsWithUnreads(d, session.SessionID)
+		sessionName := func(s db.Session) string {
+			if s.SessionName != "" {
+				return s.SessionName
 			}
-			unreadSessionNames = append(unreadSessionNames, name)
+			return s.SessionID[:8]
+		}
+		for _, s := range unreads {
+			unreadSessionNames = append(unreadSessionNames, sessionName(s))
+		}
+		for _, s := range reminders {
+			reminderSessionNames = append(reminderSessionNames, sessionName(s))
 		}
 	}()
 
@@ -245,9 +236,9 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 	// Assemble output
 	var err2 error
 	if isHandler {
-		err2 = renderHandlerStatusline(d, session, cfg, &input, trueCost, todayCost, awaitingNames, unreadSessionNames)
+		err2 = renderHandlerStatusline(d, session, cfg, &input, trueCost, todayCost, awaitingNames, unreadSessionNames, reminderSessionNames)
 	} else {
-		err2 = renderWorkerStatusline(d, session, cfg, &input, trueCost, todayCost, gitStatus, awaitingNames, unreadSessionNames)
+		err2 = renderWorkerStatusline(d, session, cfg, &input, trueCost, todayCost, gitStatus, awaitingNames, unreadSessionNames, reminderSessionNames)
 	}
 	if err2 != nil {
 		return err2
@@ -283,9 +274,9 @@ func runStatuslineDirect(cmd *cobra.Command) error {
 
 	if session.Role == "handler" {
 		awaitingNames := scanAwaitingApproval(d, session.SessionID)
-		return renderHandlerStatusline(d, session, cfg, nil, 0.0, 0.0, awaitingNames, nil)
+		return renderHandlerStatusline(d, session, cfg, nil, 0.0, 0.0, awaitingNames, nil, nil)
 	}
-	return renderWorkerStatusline(d, session, cfg, nil, 0.0, 0.0, nil, nil, nil)
+	return renderWorkerStatusline(d, session, cfg, nil, 0.0, 0.0, nil, nil, nil, nil)
 }
 
 // scanAwaitingApproval checks all peekable sessions for approval prompts.
@@ -307,7 +298,7 @@ func scanAwaitingApproval(d *db.DB, selfSessionID string) []string {
 }
 
 // renderWorkerStatusline outputs the complete statusline for a regular session.
-func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, gs *gitpkg.Status, awaitingNames []string, unreadSessionNames []string) error {
+func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, gs *gitpkg.Status, awaitingNames []string, unreadSessionNames []string, reminderSessionNames []string) error {
 	renderDuplicateNameWarning(d, session)
 
 	// Line 1: Git status
@@ -339,10 +330,11 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 	if session.TerminalType == "cmux" {
 		shortcuts = GetCmuxShortcuts()
 	}
-	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 {
+	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 || len(reminderSessionNames) > 0 {
 		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 		renderAwaitingLine(session, awaitingNames, shortcuts)
 		renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
+		renderReminderSessionsLine(reminderSessionNames)
 		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 	}
 
@@ -357,7 +349,7 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 }
 
 // renderHandlerStatusline outputs the complete statusline for a handler session.
-func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, awaitingNames []string, unreadSessionNames []string) error {
+func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, input *hookInput, trueCost float64, todayCost float64, awaitingNames []string, unreadSessionNames []string, reminderSessionNames []string) error {
 	renderDuplicateNameWarning(d, session)
 
 	// Count active sessions
@@ -443,10 +435,11 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	if session.TerminalType == "cmux" {
 		shortcuts = GetCmuxShortcuts()
 	}
-	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 {
+	if len(awaitingNames) > 0 || len(unreadSessionNames) > 0 || len(reminderSessionNames) > 0 {
 		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 		renderAwaitingLine(session, awaitingNames, shortcuts)
 		renderUnreadSessionsLine(session, unreadSessionNames, shortcuts)
+		renderReminderSessionsLine(reminderSessionNames)
 		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 	}
 
@@ -494,6 +487,23 @@ func renderUnreadSessionsLine(session *db.Session, unreadSessionNames []string, 
 	}
 	nameList := formatNameList(unreadSessionNames, 5)
 	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorCyan, nameList, colorReset)
+}
+
+// renderReminderSessionsLine lists other sessions whose only unreads are
+// reminders. No switch shortcut — the cmux "switch to unread" action targets
+// sessions with actionable (non-reminder) messages.
+func renderReminderSessionsLine(reminderSessionNames []string) {
+	if len(reminderSessionNames) == 0 {
+		return
+	}
+	count := len(reminderSessionNames)
+	label := "session"
+	if count > 1 {
+		label = "sessions"
+	}
+	fmt.Printf("%s%d other %s with reminders%s\n", colorPurple, count, label, colorReset)
+	nameList := formatNameList(reminderSessionNames, 5)
+	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorPurple, nameList, colorReset)
 }
 
 func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
