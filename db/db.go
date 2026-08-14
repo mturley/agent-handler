@@ -114,6 +114,9 @@ func runMigrations(conn *sql.DB) error {
 	if _, err := conn.Exec(`DROP TABLE IF EXISTS cost_snapshots`); err != nil {
 		return fmt.Errorf("failed to drop cost_snapshots table: %w", err)
 	}
+	if _, err := conn.Exec(`DROP TABLE IF EXISTS cost_adjustments`); err != nil {
+		return fmt.Errorf("failed to drop cost_adjustments table: %w", err)
+	}
 	// Wipe daily_cost: existing rows mix UTC dates with values from the old
 	// buggy delta logic. Rebuilds cleanly under epoch-anchored tracking.
 	if _, err := conn.Exec(`DELETE FROM daily_cost`); err != nil {

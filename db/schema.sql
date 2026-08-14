@@ -92,14 +92,6 @@ CREATE TABLE IF NOT EXISTS cost_epoch_state (
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS cost_adjustments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL REFERENCES sessions(session_id),
-    adjustment_usd REAL NOT NULL,
-    reason TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS daily_cost (
     session_id TEXT NOT NULL REFERENCES sessions(session_id),
     date TEXT NOT NULL,

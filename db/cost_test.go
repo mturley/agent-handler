@@ -190,8 +190,8 @@ func TestRecordCostTickSamePIDDip(t *testing.T) {
 	d.RecordCostTick("epoch-dip", 100, "opus", "2026-08-14T10:00:10Z", "2026-08-14", 12.00, 120000, 6000)
 
 	dc, _ := d.GetDailyCostForSession("epoch-dip", "2026-08-14")
-	if dc == nil || dc.CostUSD != 0 {
-		t.Fatalf("expected daily cost 0 after dip within epoch, got %v", dc)
+	if dc != nil {
+		t.Fatalf("expected no daily cost row after baseline+dip, got %v", dc)
 	}
 	// Reference tracks the dipped value; next climb is measured from it.
 	st, _ := d.GetCostEpochState("epoch-dip")
