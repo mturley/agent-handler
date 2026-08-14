@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
@@ -16,7 +15,6 @@ import { getSessionInbox, dismissInbox, dismissEvent, addReminder } from "@/api/
 import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
 import { formatEventType } from "@/utils/formatLabel"
-import { cn } from "@/lib/utils"
 import { ChevronRight, ChevronDown, Trash2, Mail, Bell } from "lucide-react"
 import { toast } from "sonner"
 
@@ -25,8 +23,6 @@ interface InboxContentProps {
   sessionName: string
   /** Called after "Dismiss all" succeeds (e.g. to close a wrapping modal). */
   onDismissedAll?: () => void
-  /** Tailwind classes for the scroll area (height differs between modal and tab). */
-  scrollClassName?: string
   /** Render an "Inbox" header with the unread count above the list. */
   showHeader?: boolean
 }
@@ -40,7 +36,6 @@ export function InboxContent({
   sessionId,
   sessionName,
   onDismissedAll,
-  scrollClassName = "max-h-[600px]",
   showHeader = false,
 }: InboxContentProps) {
   const queryClient = useQueryClient()
@@ -131,7 +126,7 @@ export function InboxContent({
           </Button>
         </div>
       )}
-      <ScrollArea className={cn(scrollClassName)}>
+      <div>
         {loading && (
           <p className="text-sm text-muted-foreground p-4">Loading...</p>
         )}
@@ -217,7 +212,7 @@ export function InboxContent({
             </div>
           )
         })}
-      </ScrollArea>
+      </div>
 
       {events.length > 0 && (
       <div className="flex items-center gap-2 justify-end pt-2">

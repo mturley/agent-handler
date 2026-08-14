@@ -158,7 +158,6 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
           <InboxContent
             sessionId={sessionId}
             sessionName={name}
-            scrollClassName="max-h-[40vh]"
             showHeader
           />
 
