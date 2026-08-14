@@ -82,11 +82,12 @@ CREATE INDEX IF NOT EXISTS idx_dismissed_events_session ON dismissed_events(sess
 -- `handler setup --migrate-watcher` is the only code that recreates/reads/drops
 -- them, for one-time migration of pre-2c databases.
 
-CREATE TABLE IF NOT EXISTS cost_snapshots (
+CREATE TABLE IF NOT EXISTS cost_epoch_state (
     session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),
-    reported_cost_usd REAL NOT NULL,
-    total_input_tokens INTEGER NOT NULL,
-    total_output_tokens INTEGER NOT NULL,
+    pid INTEGER NOT NULL,
+    last_observed_cost REAL NOT NULL,
+    last_observed_input INTEGER NOT NULL,
+    last_observed_output INTEGER NOT NULL,
     model TEXT,
     updated_at TEXT NOT NULL
 );

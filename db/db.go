@@ -96,6 +96,30 @@ func runMigrations(conn *sql.DB) error {
 		return fmt.Errorf("failed to create dismissed_events table: %w", err)
 	}
 
+	// cost_epoch_state replaces cost_snapshots (epoch-anchored cost tracking).
+	// Create it for existing databases and drop the obsolete snapshot table.
+	if _, err := conn.Exec(`
+		CREATE TABLE IF NOT EXISTS cost_epoch_state (
+			session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),
+			pid INTEGER NOT NULL,
+			last_observed_cost REAL NOT NULL,
+			last_observed_input INTEGER NOT NULL,
+			last_observed_output INTEGER NOT NULL,
+			model TEXT,
+			updated_at TEXT NOT NULL
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create cost_epoch_state table: %w", err)
+	}
+	if _, err := conn.Exec(`DROP TABLE IF EXISTS cost_snapshots`); err != nil {
+		return fmt.Errorf("failed to drop cost_snapshots table: %w", err)
+	}
+	// Wipe daily_cost: existing rows mix UTC dates with values from the old
+	// buggy delta logic. Rebuilds cleanly under epoch-anchored tracking.
+	if _, err := conn.Exec(`DELETE FROM daily_cost`); err != nil {
+		return fmt.Errorf("failed to wipe daily_cost: %w", err)
+	}
+
 	return nil
 }
 

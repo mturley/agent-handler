@@ -5,13 +5,14 @@ import (
 	"fmt"
 )
 
-type CostSnapshot struct {
-	SessionID         string
-	ReportedCostUSD   float64
-	TotalInputTokens  int
-	TotalOutputTokens int
-	Model             string
-	UpdatedAt         string
+type CostEpochState struct {
+	SessionID          string
+	PID                int
+	LastObservedCost   float64
+	LastObservedInput  int
+	LastObservedOutput int
+	Model              string
+	UpdatedAt          string
 }
 
 type DailyCost struct {
@@ -36,109 +37,67 @@ type SessionSummary struct {
 	OutputTokens int
 }
 
-// RecordCostTick atomically reads the current snapshot, computes deltas,
-// detects resets, and updates the snapshot + daily cost in a single transaction.
-// This prevents duplicate adjustments from concurrent statusline ticks.
-//
-// active indicates whether the session is currently working (the last prompt was
-// recent enough that cost changes reflect real API calls for the current turn).
-// When inactive, cost changes are treated as background drift (Claude Code
-// recalculates total_cost_usd even on idle sessions) and update the snapshot but
-// are not attributed to daily_cost. This prevents phantom cost on idle sessions
-// while still capturing the full cost of an active turn's many API calls.
-func (db *DB) RecordCostTick(sessionID, model, now, today string, active bool, reportedCost float64, reportedInput, reportedOutput int) error {
+// RecordCostTick records one statusline cost observation for a session using an
+// epoch-anchored model. An epoch is one continuous Claude Code process run,
+// identified by pid. Within an epoch total_cost_usd is monotonic; each tick's
+// within-epoch increment is attributed to localDate in daily_cost. A pid change
+// starts a new epoch whose baseline is the first observed cost, so cost recovered
+// from the transcript on resume is never double-counted. Runs in one transaction
+// so concurrent statusline ticks cannot interleave.
+func (db *DB) RecordCostTick(sessionID string, pid int, model, now, localDate string, reportedCost float64, reportedInput, reportedOutput int) error {
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Read current snapshot within the transaction
-	var snap CostSnapshot
-	var hasSnap bool
+	var st CostEpochState
+	var hasState bool
 	err = tx.QueryRow(`
-		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at
-		FROM cost_snapshots WHERE session_id = ?
-	`, sessionID).Scan(&snap.SessionID, &snap.ReportedCostUSD, &snap.TotalInputTokens, &snap.TotalOutputTokens, &snap.Model, &snap.UpdatedAt)
+		SELECT session_id, pid, last_observed_cost, last_observed_input, last_observed_output, model, updated_at
+		FROM cost_epoch_state WHERE session_id = ?
+	`, sessionID).Scan(&st.SessionID, &st.PID, &st.LastObservedCost, &st.LastObservedInput, &st.LastObservedOutput, &st.Model, &st.UpdatedAt)
 	if err == nil {
-		hasSnap = true
+		hasState = true
 	} else if err != sql.ErrNoRows {
-		return fmt.Errorf("failed to read snapshot: %w", err)
+		return fmt.Errorf("failed to read epoch state: %w", err)
 	}
 
-	if !hasSnap {
-		// First tick for this session. Only attribute to daily_cost if the
-		// session is active — otherwise this is an existing session being
-		// tracked for the first time, and its full cost would inflate today.
+	// New epoch (first tick ever, or a pid change = process restart): the current
+	// reported cost is the baseline. Attribute nothing this tick.
+	if !hasState || pid != st.PID {
 		if _, err := tx.Exec(`
-			INSERT INTO cost_snapshots (session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, sessionID, reportedCost, reportedInput, reportedOutput, model, now); err != nil {
-			return fmt.Errorf("failed to insert snapshot: %w", err)
-		}
-		if active && reportedCost > 0 {
-			if _, err := tx.Exec(`
-				INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
-				VALUES (?, ?, ?, ?, ?)
-				ON CONFLICT(session_id, date) DO UPDATE SET
-					cost_usd = daily_cost.cost_usd + excluded.cost_usd,
-					input_tokens = daily_cost.input_tokens + excluded.input_tokens,
-					output_tokens = daily_cost.output_tokens + excluded.output_tokens
-			`, sessionID, today, reportedCost, reportedInput, reportedOutput); err != nil {
-				return fmt.Errorf("failed to upsert daily cost: %w", err)
-			}
+			INSERT INTO cost_epoch_state (session_id, pid, last_observed_cost, last_observed_input, last_observed_output, model, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(session_id) DO UPDATE SET
+				pid = excluded.pid,
+				last_observed_cost = excluded.last_observed_cost,
+				last_observed_input = excluded.last_observed_input,
+				last_observed_output = excluded.last_observed_output,
+				model = excluded.model,
+				updated_at = excluded.updated_at
+		`, sessionID, pid, reportedCost, reportedInput, reportedOutput, model, now); err != nil {
+			return fmt.Errorf("failed to open epoch: %w", err)
 		}
 		return tx.Commit()
 	}
 
-	// No change — skip
-	if reportedCost == snap.ReportedCostUSD {
-		return nil
-	}
+	// Same epoch: compute the within-epoch increment.
+	costDelta := reportedCost - st.LastObservedCost
+	inputDelta := reportedInput - st.LastObservedInput
+	outputDelta := reportedOutput - st.LastObservedOutput
 
-	// Session is idle — update snapshot to track the latest reported value,
-	// but don't attribute background cost drift to daily_cost.
-	if !active {
-		if _, err := tx.Exec(`
-			UPDATE cost_snapshots SET
-				reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?
-			WHERE session_id = ?
-		`, reportedCost, reportedInput, reportedOutput, model, now, sessionID); err != nil {
-			return fmt.Errorf("failed to update snapshot: %w", err)
-		}
-		return tx.Commit()
-	}
-
-	var costDelta float64
-	var inputDelta, outputDelta int
-
-	if reportedCost < snap.ReportedCostUSD {
-		// Reset detected
-		if _, err := tx.Exec(`
-			INSERT INTO cost_adjustments (session_id, adjustment_usd, reason, created_at)
-			VALUES (?, ?, 'restart_reset', ?)
-		`, sessionID, snap.ReportedCostUSD, now); err != nil {
-			return fmt.Errorf("failed to insert adjustment: %w", err)
-		}
-		costDelta = reportedCost
-		inputDelta = reportedInput
-		outputDelta = reportedOutput
-	} else {
-		costDelta = reportedCost - snap.ReportedCostUSD
-		inputDelta = reportedInput - snap.TotalInputTokens
-		outputDelta = reportedOutput - snap.TotalOutputTokens
-	}
-
-	// Update snapshot
+	// Always advance the reference to the latest observed value.
 	if _, err := tx.Exec(`
-		UPDATE cost_snapshots SET
-			reported_cost_usd = ?, total_input_tokens = ?, total_output_tokens = ?, model = ?, updated_at = ?
+		UPDATE cost_epoch_state SET
+			last_observed_cost = ?, last_observed_input = ?, last_observed_output = ?, model = ?, updated_at = ?
 		WHERE session_id = ?
 	`, reportedCost, reportedInput, reportedOutput, model, now, sessionID); err != nil {
-		return fmt.Errorf("failed to update snapshot: %w", err)
+		return fmt.Errorf("failed to update epoch state: %w", err)
 	}
 
-	// Update daily cost
+	// Attribute only positive increments. A dip (recalculation noise) contributes
+	// nothing; the next climb is measured from the dipped value.
 	if costDelta > 0 {
 		if _, err := tx.Exec(`
 			INSERT INTO daily_cost (session_id, date, cost_usd, input_tokens, output_tokens)
@@ -147,7 +106,7 @@ func (db *DB) RecordCostTick(sessionID, model, now, today string, active bool, r
 				cost_usd = daily_cost.cost_usd + excluded.cost_usd,
 				input_tokens = daily_cost.input_tokens + excluded.input_tokens,
 				output_tokens = daily_cost.output_tokens + excluded.output_tokens
-		`, sessionID, today, costDelta, inputDelta, outputDelta); err != nil {
+		`, sessionID, localDate, costDelta, inputDelta, outputDelta); err != nil {
 			return fmt.Errorf("failed to upsert daily cost: %w", err)
 		}
 	}
@@ -155,56 +114,29 @@ func (db *DB) RecordCostTick(sessionID, model, now, today string, active bool, r
 	return tx.Commit()
 }
 
-func (db *DB) GetCostSnapshot(sessionID string) (*CostSnapshot, error) {
-	var s CostSnapshot
+func (db *DB) GetCostEpochState(sessionID string) (*CostEpochState, error) {
+	var st CostEpochState
 	err := db.conn.QueryRow(`
-		SELECT session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at
-		FROM cost_snapshots WHERE session_id = ?
-	`, sessionID).Scan(&s.SessionID, &s.ReportedCostUSD, &s.TotalInputTokens, &s.TotalOutputTokens, &s.Model, &s.UpdatedAt)
+		SELECT session_id, pid, last_observed_cost, last_observed_input, last_observed_output, model, updated_at
+		FROM cost_epoch_state WHERE session_id = ?
+	`, sessionID).Scan(&st.SessionID, &st.PID, &st.LastObservedCost, &st.LastObservedInput, &st.LastObservedOutput, &st.Model, &st.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get cost snapshot: %w", err)
+		return nil, fmt.Errorf("failed to get cost epoch state: %w", err)
 	}
-	return &s, nil
+	return &st, nil
 }
 
-func (db *DB) UpsertCostSnapshot(s CostSnapshot) error {
-	_, err := db.conn.Exec(`
-		INSERT INTO cost_snapshots (session_id, reported_cost_usd, total_input_tokens, total_output_tokens, model, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(session_id) DO UPDATE SET
-			reported_cost_usd = excluded.reported_cost_usd,
-			total_input_tokens = excluded.total_input_tokens,
-			total_output_tokens = excluded.total_output_tokens,
-			model = excluded.model,
-			updated_at = excluded.updated_at
-	`, s.SessionID, s.ReportedCostUSD, s.TotalInputTokens, s.TotalOutputTokens, s.Model, s.UpdatedAt)
-	if err != nil {
-		return fmt.Errorf("failed to upsert cost snapshot: %w", err)
-	}
-	return nil
-}
-
-func (db *DB) InsertCostAdjustment(sessionID string, adjustmentUSD float64, reason, createdAt string) error {
-	_, err := db.conn.Exec(`
-		INSERT INTO cost_adjustments (session_id, adjustment_usd, reason, created_at)
-		VALUES (?, ?, ?, ?)
-	`, sessionID, adjustmentUSD, reason, createdAt)
-	if err != nil {
-		return fmt.Errorf("failed to insert cost adjustment: %w", err)
-	}
-	return nil
-}
-
-func (db *DB) GetTotalAdjustment(sessionID string) (float64, error) {
+// SessionTotalCost returns the sum of all daily_cost entries for a session.
+func (db *DB) SessionTotalCost(sessionID string) (float64, error) {
 	var total sql.NullFloat64
 	err := db.conn.QueryRow(`
-		SELECT SUM(adjustment_usd) FROM cost_adjustments WHERE session_id = ?
+		SELECT SUM(cost_usd) FROM daily_cost WHERE session_id = ?
 	`, sessionID).Scan(&total)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get total adjustment: %w", err)
+		return 0, fmt.Errorf("failed to get session total cost: %w", err)
 	}
 	if !total.Valid {
 		return 0, nil

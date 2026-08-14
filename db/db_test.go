@@ -38,8 +38,7 @@ func TestOpen(t *testing.T) {
 		"event_resources",
 		"sessions",
 		"session_cursors",
-		"cost_snapshots",
-		"cost_adjustments",
+		"cost_epoch_state",
 		"daily_cost",
 	}
 

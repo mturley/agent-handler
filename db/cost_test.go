@@ -1,100 +1,17 @@
 package db
 
 import (
-	"fmt"
 	"testing"
 )
 
-func TestGetCostSnapshotNotFound(t *testing.T) {
+func TestGetCostEpochStateNotFound(t *testing.T) {
 	d := testDB(t)
-	snap, err := d.GetCostSnapshot("nonexistent")
+	st, err := d.GetCostEpochState("nonexistent")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if snap != nil {
+	if st != nil {
 		t.Error("expected nil for nonexistent session")
-	}
-}
-
-func TestUpsertAndGetCostSnapshot(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "cost-test-1")
-
-	s := CostSnapshot{
-		SessionID:         "cost-test-1",
-		ReportedCostUSD:   12.50,
-		TotalInputTokens:  100000,
-		TotalOutputTokens: 5000,
-		Model:             "claude-opus-4-6[1m]",
-		UpdatedAt:         "2026-07-16T10:00:00Z",
-	}
-	if err := d.UpsertCostSnapshot(s); err != nil {
-		t.Fatalf("UpsertCostSnapshot failed: %v", err)
-	}
-
-	got, err := d.GetCostSnapshot("cost-test-1")
-	if err != nil {
-		t.Fatalf("GetCostSnapshot failed: %v", err)
-	}
-	if got == nil {
-		t.Fatal("expected non-nil snapshot")
-	}
-	if got.ReportedCostUSD != 12.50 {
-		t.Errorf("expected cost 12.50, got %f", got.ReportedCostUSD)
-	}
-	if got.TotalInputTokens != 100000 {
-		t.Errorf("expected 100000 input tokens, got %d", got.TotalInputTokens)
-	}
-	if got.Model != "claude-opus-4-6[1m]" {
-		t.Errorf("expected model claude-opus-4-6[1m], got %s", got.Model)
-	}
-}
-
-func TestUpsertCostSnapshotOverwrites(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "cost-test-2")
-
-	d.UpsertCostSnapshot(CostSnapshot{
-		SessionID: "cost-test-2", ReportedCostUSD: 5.00,
-		TotalInputTokens: 50000, TotalOutputTokens: 2000,
-		Model: "claude-opus-4-6[1m]", UpdatedAt: "2026-07-16T10:00:00Z",
-	})
-	d.UpsertCostSnapshot(CostSnapshot{
-		SessionID: "cost-test-2", ReportedCostUSD: 10.00,
-		TotalInputTokens: 100000, TotalOutputTokens: 4000,
-		Model: "claude-opus-4-6[1m]", UpdatedAt: "2026-07-16T10:05:00Z",
-	})
-
-	got, _ := d.GetCostSnapshot("cost-test-2")
-	if got.ReportedCostUSD != 10.00 {
-		t.Errorf("expected 10.00, got %f", got.ReportedCostUSD)
-	}
-}
-
-func TestInsertCostAdjustmentAndGetTotal(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "adj-test")
-
-	d.InsertCostAdjustment("adj-test", 25.00, "restart_reset", "2026-07-16T10:00:00Z")
-	d.InsertCostAdjustment("adj-test", 15.00, "restart_reset", "2026-07-16T14:00:00Z")
-
-	total, err := d.GetTotalAdjustment("adj-test")
-	if err != nil {
-		t.Fatalf("GetTotalAdjustment failed: %v", err)
-	}
-	if total != 40.00 {
-		t.Errorf("expected 40.00, got %f", total)
-	}
-}
-
-func TestGetTotalAdjustmentNoRows(t *testing.T) {
-	d := testDB(t)
-	total, err := d.GetTotalAdjustment("nonexistent")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if total != 0 {
-		t.Errorf("expected 0, got %f", total)
 	}
 }
 
@@ -213,149 +130,143 @@ func TestQueryTotalCostEmpty(t *testing.T) {
 	}
 }
 
-func TestRecordCostTickFirstTickActive(t *testing.T) {
+func TestRecordCostTickFirstTickNoAttribution(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-first")
+	seedSession(t, d, "epoch-first")
 
-	err := d.RecordCostTick("tick-first", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 5.00, 50000, 2000)
-	if err != nil {
+	// First tick ever establishes the baseline and attributes nothing.
+	if err := d.RecordCostTick("epoch-first", 100, "opus", "2026-08-14T10:00:00Z", "2026-08-14", 5.00, 50000, 2000); err != nil {
 		t.Fatalf("RecordCostTick failed: %v", err)
 	}
 
-	snap, _ := d.GetCostSnapshot("tick-first")
-	if snap == nil || snap.ReportedCostUSD != 5.00 {
-		t.Fatalf("expected snapshot with cost 5.00, got %v", snap)
-	}
-
-	dc, _ := d.GetDailyCostForSession("tick-first", "2026-07-20")
-	if dc == nil || dc.CostUSD != 5.00 {
-		t.Fatalf("expected daily cost 5.00, got %v", dc)
-	}
-}
-
-func TestRecordCostTickFirstTickInactive(t *testing.T) {
-	d := testDB(t)
-	seedSession(t, d, "tick-first-idle")
-
-	// Existing session tracked for the first time while idle — its full
-	// historical cost should NOT be attributed to today.
-	d.RecordCostTick("tick-first-idle", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", false, 50.00, 500000, 20000)
-
-	snap, _ := d.GetCostSnapshot("tick-first-idle")
-	if snap == nil || snap.ReportedCostUSD != 50.00 {
-		t.Fatalf("expected snapshot 50.00, got %v", snap)
-	}
-
-	dc, _ := d.GetDailyCostForSession("tick-first-idle", "2026-07-20")
+	dc, _ := d.GetDailyCostForSession("epoch-first", "2026-08-14")
 	if dc != nil {
-		t.Errorf("expected no daily cost for idle first tick, got %v", dc)
+		t.Errorf("expected no daily cost on first tick, got %v", dc)
+	}
+	st, _ := d.GetCostEpochState("epoch-first")
+	if st == nil || st.PID != 100 || st.LastObservedCost != 5.00 {
+		t.Fatalf("expected epoch state pid=100 cost=5.00, got %v", st)
 	}
 }
 
-func TestRecordCostTickCapturesFullTurn(t *testing.T) {
+func TestRecordCostTickSamePIDIncrease(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-turn")
+	seedSession(t, d, "epoch-inc")
 
-	// A single active turn: cost climbs across many ticks. ALL of it should
-	// be captured (one prompt triggers many API calls).
-	d.RecordCostTick("tick-turn", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 2.00, 20000, 1000)
-	d.RecordCostTick("tick-turn", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", true, 5.00, 50000, 2000)
-	d.RecordCostTick("tick-turn", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", true, 9.00, 90000, 3000)
+	d.RecordCostTick("epoch-inc", 100, "opus", "2026-08-14T10:00:00Z", "2026-08-14", 5.00, 50000, 2000)
+	// Same PID, cost climbs — increment attributed to the local date.
+	d.RecordCostTick("epoch-inc", 100, "opus", "2026-08-14T10:00:10Z", "2026-08-14", 9.00, 90000, 3000)
 
-	dc, _ := d.GetDailyCostForSession("tick-turn", "2026-07-20")
-	if dc.CostUSD != 9.00 {
-		t.Errorf("expected daily cost 9.00 (full turn captured), got %f", dc.CostUSD)
+	dc, _ := d.GetDailyCostForSession("epoch-inc", "2026-08-14")
+	if dc == nil || dc.CostUSD != 4.00 {
+		t.Fatalf("expected daily cost 4.00 (9-5), got %v", dc)
+	}
+	if dc.InputTokens != 40000 || dc.OutputTokens != 1000 {
+		t.Errorf("expected token deltas 40000/1000, got %d/%d", dc.InputTokens, dc.OutputTokens)
 	}
 }
 
-func TestRecordCostTickSkipsWhenUnchanged(t *testing.T) {
+func TestRecordCostTickSamePIDUnchanged(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-skip")
+	seedSession(t, d, "epoch-same")
 
-	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 5.00, 50000, 2000)
-	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:10Z", "2026-07-20", true, 5.00, 50000, 2000)
-	d.RecordCostTick("tick-skip", "opus-4", "2026-07-20T10:00:20Z", "2026-07-20", true, 5.00, 50000, 2000)
+	d.RecordCostTick("epoch-same", 100, "opus", "2026-08-14T10:00:00Z", "2026-08-14", 5.00, 50000, 2000)
+	d.RecordCostTick("epoch-same", 100, "opus", "2026-08-14T10:00:10Z", "2026-08-14", 9.00, 90000, 3000)
+	// No change on this tick.
+	d.RecordCostTick("epoch-same", 100, "opus", "2026-08-14T10:00:20Z", "2026-08-14", 9.00, 90000, 3000)
 
-	dc, _ := d.GetDailyCostForSession("tick-skip", "2026-07-20")
-	if dc.CostUSD != 5.00 {
-		t.Errorf("expected daily cost 5.00 (no change), got %f", dc.CostUSD)
+	dc, _ := d.GetDailyCostForSession("epoch-same", "2026-08-14")
+	if dc.CostUSD != 4.00 {
+		t.Errorf("expected daily cost 4.00 (unchanged), got %f", dc.CostUSD)
 	}
 }
 
-func TestRecordCostTickResetDetection(t *testing.T) {
+func TestRecordCostTickSamePIDDip(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-reset")
+	seedSession(t, d, "epoch-dip")
 
-	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 20.00, 200000, 10000)
-	// Simulate restart — cost drops to 3.00 while active
-	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:00Z", "2026-07-20", true, 3.00, 30000, 1000)
+	d.RecordCostTick("epoch-dip", 100, "opus", "2026-08-14T10:00:00Z", "2026-08-14", 20.00, 200000, 10000)
+	// A downward dip within the SAME epoch (recalc noise) attributes nothing.
+	d.RecordCostTick("epoch-dip", 100, "opus", "2026-08-14T10:00:10Z", "2026-08-14", 12.00, 120000, 6000)
 
-	adj, _ := d.GetTotalAdjustment("tick-reset")
-	if adj != 20.00 {
-		t.Errorf("expected adjustment 20.00, got %f", adj)
+	dc, _ := d.GetDailyCostForSession("epoch-dip", "2026-08-14")
+	if dc == nil || dc.CostUSD != 0 {
+		t.Fatalf("expected daily cost 0 after dip within epoch, got %v", dc)
 	}
-
-	snap, _ := d.GetCostSnapshot("tick-reset")
-	if snap.ReportedCostUSD != 3.00 {
-		t.Errorf("expected snapshot 3.00 after reset, got %f", snap.ReportedCostUSD)
+	// Reference tracks the dipped value; next climb is measured from it.
+	st, _ := d.GetCostEpochState("epoch-dip")
+	if st.LastObservedCost != 12.00 {
+		t.Errorf("expected reference 12.00 after dip, got %f", st.LastObservedCost)
 	}
-
-	// Next tick at same value should NOT create another adjustment
-	d.RecordCostTick("tick-reset", "opus-4", "2026-07-20T12:00:10Z", "2026-07-20", true, 3.00, 30000, 1000)
-
-	adj2, _ := d.GetTotalAdjustment("tick-reset")
-	if adj2 != 20.00 {
-		t.Errorf("expected adjustment still 20.00 (no duplicate), got %f", adj2)
+	d.RecordCostTick("epoch-dip", 100, "opus", "2026-08-14T10:00:20Z", "2026-08-14", 15.00, 150000, 7000)
+	dc2, _ := d.GetDailyCostForSession("epoch-dip", "2026-08-14")
+	if dc2.CostUSD != 3.00 {
+		t.Errorf("expected daily cost 3.00 (15-12), got %f", dc2.CostUSD)
 	}
 }
 
-func TestRecordCostTickResetNoRepeat(t *testing.T) {
+func TestRecordCostTickRestartFreshGauge(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-no-repeat")
+	seedSession(t, d, "epoch-restart")
 
-	// Simulate the exact bug scenario: many rapid ticks after a reset
-	d.RecordCostTick("tick-no-repeat", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 100.00, 1000000, 50000)
+	d.RecordCostTick("epoch-restart", 100, "opus", "2026-08-14T10:00:00Z", "2026-08-14", 5.00, 50000, 2000)
+	d.RecordCostTick("epoch-restart", 100, "opus", "2026-08-14T10:00:10Z", "2026-08-14", 20.00, 200000, 8000)
+	// daily so far: 15.00
 
-	// Restart: cost drops to 5.00, then stays at 5.00 for many ticks
-	for i := 0; i < 100; i++ {
-		ts := "2026-07-20T12:00:" + fmt.Sprintf("%02d", i%60) + "Z"
-		d.RecordCostTick("tick-no-repeat", "opus-4", ts, "2026-07-20", true, 5.00, 50000, 2000)
+	// Restart: new PID, gauge starts fresh at ~0. First tick of new epoch = baseline.
+	d.RecordCostTick("epoch-restart", 200, "opus", "2026-08-14T12:00:00Z", "2026-08-14", 0.50, 5000, 100)
+	// Climb within the new epoch.
+	d.RecordCostTick("epoch-restart", 200, "opus", "2026-08-14T12:00:10Z", "2026-08-14", 6.50, 60000, 1100)
+
+	total, _ := d.SessionTotalCost("epoch-restart")
+	if total != 21.00 {
+		t.Errorf("expected total 21.00 (15 + 6 post-restart), got %f", total)
 	}
-
-	adj, _ := d.GetTotalAdjustment("tick-no-repeat")
-	if adj != 100.00 {
-		t.Errorf("expected exactly one adjustment of 100.00, got %f", adj)
+	st, _ := d.GetCostEpochState("epoch-restart")
+	if st.PID != 200 {
+		t.Errorf("expected pid 200 after restart, got %d", st.PID)
 	}
 }
 
-func TestRecordCostTickIdleDriftIgnored(t *testing.T) {
+func TestRecordCostTickRestartRecoveredCost(t *testing.T) {
 	d := testDB(t)
-	seedSession(t, d, "tick-idle")
+	seedSession(t, d, "epoch-recover")
 
-	// Active turn establishes a baseline
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T10:00:00Z", "2026-07-20", true, 10.00, 100000, 5000)
+	d.RecordCostTick("epoch-recover", 100, "opus", "2026-08-14T10:00:00Z", "2026-08-14", 5.00, 50000, 2000)
+	d.RecordCostTick("epoch-recover", 100, "opus", "2026-08-14T10:00:10Z", "2026-08-14", 20.00, 200000, 8000)
+	// daily so far: 15.00
 
-	// Cost drifts while idle (background recalculation) — should NOT count
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T13:00:00Z", "2026-07-20", false, 12.00, 110000, 5500)
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T16:00:00Z", "2026-07-20", false, 15.00, 120000, 6000)
+	// Restart: new PID, but Claude recovers cost from transcript — gauge starts
+	// at the OLD peak (~20) instead of ~0. Baseline = 20, so no double-count.
+	d.RecordCostTick("epoch-recover", 200, "opus", "2026-08-14T12:00:00Z", "2026-08-14", 20.00, 200000, 8000)
+	// New work climbs to 23.
+	d.RecordCostTick("epoch-recover", 200, "opus", "2026-08-14T12:00:10Z", "2026-08-14", 23.00, 230000, 9000)
 
-	dc, _ := d.GetDailyCostForSession("tick-idle", "2026-07-20")
-	if dc.CostUSD != 10.00 {
-		t.Errorf("expected daily cost 10.00 (idle drift ignored), got %f", dc.CostUSD)
-	}
-
-	// Snapshot should still track the latest reported value
-	snap, _ := d.GetCostSnapshot("tick-idle")
-	if snap.ReportedCostUSD != 15.00 {
-		t.Errorf("expected snapshot to track latest value 15.00, got %f", snap.ReportedCostUSD)
-	}
-
-	// Active again — delta from 15 to 18 should be recorded
-	d.RecordCostTick("tick-idle", "opus-4", "2026-07-20T17:00:00Z", "2026-07-20", true, 18.00, 130000, 7000)
-
-	dc2, _ := d.GetDailyCostForSession("tick-idle", "2026-07-20")
-	if dc2.CostUSD != 13.00 {
-		t.Errorf("expected daily cost 13.00 (10 + 3 from active delta), got %f", dc2.CostUSD)
+	total, _ := d.SessionTotalCost("epoch-recover")
+	if total != 18.00 {
+		t.Errorf("expected total 18.00 (15 + 3 new, no double-count), got %f", total)
 	}
 }
 
+func TestRecordCostTickLocalDateAttribution(t *testing.T) {
+	d := testDB(t)
+	seedSession(t, d, "epoch-dates")
+
+	d.RecordCostTick("epoch-dates", 100, "opus", "2026-08-14T23:59:00Z", "2026-08-14", 5.00, 50000, 2000)
+	d.RecordCostTick("epoch-dates", 100, "opus", "2026-08-14T23:59:10Z", "2026-08-14", 8.00, 80000, 2500)
+	// Next tick observed on the following local day.
+	d.RecordCostTick("epoch-dates", 100, "opus", "2026-08-15T00:00:10Z", "2026-08-15", 12.00, 120000, 3000)
+
+	d14, _ := d.GetDailyCostForSession("epoch-dates", "2026-08-14")
+	d15, _ := d.GetDailyCostForSession("epoch-dates", "2026-08-15")
+	if d14.CostUSD != 3.00 {
+		t.Errorf("expected 3.00 on 08-14, got %f", d14.CostUSD)
+	}
+	if d15.CostUSD != 4.00 {
+		t.Errorf("expected 4.00 on 08-15, got %f", d15.CostUSD)
+	}
+	total, _ := d.SessionTotalCost("epoch-dates")
+	if total != 7.00 {
+		t.Errorf("expected total 7.00, got %f", total)
+	}
+}
