@@ -111,16 +111,29 @@ func runMigrations(conn *sql.DB) error {
 	`); err != nil {
 		return fmt.Errorf("failed to create cost_epoch_state table: %w", err)
 	}
+	// Detect whether this Open is the first one after upgrading from the old
+	// cost_snapshots schema, BEFORE dropping cost_snapshots below. This lets us
+	// gate the one-time daily_cost wipe so it doesn't run on every Open().
+	var oldSchemaTableCount int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cost_snapshots'`).Scan(&oldSchemaTableCount); err != nil {
+		return fmt.Errorf("failed to check for cost_snapshots table: %w", err)
+	}
+
 	if _, err := conn.Exec(`DROP TABLE IF EXISTS cost_snapshots`); err != nil {
 		return fmt.Errorf("failed to drop cost_snapshots table: %w", err)
 	}
 	if _, err := conn.Exec(`DROP TABLE IF EXISTS cost_adjustments`); err != nil {
 		return fmt.Errorf("failed to drop cost_adjustments table: %w", err)
 	}
-	// Wipe daily_cost: existing rows mix UTC dates with values from the old
-	// buggy delta logic. Rebuilds cleanly under epoch-anchored tracking.
-	if _, err := conn.Exec(`DELETE FROM daily_cost`); err != nil {
-		return fmt.Errorf("failed to wipe daily_cost: %w", err)
+	// Wipe daily_cost ONCE, only during the cutover from the old schema:
+	// existing rows mix UTC dates with values from the old buggy delta logic.
+	// Rebuilds cleanly under epoch-anchored tracking. On a brand-new DB or any
+	// subsequent Open() (cost_snapshots no longer exists), this must NOT run,
+	// or accrued cost would be wiped on every CLI invocation / statusline tick.
+	if oldSchemaTableCount > 0 {
+		if _, err := conn.Exec(`DELETE FROM daily_cost`); err != nil {
+			return fmt.Errorf("failed to wipe daily_cost: %w", err)
+		}
 	}
 
 	return nil

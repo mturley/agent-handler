@@ -124,3 +124,44 @@ func TestOpenIdempotent(t *testing.T) {
 		t.Errorf("events table not found after second Open()")
 	}
 }
+
+// TestReopenDoesNotWipeDailyCost guards against a regression where the
+// one-time daily_cost cutover wipe (added when cost_epoch_state replaced
+// cost_snapshots) ran unconditionally on every Open() instead of only once
+// during the actual schema cutover. Since Open() is called on every CLI
+// invocation and every statusline tick, an unconditional wipe would delete
+// all accrued cost continuously. A fresh DB (no legacy cost_snapshots table)
+// must never trigger the wipe, on the first Open() or any subsequent one.
+func TestReopenDoesNotWipeDailyCost(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	db1, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("first Open() failed: %v", err)
+	}
+	seedSession(t, db1, "reopen-cost-session")
+	if err := db1.UpsertDailyCost("reopen-cost-session", "2026-08-14", 5.00, 50000, 2000); err != nil {
+		t.Fatalf("UpsertDailyCost failed: %v", err)
+	}
+	db1.Close()
+
+	// Re-open the same database. This must NOT wipe daily_cost, since there
+	// is no legacy cost_snapshots table to cut over from.
+	db2, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("second Open() failed: %v", err)
+	}
+	defer db2.Close()
+
+	dc, err := db2.GetDailyCostForSession("reopen-cost-session", "2026-08-14")
+	if err != nil {
+		t.Fatalf("GetDailyCostForSession failed: %v", err)
+	}
+	if dc == nil {
+		t.Fatal("expected daily_cost row to survive re-open, got nil")
+	}
+	if dc.CostUSD != 5.00 {
+		t.Errorf("expected cost 5.00 to survive re-open, got %v", dc.CostUSD)
+	}
+}
