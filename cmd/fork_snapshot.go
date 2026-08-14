@@ -115,7 +115,10 @@ func runForkSnapshot(cmd *cobra.Command, args []string) error {
 	if len(base) >= 8 {
 		base = base[:8]
 	}
-	if session, err := d.GetSession(in.SessionID); err == nil && session != nil && session.SessionName != "" {
+	session, err := d.GetSession(in.SessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "fork-snapshot: could not look up session name (%v); using id-based name\n", err)
+	} else if session != nil && session.SessionName != "" {
 		base = session.SessionName
 	}
 
