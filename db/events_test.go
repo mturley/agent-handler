@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	watcher "github.com/mturley/watcher"
 	wdb "github.com/mturley/watcher/db"
 )
@@ -259,5 +260,63 @@ func TestUnreadExcludesOldEvents(t *testing.T) {
 
 	if len(unread) != 0 {
 		t.Errorf("expected 0 unread events, got %d", len(unread))
+	}
+}
+
+func TestNextForkSnapshotName(t *testing.T) {
+	d := testDB(t)
+
+	sid := "11111111-1111-1111-1111-111111111111"
+	snapType := "pre_compact_snapshot"
+
+	// No prior snapshots → base-precompact
+	name, err := d.NextForkSnapshotName(sid, "auth-work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "auth-work-precompact" {
+		t.Fatalf("want auth-work-precompact, got %q", name)
+	}
+
+	// Insert one prior snapshot for this session
+	mustInsertEvent(t, d, sid, snapType)
+
+	name, err = d.NextForkSnapshotName(sid, "auth-work")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "auth-work-precompact-2" {
+		t.Fatalf("want auth-work-precompact-2, got %q", name)
+	}
+
+	// A second prior snapshot → -3
+	mustInsertEvent(t, d, sid, snapType)
+	name, _ = d.NextForkSnapshotName(sid, "auth-work")
+	if name != "auth-work-precompact-3" {
+		t.Fatalf("want auth-work-precompact-3, got %q", name)
+	}
+
+	// Snapshots for a DIFFERENT session don't affect the count
+	other := "22222222-2222-2222-2222-222222222222"
+	name, _ = d.NextForkSnapshotName(other, "auth-work")
+	if name != "auth-work-precompact" {
+		t.Fatalf("want auth-work-precompact for fresh session, got %q", name)
+	}
+}
+
+func mustInsertEvent(t *testing.T, d *DB, sessionID, typ string) {
+	t.Helper()
+	body := ""
+	evt := Event{
+		ID:        uuid.New().String(),
+		TS:        time.Now().UTC().Format(time.RFC3339Nano),
+		Source:    "agent",
+		SessionID: &sessionID,
+		Type:      typ,
+		Title:     "snapshot",
+		Body:      &body,
+	}
+	if err := d.InsertEvent(evt, nil, nil); err != nil {
+		t.Fatalf("insert: %v", err)
 	}
 }

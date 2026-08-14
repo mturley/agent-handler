@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -163,6 +164,25 @@ func (db *DB) QueryEvents(f EventFilter) ([]Event, error) {
 	defer rows.Close()
 
 	return scanEvents(rows)
+}
+
+// NextForkSnapshotName returns a unique session name for a pre-compaction fork.
+// The first snapshot for a session is "<base>-precompact"; subsequent ones get
+// a numeric suffix ("<base>-precompact-2", "-3", ...) based on how many
+// pre_compact_snapshot events already exist for the session.
+func (db *DB) NextForkSnapshotName(sessionID, base string) (string, error) {
+	snapType := "pre_compact_snapshot"
+	prior, err := db.QueryEvents(EventFilter{
+		SessionID: &sessionID,
+		Type:      &snapType,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to count prior snapshots: %w", err)
+	}
+	if len(prior) == 0 {
+		return base + "-precompact", nil
+	}
+	return base + "-precompact-" + strconv.Itoa(len(prior)+1), nil
 }
 
 // UnreadForSession returns unread events for a session, ordered by ts ASC.
