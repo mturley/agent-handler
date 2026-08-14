@@ -75,6 +75,30 @@ func TestParsePreCompactInput(t *testing.T) {
 	}
 }
 
+func TestParsePreCompactInputMissingSessionID(t *testing.T) {
+	raw := `{
+	  "session_id": "",
+	  "transcript_path": "/x/y/dcbed3d2.jsonl",
+	  "trigger": "manual"
+	}`
+	_, err := parsePreCompactInput(strings.NewReader(raw))
+	if err == nil {
+		t.Fatal("expected error for missing session_id, got nil")
+	}
+}
+
+func TestParsePreCompactInputMissingTranscriptPath(t *testing.T) {
+	raw := `{
+	  "session_id": "dcbed3d2-1b23-4af8-aa1e-61d5d9b7dd99",
+	  "transcript_path": "",
+	  "trigger": "manual"
+	}`
+	_, err := parsePreCompactInput(strings.NewReader(raw))
+	if err == nil {
+		t.Fatal("expected error for missing transcript_path, got nil")
+	}
+}
+
 func TestBuildSnapshotBody(t *testing.T) {
 	body := buildSnapshotBody("newuuid-1234", "auth-work-precompact", "auto", nil)
 	if !strings.Contains(body, "claude --resume newuuid-1234 --name auth-work-precompact") {
@@ -88,5 +112,13 @@ func TestBuildSnapshotBody(t *testing.T) {
 	body = buildSnapshotBody("id2", "n-precompact-2", "manual", &ci)
 	if !strings.Contains(body, ci) {
 		t.Fatalf("body missing custom instructions:\n%s", body)
+	}
+}
+
+func TestBuildSnapshotBodyEmptyCustomInstructions(t *testing.T) {
+	ci := ""
+	body := buildSnapshotBody("id", "n-precompact", "auto", &ci)
+	if strings.Contains(body, "Custom /compact instructions") {
+		t.Fatalf("body should not include custom instructions line for empty pointer:\n%s", body)
 	}
 }
