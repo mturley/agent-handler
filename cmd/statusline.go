@@ -184,7 +184,8 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		if total, err := d.SessionTotalCost(input.SessionID); err == nil {
 			trueCost = total
 		}
-		today := time.Now().UTC().Format("2006-01-02")
+		// Local date, matching how cost is attributed to daily_cost.
+		today := time.Now().Format("2006-01-02")
 		if dc, err := d.GetDailyCostForSession(input.SessionID, today); err == nil && dc != nil {
 			todayCost = dc.CostUSD
 		}

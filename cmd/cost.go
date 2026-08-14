@@ -147,7 +147,7 @@ func runCostMonth(d *db.DB) error {
 }
 
 func runCostToday(d *db.DB) error {
-	today := time.Now().UTC().Format("2006-01-02")
+	today := time.Now().Format("2006-01-02") // local date, matching cost attribution
 
 	totalCost, totalInput, totalOutput, err := d.QueryTotalCost(today, today)
 	if err != nil {
@@ -208,7 +208,7 @@ func runCostSession(d *db.DB, sessionID string) error {
 		return err
 	}
 
-	today := time.Now().UTC().Format("2006-01-02")
+	today := time.Now().Format("2006-01-02") // local date, matching cost attribution
 	todayCost, _ := d.GetDailyCostForSession(sessionID, today)
 
 	if jsonOutput {
