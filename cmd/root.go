@@ -274,8 +274,8 @@ func syncSessionMetadata(d *db.DB, sessionID, name string, pid int, termType, te
 	if workspaceID != "" && session.CmuxWorkspaceID != workspaceID {
 		updates["cmux_workspace_id"] = workspaceID
 	}
-	if termType == "cmux" && termID != "" {
-		wsName, wsColor := terminal.CmuxWorkspaceInfo(termID)
+	if termType == "cmux" && workspaceID != "" {
+		wsName, wsColor := terminal.CmuxWorkspaceInfo(workspaceID)
 		if wsName != "" && session.CmuxWorkspaceName != wsName {
 			updates["cmux_workspace_name"] = wsName
 		}

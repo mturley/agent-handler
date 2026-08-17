@@ -50,19 +50,15 @@ func (b *CmuxBackend) Bell(terminalID string) error {
 	return nil // cmux has better notification primitives
 }
 
-// CmuxWorkspaceInfo resolves the workspace name and color for a surface UUID.
-// Returns empty strings if resolution fails.
-func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
-	idOut, err := exec.Command("cmux", "identify", "--surface", surfaceID).Output()
-	if err != nil {
-		return "", ""
-	}
-	var idData struct {
-		Focused *struct {
-			WorkspaceRef string `json:"workspace_ref"`
-		} `json:"focused"`
-	}
-	if err := json.Unmarshal(idOut, &idData); err != nil || idData.Focused == nil || idData.Focused.WorkspaceRef == "" {
+// CmuxWorkspaceInfo resolves the workspace name and color for a workspace ref
+// (e.g. "workspace:17"), as returned by Detect/cmuxLiveInfo. Callers must pass
+// the ref of the surface's OWN workspace (the "caller" workspace), not a surface
+// UUID — resolving from a surface UUID via `cmux identify` reads the "focused"
+// field, which is the currently-active tab and would stamp every session with
+// whatever workspace the user happens to be viewing. Returns empty strings if
+// resolution fails.
+func CmuxWorkspaceInfo(workspaceRef string) (name, color string) {
+	if workspaceRef == "" {
 		return "", ""
 	}
 
@@ -82,7 +78,7 @@ func CmuxWorkspaceInfo(surfaceID string) (name, color string) {
 		return "", ""
 	}
 	for _, w := range listData.Workspaces {
-		if w.Ref == idData.Focused.WorkspaceRef {
+		if w.Ref == workspaceRef {
 			n := w.CustomTitle
 			if n == "" {
 				n = w.Title
