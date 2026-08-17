@@ -82,6 +82,9 @@ CREATE INDEX IF NOT EXISTS idx_dismissed_events_session ON dismissed_events(sess
 -- `handler setup --migrate-watcher` is the only code that recreates/reads/drops
 -- them, for one-time migration of pre-2c databases.
 
+-- Cost tracking: epoch-anchored per-session cost. cost_epoch_state holds the
+-- current epoch reference (Claude PID + last observed cost); daily_cost holds
+-- per-session, per-local-date accumulated cost.
 CREATE TABLE IF NOT EXISTS cost_epoch_state (
     session_id TEXT PRIMARY KEY REFERENCES sessions(session_id),
     pid INTEGER NOT NULL,
