@@ -72,7 +72,7 @@ func buildSnapshotBody(newID, name, trigger string, customInstructions *string) 
 	var b strings.Builder
 	b.WriteString("A pre-compaction fork of this session was saved.\n")
 	b.WriteString("Resume it (rewindable to the pre-compaction state) with:\n\n")
-	b.WriteString(fmt.Sprintf("  claude --resume %s --name %s\n\n", newID, name))
+	b.WriteString(fmt.Sprintf("  claude --resume %s --fork-session --name %s\n\n", newID, name))
 	b.WriteString(fmt.Sprintf("Compaction trigger: %s\n", trigger))
 	if customInstructions != nil && *customInstructions != "" {
 		b.WriteString(fmt.Sprintf("Custom /compact instructions: %s\n", *customInstructions))

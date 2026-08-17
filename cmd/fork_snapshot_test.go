@@ -101,7 +101,7 @@ func TestParsePreCompactInputMissingTranscriptPath(t *testing.T) {
 
 func TestBuildSnapshotBody(t *testing.T) {
 	body := buildSnapshotBody("newuuid-1234", "auth-work-precompact", "auto", nil)
-	if !strings.Contains(body, "claude --resume newuuid-1234 --name auth-work-precompact") {
+	if !strings.Contains(body, "claude --resume newuuid-1234 --fork-session --name auth-work-precompact") {
 		t.Fatalf("body missing resume command:\n%s", body)
 	}
 	if !strings.Contains(body, "auto") {
