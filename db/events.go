@@ -393,6 +393,40 @@ func (db *DB) HumanUnreadCountForSession(sessionID string) (int, error) {
 	return count, nil
 }
 
+// HumanUnreadBreakdownForSession returns the human-unread count broken down by
+// event type (using the human_seen_ts cursor and the same routing/exclusion
+// scope as HumanUnreadCountForSession). Lets callers distinguish sessions whose
+// only unreads are reminders from those with actionable messages.
+func (db *DB) HumanUnreadBreakdownForSession(sessionID string) (map[string]int, error) {
+	cursor, err := db.GetHumanCursor(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	session, err := db.GetSession(sessionID)
+	if err != nil || session == nil {
+		return nil, err
+	}
+
+	query := inboxSelect("SELECT", inboxTypeCountCols) + `
+		GROUP BY e.type`
+	rows, err := db.conn.Query(query, inboxArgs(session, cursor)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	breakdown := make(map[string]int)
+	for rows.Next() {
+		var eventType string
+		var count int
+		if err := rows.Scan(&eventType, &count); err != nil {
+			return nil, err
+		}
+		breakdown[eventType] = count
+	}
+	return breakdown, rows.Err()
+}
+
 // GlobalUnreadCountForSession returns the total count and breakdown by type of ALL events since the session's cursor.
 func (db *DB) GlobalUnreadCountForSession(sessionID string) (int, map[string]int, error) {
 	cursor, err := db.GetCursor(sessionID)

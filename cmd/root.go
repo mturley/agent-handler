@@ -199,14 +199,22 @@ func claudePID() int {
 	return os.Getppid()
 }
 
-// findSessionsWithUnreads returns sessions (other than self) that have human-unread events.
+// findSessionsWithUnreads returns live sessions (other than self) that have
+// human-unread NON-reminder events. Reminder-only sessions are excluded here and
+// surfaced separately via findSessionsWithReminders.
 func findSessionsWithUnreads(d *db.DB, selfSessionID string) []db.Session {
+	withUnreads, _ := classifySessionsWithUnreads(d, selfSessionID)
+	return withUnreads
+}
+
+// classifySessionsWithUnreads splits live non-self sessions into those with at
+// least one non-reminder unread and those whose only unreads are reminders.
+func classifySessionsWithUnreads(d *db.DB, selfSessionID string) (withUnreads, reminderOnly []db.Session) {
 	sessions, err := d.ListSessions(false, 1000, 0)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
-	var withUnreads []db.Session
 	for _, s := range sessions {
 		if s.SessionID == selfSessionID || s.Role == "handler" {
 			continue
@@ -214,12 +222,24 @@ func findSessionsWithUnreads(d *db.DB, selfSessionID string) []db.Session {
 		if s.PID > 0 && !discover.IsSessionProcess(s.PID, s.SessionID) {
 			continue
 		}
-		count, err := d.HumanUnreadCountForSession(s.SessionID)
-		if err == nil && count > 0 {
+		breakdown, err := d.HumanUnreadBreakdownForSession(s.SessionID)
+		if err != nil || len(breakdown) == 0 {
+			continue
+		}
+		hasNonReminder := false
+		for eventType, count := range breakdown {
+			if count > 0 && eventType != "reminder" {
+				hasNonReminder = true
+				break
+			}
+		}
+		if hasNonReminder {
 			withUnreads = append(withUnreads, s)
+		} else {
+			reminderOnly = append(reminderOnly, s)
 		}
 	}
-	return withUnreads
+	return withUnreads, reminderOnly
 }
 
 // syncSessionMetadata updates session name, PID, and terminal info only if changed.
