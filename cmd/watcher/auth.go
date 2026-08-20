@@ -1,14 +1,13 @@
 package watcher
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/mturley/agent-handler/config"
 	wcfg "github.com/mturley/watcher/config"
+	"github.com/mturley/watcher/credsetup"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -20,13 +19,33 @@ func init() {
 var authCmd = &cobra.Command{
 	Use:   "auth [service]",
 	Short: "Configure authentication for external services",
-	Long: `Configure authentication tokens for external services (GitHub, Jira).
+	Long: `Configure authentication tokens for external services (GitHub, Jira, Slack).
 Run without arguments to configure all services interactively.
-Specify 'github' or 'jira' to configure a specific service.
+Specify 'github', 'jira', or 'slack' to configure a specific service.
 
-Credentials are stored in the watcher library config at ~/.config/watcher/auth.yaml.`,
+Credentials are stored in the watcher library config at ~/.config/watcher/auth.yaml.
+Tests each configured service's credentials and prompts to repair them if
+missing or rejected (see github.com/mturley/watcher/credsetup).`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runAuth,
+}
+
+// capitalize upper-cases the first byte of s (services are plain ASCII
+// lowercase names like "github"/"jira"/"slack"), used only for the section
+// header printed above each service's auth flow.
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// authServiceByName maps the auth command's lowercase service argument to
+// the corresponding credsetup.Service constant.
+var authServiceByName = map[string]credsetup.Service{
+	"github": credsetup.GitHub,
+	"jira":   credsetup.Jira,
+	"slack":  credsetup.Slack,
 }
 
 func runAuth(cmd *cobra.Command, args []string) error {
@@ -37,34 +56,42 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	// Determine which services to configure
-	services := []string{}
+	services := []credsetup.Service{}
 	if len(args) == 0 {
-		services = []string{"github", "jira"}
+		services = []credsetup.Service{credsetup.GitHub, credsetup.Jira, credsetup.Slack}
 	} else {
-		service := strings.ToLower(args[0])
-		if service != "github" && service != "jira" {
-			return fmt.Errorf("unknown service: %s (must be 'github' or 'jira')", args[0])
+		svc, ok := authServiceByName[strings.ToLower(args[0])]
+		if !ok {
+			return fmt.Errorf("unknown service: %s (must be 'github', 'jira', or 'slack')", args[0])
 		}
-		services = []string{service}
+		services = []credsetup.Service{svc}
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	prompter := newAuthPrompter()
 	modified := false
+	jiraChanged := false
 
 	for _, service := range services {
-		switch service {
-		case "github":
-			if changed, err := configureGitHub(reader, cfg); err != nil {
-				return err
-			} else if changed {
-				modified = true
+		fmt.Printf("\n=== %s ===\n", capitalize(string(service)))
+		changed, err := credsetup.TestAndRepair(cfg, service, prompter)
+		if err != nil {
+			return fmt.Errorf("%s: %w", service, err)
+		}
+		if changed {
+			modified = true
+			if service == credsetup.Jira {
+				jiraChanged = true
 			}
-		case "jira":
-			if changed, err := configureJira(reader, cfg); err != nil {
-				return err
-			} else if changed {
-				modified = true
-			}
+		}
+	}
+
+	if jiraChanged {
+		// Custom fields are a behavior setting, not a credential, so they
+		// live in the library's separate config.yaml rather than here in
+		// auth.yaml. Seed defaults there if config.yaml doesn't already
+		// have any configured.
+		if err := seedDefaultJiraCustomFields(); err != nil {
+			fmt.Printf("  note: failed to seed default custom fields into config.yaml (%v)\n", err)
 		}
 	}
 
@@ -76,138 +103,6 @@ func runAuth(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-func configureGitHub(reader *bufio.Reader, cfg *wcfg.Config) (bool, error) {
-	fmt.Println("\n=== GitHub Configuration ===")
-
-	// Check if already configured
-	if cfg.Services.GitHub != nil && cfg.Services.GitHub.Token != "" {
-		fmt.Println("GitHub is already configured.")
-		username, err := config.ValidateGitHubToken(cfg.Services.GitHub.Token)
-		if err != nil {
-			fmt.Printf("⚠ Token validation failed: %v\n", err)
-			fmt.Print("Would you like to reconfigure? (y/N): ")
-			response, _ := reader.ReadString('\n')
-			if strings.ToLower(strings.TrimSpace(response)) != "y" {
-				return false, nil
-			}
-		} else {
-			fmt.Printf("✓ Valid token for user: %s\n", username)
-			return false, nil
-		}
-	}
-
-	fmt.Println("Create a personal access token at: https://github.com/settings/tokens")
-	fmt.Println("Required scopes: repo")
-	fmt.Print("\nEnter GitHub token (or press Enter to skip): ")
-
-	token, err := reader.ReadString('\n')
-	if err != nil {
-		return false, fmt.Errorf("failed to read token: %w", err)
-	}
-
-	token = strings.TrimSpace(token)
-	if token == "" {
-		fmt.Println("Skipped GitHub configuration.")
-		return false, nil
-	}
-
-	// Validate token
-	username, err := config.ValidateGitHubToken(token)
-	if err != nil {
-		return false, fmt.Errorf("token validation failed: %w", err)
-	}
-
-	fmt.Printf("✓ Valid token for user: %s\n", username)
-
-	// Save token
-	if cfg.Services.GitHub == nil {
-		cfg.Services.GitHub = &wcfg.GitHubConfig{}
-	}
-	cfg.Services.GitHub.Token = token
-
-	return true, nil
-}
-
-func configureJira(reader *bufio.Reader, cfg *wcfg.Config) (bool, error) {
-	fmt.Println("\n=== Jira Configuration ===")
-
-	// Check if already configured
-	if cfg.Services.Jira != nil && cfg.Services.Jira.Token != "" {
-		fmt.Println("Jira is already configured.")
-		displayName, err := config.ValidateJiraToken(cfg.Services.Jira.Host, cfg.Services.Jira.Email, cfg.Services.Jira.Token)
-		if err != nil {
-			fmt.Printf("⚠ Token validation failed: %v\n", err)
-			fmt.Print("Would you like to reconfigure? (y/N): ")
-			response, _ := reader.ReadString('\n')
-			if strings.ToLower(strings.TrimSpace(response)) != "y" {
-				return false, nil
-			}
-		} else {
-			fmt.Printf("✓ Valid credentials for: %s\n", displayName)
-			fmt.Printf("  Host: %s\n", cfg.Services.Jira.Host)
-			fmt.Printf("  Email: %s\n", cfg.Services.Jira.Email)
-			return false, nil
-		}
-	}
-
-	fmt.Println("Create an API token at: https://id.atlassian.com/manage-profile/security/api-tokens")
-	fmt.Print("\nEnter Jira base URL (e.g., https://your-domain.atlassian.net) or press Enter to skip: ")
-
-	url, err := reader.ReadString('\n')
-	if err != nil {
-		return false, fmt.Errorf("failed to read URL: %w", err)
-	}
-
-	url = strings.TrimSpace(url)
-	if url == "" {
-		fmt.Println("Skipped Jira configuration.")
-		return false, nil
-	}
-
-	// Remove trailing slash if present
-	url = strings.TrimSuffix(url, "/")
-
-	fmt.Print("Enter Jira email: ")
-	email, err := reader.ReadString('\n')
-	if err != nil {
-		return false, fmt.Errorf("failed to read email: %w", err)
-	}
-	email = strings.TrimSpace(email)
-
-	fmt.Print("Enter Jira API token: ")
-	token, err := reader.ReadString('\n')
-	if err != nil {
-		return false, fmt.Errorf("failed to read token: %w", err)
-	}
-	token = strings.TrimSpace(token)
-
-	// Validate credentials
-	displayName, err := config.ValidateJiraToken(url, email, token)
-	if err != nil {
-		return false, fmt.Errorf("credential validation failed: %w", err)
-	}
-
-	fmt.Printf("✓ Valid credentials for: %s\n", displayName)
-
-	// Save credentials to the library config shape. The Jira host is stored
-	// under services.jira.host (per the watcher library spec).
-	if cfg.Services.Jira == nil {
-		cfg.Services.Jira = &wcfg.JiraConfig{}
-	}
-	cfg.Services.Jira.Host = url
-	cfg.Services.Jira.Email = email
-	cfg.Services.Jira.Token = token
-
-	// Custom fields are a behavior setting, not a credential, so they live in
-	// the library's separate config.yaml rather than here in auth.yaml. Seed
-	// defaults there if config.yaml doesn't already have any configured.
-	if err := seedDefaultJiraCustomFields(); err != nil {
-		fmt.Printf("  note: failed to seed default custom fields into config.yaml (%v)\n", err)
-	}
-
-	return true, nil
 }
 
 // seedDefaultJiraCustomFields writes a default set of Jira custom field IDs
