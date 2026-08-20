@@ -2,7 +2,12 @@ BINARY_NAME := handler
 BIN_DIR := bin
 INSTALL_DIR := /usr/local/bin
 
-.PHONY: build build-cli build-web install test clean dev
+.PHONY: build build-cli build-web install stop-running test clean dev
+
+# Subcommands that run as long-lived servers. If any are running against the
+# installed binary when we go to reinstall, they'd keep executing old code, so
+# stop-running terminates them before the binary is replaced.
+SERVER_CMDS := ui watcher tail
 
 build-cli:
 	@mkdir -p $(BIN_DIR)
@@ -17,7 +22,21 @@ build-web:
 
 build: build-web build-cli
 
-install: build
+stop-running:
+	@pattern="$(INSTALL_DIR)/$(BINARY_NAME) ($$(echo '$(SERVER_CMDS)' | tr ' ' '|'))"; \
+	pids=$$(pgrep -f "$$pattern" 2>/dev/null || true); \
+	if [ -n "$$pids" ]; then \
+		echo "Stopping running $(BINARY_NAME) server(s): $$pids"; \
+		kill -TERM $$pids 2>/dev/null || true; \
+		sleep 2; \
+		pids=$$(pgrep -f "$$pattern" 2>/dev/null || true); \
+		if [ -n "$$pids" ]; then \
+			echo "Force-killing remaining $(BINARY_NAME) server(s): $$pids"; \
+			kill -KILL $$pids 2>/dev/null || true; \
+		fi; \
+	fi
+
+install: build stop-running
 	@cp $(BIN_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/.$(BINARY_NAME).tmp
 	@chmod 755 $(INSTALL_DIR)/.$(BINARY_NAME).tmp
 	@mv $(INSTALL_DIR)/.$(BINARY_NAME).tmp $(INSTALL_DIR)/$(BINARY_NAME)
