@@ -136,3 +136,29 @@ func (p *authPrompter) PromptSlack(_ string) (token, cookie string) {
 	}
 	return tok, strings.TrimSpace(ck)
 }
+
+// PromptJira prints the given instructions and reads the Jira site URL and
+// account email needed for greenfield setup (no host/email configured yet).
+// Neither value is secret, so both are read as plain (non-masked) lines. An
+// empty host means "skip", matching the empty-means-skip contract used by
+// PromptToken and PromptSlack.
+func (p *authPrompter) PromptJira(instructions string) (host, email string) {
+	fmt.Println(instructions)
+
+	fmt.Print("Enter Jira site URL (or press Enter to skip): ")
+	h, err := p.reader.ReadString('\n')
+	if err != nil {
+		return "", ""
+	}
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return "", ""
+	}
+
+	fmt.Print("Enter Jira account email: ")
+	e, err := p.reader.ReadString('\n')
+	if err != nil {
+		return "", ""
+	}
+	return h, strings.TrimSpace(e)
+}
