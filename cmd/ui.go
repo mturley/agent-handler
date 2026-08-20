@@ -22,6 +22,7 @@ var uiCmd = &cobra.Command{
 var (
 	uiPort int
 	uiAPIOnly  bool
+	uiNoOpen   bool
 )
 
 func init() {
@@ -29,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(uiCmd)
 	uiCmd.Flags().IntVar(&uiPort, "port", 8420, "HTTP server port")
 	uiCmd.Flags().BoolVar(&uiAPIOnly, "api-only", false, "serve API only (skip static file serving, for use with a separate dev server)")
+	uiCmd.Flags().BoolVar(&uiNoOpen, "no-open", false, "do not open the browser")
 }
 
 func runUI(cmd *cobra.Command, args []string) error {
@@ -38,8 +40,12 @@ func runUI(cmd *cobra.Command, args []string) error {
 	if !uiAPIOnly {
 		if port := uiPortForRunningServer(); port != 0 {
 			url := fmt.Sprintf("http://localhost:%d", port)
-			fmt.Printf("A handler UI server is already running. Opening %s\n", url)
-			openBrowser(url)
+			if uiNoOpen {
+				fmt.Printf("A handler UI server is already running at %s\n", url)
+			} else {
+				fmt.Printf("A handler UI server is already running. Opening %s\n", url)
+				openBrowser(url)
+			}
 			return nil
 		}
 	}
@@ -105,8 +111,12 @@ func runUI(cmd *cobra.Command, args []string) error {
 		logger.Printf("API-only mode (static files served by Vite on port 5173)")
 	} else {
 		url := fmt.Sprintf("http://localhost:%d", uiPort)
-		logger.Printf("Opening %s in browser...", url)
-		openBrowser(url)
+		if uiNoOpen {
+			logger.Printf("Serving on %s (browser not opened)", url)
+		} else {
+			logger.Printf("Opening %s in browser...", url)
+			openBrowser(url)
+		}
 	}
 
 	return server.Start()
