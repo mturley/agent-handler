@@ -1,16 +1,17 @@
 package watcher
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/mturley/agent-handler/watcher"
+	"github.com/spf13/cobra"
+)
 
 // JSONOutput is set by the parent cmd package to enable JSON output
 var JSONOutput *bool
 
-// knownWatchers lists the services handler can actually poll/install
-// watchers for. Slack is a first-class watcher alongside github and jira:
-// it has credential auth/test+repair support (via `handler watcher auth
-// slack` and credsetup.TestAndRepair) and a poller implementation
-// (wslack.Poll), so it is offered for `handler watcher install`/`run`.
-var knownWatchers = []string{"github", "jira", "slack"}
+// knownWatchers is this package's handle on the canonical watcher service list
+// (watcher.KnownWatchers) — the single source of truth. Slack is first-class
+// alongside github and jira.
+var knownWatchers = watcher.KnownWatchers
 
 var WatcherCmd = &cobra.Command{
 	Use:   "watcher",

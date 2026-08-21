@@ -830,7 +830,7 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 	// Watcher status
 	watcherStatus := ""
 	var services []string
-	for _, svc := range []string{"github", "jira"} {
+	for _, svc := range watcher.KnownWatchers {
 		if config.ServiceConfiguredForWatching(svc) && watcher.IsInstalled(svc) {
 			lastRun := watcher.LastRunTime(svc)
 			ago := ""

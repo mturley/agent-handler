@@ -58,7 +58,7 @@ func runWatching(cmd *cobra.Command, args []string) error {
 	}
 
 	var watchers []watcherStatus
-	for _, name := range []string{"github", "jira"} {
+	for _, name := range watcherPkg.KnownWatchers {
 		ws := watcherStatus{Name: name}
 		ws.Configured = config.ServiceConfiguredForWatching(name)
 		ws.Installed = watcherPkg.IsInstalled(name)
@@ -219,7 +219,7 @@ func runWatchingGlobal(d *db.DB) error {
 		LastErrorMessage string `json:"last_error_message,omitempty"`
 	}
 	var watchers []wsStatus
-	for _, name := range []string{"github", "jira"} {
+	for _, name := range watcherPkg.KnownWatchers {
 		ws := wsStatus{Name: name}
 		ws.Configured = config.ServiceConfiguredForWatching(name)
 		ws.Installed = watcherPkg.IsInstalled(name)
