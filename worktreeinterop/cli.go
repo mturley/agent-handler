@@ -2,6 +2,7 @@ package worktreeinterop
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 )
@@ -45,6 +46,12 @@ func ListPrimaryResources(dir string) ([]Resource, error) {
 	cmd := execCommand("worktree", "resources", "list", "--json", "--worktree", dir)
 	out, err := cmd.Output()
 	if err != nil {
+		// cmd.Output captures stderr into ExitError.Stderr on a non-zero
+		// exit; surface it to aid debugging a broken worktree CLI.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			return nil, fmt.Errorf("worktree resources list: %w (%s)", err, string(exitErr.Stderr))
+		}
 		return nil, fmt.Errorf("worktree resources list: %w", err)
 	}
 	var items []listItem
