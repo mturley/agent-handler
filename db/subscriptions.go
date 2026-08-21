@@ -52,8 +52,8 @@ func (db *DB) Subscribe(s Subscription) error {
 // SubscribeIfNew creates a subscription only if one doesn't already exist
 // (live). Unlike Subscribe, this does NOT refresh an already-live
 // subscription and does NOT resurrect a user-unsubscribed one — used by
-// auto-registration from .worktree-resources to avoid resurrecting
-// subscriptions that were closed by a watcher or by the user.
+// auto-registration from the worktree CLI's primary resources to avoid
+// resurrecting subscriptions that were closed by a watcher or by the user.
 func (db *DB) SubscribeIfNew(s Subscription) error {
 	return wdb.Subscribe(db.conn, handlerSubscriber(s.SessionID),
 		watcher.Resource{Type: s.ResourceType, ID: s.ResourceID, URL: deref(s.ResourceURL)},
