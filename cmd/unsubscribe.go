@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mturley/agent-handler/worktree"
+	"github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +21,6 @@ func init() {
 	rootCmd.AddCommand(unsubscribeCmd)
 	unsubscribeCmd.Flags().StringVar(&unsubResource, "resource", "", "resource ID (format: type:id)")
 	unsubscribeCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
-	unsubscribeCmd.Flags().Bool("persist", false, "also remove from .worktree-resources so future sessions won't auto-subscribe")
 	unsubscribeCmd.MarkFlagRequired("resource")
 }
 
@@ -38,7 +37,7 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse resource
-	resourceType, resourceID := worktree.ParseResourceID(unsubResource)
+	resourceType, resourceID := worktreeinterop.ParseResourceID(unsubResource)
 	if resourceType == "" {
 		return fmt.Errorf("invalid resource format (expected type:id): %s", unsubResource)
 	}
@@ -47,15 +46,6 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	err = d.Unsubscribe(sessionID, resourceType, resourceID)
 	if err != nil {
 		return fmt.Errorf("failed to unsubscribe: %w", err)
-	}
-
-	// Remove from .worktree-resources if requested
-	persist, _ := cmd.Flags().GetBool("persist")
-	if persist {
-		resourcesPath := ".worktree-resources"
-		if err := worktree.RemoveResource(resourcesPath, unsubResource); err != nil {
-			return fmt.Errorf("failed to remove from .worktree-resources: %w", err)
-		}
 	}
 
 	// Output

@@ -3,12 +3,13 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/worktree"
+	"github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 )
 
@@ -29,8 +30,7 @@ func init() {
 	subscribeCmd.Flags().StringVar(&subResource, "resource", "", "resource ID (format: type:id, e.g., pr:owner/repo#42)")
 	subscribeCmd.Flags().StringVar(&subURL, "url", "", "resource URL (optional)")
 	subscribeCmd.Flags().String("session-id", "", "session ID (auto-detected if omitted)")
-	subscribeCmd.Flags().Bool("primary", false, "mark as a primary resource for this worktree")
-	subscribeCmd.Flags().Bool("persist", false, "also write to .worktree-resources so future sessions in this worktree auto-subscribe")
+	subscribeCmd.Flags().Bool("related", false, "propagate to worktree as a related (not primary) resource")
 	subscribeCmd.MarkFlagRequired("resource")
 }
 
@@ -47,7 +47,7 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse resource
-	resourceType, resourceID := worktree.ParseResourceID(subResource)
+	resourceType, resourceID := worktreeinterop.ParseResourceID(subResource)
 	if resourceType == "" {
 		return fmt.Errorf("invalid resource format (expected type:id): %s", subResource)
 	}
@@ -87,13 +87,19 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to subscribe: %w", err)
 	}
 
-	// Persist to .worktree-resources if requested
-	persist, _ := cmd.Flags().GetBool("persist")
-	if persist && subURL != "" {
-		resourcesPath := ".worktree-resources"
-		primary, _ := cmd.Flags().GetBool("primary")
-		if err := worktree.AppendResource(resourcesPath, subResource, subURL, primary); err != nil {
-			return fmt.Errorf("failed to append to .worktree-resources: %w", err)
+	// Propagate to the worktree CLI if present (best-effort).
+	if worktreeinterop.Available() {
+		related, _ := cmd.Flags().GetBool("related")
+		cwd, _ := os.Getwd()
+		u := ""
+		if urlPtr != nil {
+			u = *urlPtr
+		}
+		if err := worktreeinterop.AddResource(cwd, worktreeinterop.Resource{
+			Type: resourceType, ID: resourceID, URL: u,
+		}, related); err != nil {
+			// soft degradation: subscribe already succeeded
+			fmt.Fprintf(os.Stderr, "warning: could not propagate to worktree: %v\n", err)
 		}
 	}
 

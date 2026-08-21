@@ -9,11 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
-	"github.com/mturley/agent-handler/worktree"
 	"github.com/spf13/cobra"
 )
 
@@ -109,41 +107,13 @@ func runRegister(cmd *cobra.Command, args []string) error {
 		d.AdvanceCursor(regSessionID, now)
 	}
 
-	// Auto-subscribe to resources from .worktree-resources
+	// Auto-subscribe to the worktree's primary resources (best-effort; a
+	// broken/missing worktree CLI must never fail registration).
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get cwd: %w", err)
 	}
-	resourcesPath := filepath.Join(cwd, ".worktree-resources")
-	resources, err := worktree.ReadResources(resourcesPath)
-	if err == nil && len(resources) > 0 {
-		resCfg, _ := config.Read(config.DefaultPath())
-		for _, r := range resources {
-			resourceType, resourceID := worktree.ParseResourceID(r.ID)
-			if resourceType == "" {
-				continue
-			}
-			resURL := r.URL
-			if resURL == "" && resCfg != nil {
-				resURL = resCfg.DefaultResourceURL(resourceType, resourceID)
-			}
-			var urlPtr *string
-			if resURL != "" {
-				urlPtr = &resURL
-			}
-			err = d.SubscribeIfNew(db.Subscription{
-				ID:           uuid.New().String(),
-				SessionID:    regSessionID,
-				ResourceType: resourceType,
-				ResourceID:   resourceID,
-				ResourceURL:  urlPtr,
-				CreatedAt:    now,
-			})
-			if err != nil {
-				return fmt.Errorf("failed to subscribe to %s: %w", r.ID, err)
-			}
-		}
-	}
+	autoSubscribeWorktreePrimaries(d, regSessionID, cwd, now)
 
 	// Spawn background catch-up watcher runs for subscribed resources
 	subs, _ := d.ListSubscriptions(regSessionID, false)
