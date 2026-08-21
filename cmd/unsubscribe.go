@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mturley/agent-handler/worktree"
+	"github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +38,7 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse resource
-	resourceType, resourceID := worktree.ParseResourceID(unsubResource)
+	resourceType, resourceID := worktreeinterop.ParseResourceID(unsubResource)
 	if resourceType == "" {
 		return fmt.Errorf("invalid resource format (expected type:id): %s", unsubResource)
 	}
@@ -50,13 +50,14 @@ func runUnsubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Remove from .worktree-resources if requested
-	persist, _ := cmd.Flags().GetBool("persist")
-	if persist {
-		resourcesPath := ".worktree-resources"
-		if err := worktree.RemoveResource(resourcesPath, unsubResource); err != nil {
-			return fmt.Errorf("failed to remove from .worktree-resources: %w", err)
-		}
-	}
+	// TODO(phase5-task4): replaced by autoSubscribeWorktreePrimaries
+	// persist, _ := cmd.Flags().GetBool("persist")
+	// if persist {
+	// 	resourcesPath := ".worktree-resources"
+	// 	if err := worktreeinterop.RemoveResource(resourcesPath, unsubResource); err != nil {
+	// 		return fmt.Errorf("failed to remove from .worktree-resources: %w", err)
+	// 	}
+	// }
 
 	// Output
 	if jsonOutput {

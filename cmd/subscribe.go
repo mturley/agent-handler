@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/worktree"
+	"github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 )
 
@@ -47,7 +47,7 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Parse resource
-	resourceType, resourceID := worktree.ParseResourceID(subResource)
+	resourceType, resourceID := worktreeinterop.ParseResourceID(subResource)
 	if resourceType == "" {
 		return fmt.Errorf("invalid resource format (expected type:id): %s", subResource)
 	}
@@ -88,14 +88,15 @@ func runSubscribe(cmd *cobra.Command, args []string) error {
 	}
 
 	// Persist to .worktree-resources if requested
-	persist, _ := cmd.Flags().GetBool("persist")
-	if persist && subURL != "" {
-		resourcesPath := ".worktree-resources"
-		primary, _ := cmd.Flags().GetBool("primary")
-		if err := worktree.AppendResource(resourcesPath, subResource, subURL, primary); err != nil {
-			return fmt.Errorf("failed to append to .worktree-resources: %w", err)
-		}
-	}
+	// TODO(phase5-task4): replaced by autoSubscribeWorktreePrimaries
+	// persist, _ := cmd.Flags().GetBool("persist")
+	// if persist && subURL != "" {
+	// 	resourcesPath := ".worktree-resources"
+	// 	primary, _ := cmd.Flags().GetBool("primary")
+	// 	if err := worktreeinterop.AppendResource(resourcesPath, subResource, subURL, primary); err != nil {
+	// 		return fmt.Errorf("failed to append to .worktree-resources: %w", err)
+	// 	}
+	// }
 
 	// Output
 	if jsonOutput {

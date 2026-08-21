@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/worktree"
+	"github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +33,7 @@ func runHistory(cmd *cobra.Command, args []string) error {
 	defer d.Close()
 
 	// Parse resource
-	resourceType, resourceID := worktree.ParseResourceID(resourceArg)
+	resourceType, resourceID := worktreeinterop.ParseResourceID(resourceArg)
 	if resourceType == "" {
 		return fmt.Errorf("invalid resource format (expected type:id): %s", resourceArg)
 	}

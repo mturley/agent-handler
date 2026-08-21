@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/mturley/agent-handler/db"
-	"github.com/mturley/agent-handler/worktree"
+	"github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 )
 
@@ -47,13 +47,13 @@ func runLink(cmd *cobra.Command, args []string) error {
 	defer d.Close()
 
 	// Parse child resource
-	childType, childID := worktree.ParseResourceID(linkChild)
+	childType, childID := worktreeinterop.ParseResourceID(linkChild)
 	if childType == "" {
 		return fmt.Errorf("invalid child resource format (expected type:id): %s", linkChild)
 	}
 
 	// Parse parent resource
-	parentType, parentID := worktree.ParseResourceID(linkParent)
+	parentType, parentID := worktreeinterop.ParseResourceID(linkParent)
 	if parentType == "" {
 		return fmt.Errorf("invalid parent resource format (expected type:id): %s", linkParent)
 	}
