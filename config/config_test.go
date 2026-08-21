@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	wcfg "github.com/mturley/watcher/config"
 )
 
 func TestReadWriteConfig(t *testing.T) {
@@ -257,6 +259,53 @@ func TestJiraCustomFieldsConfig(t *testing.T) {
 	}
 	if cfg.Services.Jira.CustomFields["epic_key"] != "customfield_10014" {
 		t.Errorf("expected epic_key = customfield_10014, got %q", cfg.Services.Jira.CustomFields["epic_key"])
+	}
+}
+
+func TestDefaultResourceURL_Slack(t *testing.T) {
+	t.Setenv("WATCHER_HOME", t.TempDir())
+	seed := &wcfg.Config{Services: wcfg.Services{Slack: &wcfg.SlackConfig{
+		Token: "xoxc-x", Cookie: "d", WorkspaceDomain: "myteam.slack.com",
+	}}}
+	if err := seed.Save(wcfg.DefaultPath()); err != nil {
+		t.Fatalf("seed auth.yaml: %v", err)
+	}
+	c := &Config{}
+	want := "https://myteam.slack.com/archives/C0123ABCD/p1699999999000100"
+	if got := c.DefaultResourceURL("slack", "C0123ABCD:1699999999.000100"); got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+	if got := c.DefaultResourceURL("slack", "nocolon"); got != "" {
+		t.Errorf("malformed: got %q want \"\"", got)
+	}
+}
+
+func TestDefaultResourceURL_Slack_SchemeTolerated(t *testing.T) {
+	t.Setenv("WATCHER_HOME", t.TempDir())
+	seed := &wcfg.Config{Services: wcfg.Services{Slack: &wcfg.SlackConfig{
+		Token: "x", Cookie: "d", WorkspaceDomain: "https://myteam.slack.com/",
+	}}}
+	if err := seed.Save(wcfg.DefaultPath()); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	c := &Config{}
+	want := "https://myteam.slack.com/archives/C0123ABCD/p1699999999000100"
+	if got := c.DefaultResourceURL("slack", "C0123ABCD:1699999999.000100"); got != want {
+		t.Errorf("got %q want %q", got, want)
+	}
+}
+
+func TestDefaultResourceURL_Slack_NoDomain(t *testing.T) {
+	t.Setenv("WATCHER_HOME", t.TempDir())
+	c := &Config{}
+	if got := c.DefaultResourceURL("slack", "C0:1699999999.000100"); got != "" {
+		t.Errorf("no domain: got %q want \"\"", got)
+	}
+}
+
+func TestResourceTypeToService_Slack(t *testing.T) {
+	if got := ResourceTypeToService("slack"); got != "slack" {
+		t.Errorf("got %q want slack", got)
 	}
 }
 

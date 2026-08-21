@@ -12,10 +12,9 @@ import (
 // the codebase, regardless of whether the (now legacy) handler
 // ~/.agent-handler/config.yaml has anything configured.
 //
-// Slack is included here even though handler has no Slack poller yet
-// (that's a later phase) — this function answers "are Slack credentials
-// configured?", which the `handler watcher auth`/status flows need
-// regardless of poller support; it does not imply Slack can be watched.
+// Slack is a first-class watcher (alongside github/jira): this answers "are
+// Slack credentials configured?" for the `handler watcher auth`/status/install
+// flows and the slack poller.
 func ServiceConfiguredForWatching(service string) bool {
 	creds, err := wcfg.Load(wcfg.DefaultPath())
 	if err != nil {

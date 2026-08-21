@@ -99,7 +99,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 		// Watcher and resource summary
 		fmt.Printf("\n%s─── Watchers ───%s\n", dim, reset)
-		for _, svc := range []string{"github", "jira"} {
+		for _, svc := range watcherPkg.KnownWatchers {
 			status := fmt.Sprintf("%s✗ not configured%s", red, reset)
 			if config.ServiceConfiguredForWatching(svc) {
 				if watcherPkg.IsInstalled(svc) {

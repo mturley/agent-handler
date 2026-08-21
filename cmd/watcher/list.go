@@ -29,7 +29,6 @@ type watcherInfo struct {
 }
 
 func listWatchers(cmd *cobra.Command, args []string) error {
-	knownWatchers := []string{"github", "jira"}
 	var watchers []watcherInfo
 
 	for _, name := range knownWatchers {

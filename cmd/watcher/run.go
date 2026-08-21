@@ -13,6 +13,7 @@ import (
 	wdb "github.com/mturley/watcher/db"
 	wgithub "github.com/mturley/watcher/github"
 	wjira "github.com/mturley/watcher/jira"
+	wslack "github.com/mturley/watcher/slack"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,7 @@ var runCmd = &cobra.Command{
 	Short: "Run a watcher once (one-shot poll)",
 	Long: `Run a watcher once to poll for new events.
 
-Valid watchers: github, jira
+Valid watchers: github, jira, slack
 
 Use --resources to poll specific resources instead of all active subscriptions.
 Example: handler watcher run github --resources "owner/repo#123,owner/repo#456"`,
@@ -40,8 +41,8 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 	name := strings.ToLower(args[0])
 
 	// Validate watcher name
-	if name != "github" && name != "jira" {
-		return fmt.Errorf("unknown watcher: %s (must be 'github' or 'jira')", name)
+	if name != "github" && name != "jira" && name != "slack" {
+		return fmt.Errorf("unknown watcher: %s (must be 'github', 'jira', or 'slack')", name)
 	}
 
 	// Load credentials from the watcher library config (auth.yaml).
@@ -121,6 +122,17 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 			BotUsernames: botUsernames,
 		}
 		return wjira.Poll(d.Conn(), auth, resources, logger)
+	case "slack":
+		sc, err := creds.Slack()
+		if err != nil {
+			return fmt.Errorf("slack credentials not available: %w", err)
+		}
+		auth := wslack.SlackAuth{
+			Token:           sc.Token,
+			Cookie:          sc.Cookie,
+			WorkspaceDomain: sc.WorkspaceDomain,
+		}
+		return wslack.Poll(d.Conn(), auth, resources, logger)
 	default:
 		return fmt.Errorf("unknown watcher: %s", name)
 	}
@@ -133,6 +145,8 @@ func serviceToResourceType(service string) string {
 		return "pr"
 	case "jira":
 		return "jira"
+	case "slack":
+		return "slack"
 	default:
 		return ""
 	}

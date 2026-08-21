@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	wcfg "github.com/mturley/watcher/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -136,6 +137,8 @@ func ResourceTypeToService(resourceType string) string {
 		return "github"
 	case "jira":
 		return "jira"
+	case "slack":
+		return "slack"
 	default:
 		return ""
 	}
@@ -154,6 +157,8 @@ func (c *Config) DefaultResourceURL(resourceType, resourceID string) string {
 			return strings.TrimRight(c.Services.Jira.URL, "/") + "/browse/" + resourceID
 		}
 		return ""
+	case "slack":
+		return slackResourceURL(resourceID)
 	default:
 		return ""
 	}
@@ -171,4 +176,32 @@ func prResourceURL(resourceID string) string {
 		return ""
 	}
 	return "https://github.com/" + repo + "/pull/" + num
+}
+
+// slackResourceURL builds a Slack archive permalink from a "<channel>:<ts>"
+// resource ID and the WorkspaceDomain in the shared watcher auth.yaml (the
+// source of truth for Slack config — handler's own config has no Slack
+// section). Returns "" if the domain is unset/unreadable or the ID is
+// malformed.
+func slackResourceURL(resourceID string) string {
+	parts := strings.SplitN(resourceID, ":", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return ""
+	}
+	sc, err := wcfg.Load(wcfg.DefaultPath())
+	if err != nil {
+		return ""
+	}
+	creds, err := sc.Slack()
+	if err != nil || creds.WorkspaceDomain == "" {
+		return ""
+	}
+	// Tolerate a stored domain with a scheme and/or trailing slash.
+	domain := strings.TrimPrefix(creds.WorkspaceDomain, "https://")
+	domain = strings.TrimPrefix(domain, "http://")
+	domain = strings.TrimRight(domain, "/")
+
+	channel, ts := parts[0], parts[1]
+	tsDigits := strings.ReplaceAll(ts, ".", "")
+	return "https://" + domain + "/archives/" + channel + "/p" + tsDigits
 }

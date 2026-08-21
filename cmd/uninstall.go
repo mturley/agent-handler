@@ -88,7 +88,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check watcher schedules
-	for _, name := range []string{"github", "jira"} {
+	for _, name := range watcherPkg.KnownWatchers {
 		if watcherPkg.IsInstalled(name) {
 			fmt.Printf("  Uninstall %s watcher schedule\n", name)
 		}
@@ -175,7 +175,7 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Uninstall watcher schedules
-	for _, name := range []string{"github", "jira"} {
+	for _, name := range watcherPkg.KnownWatchers {
 		if watcherPkg.IsInstalled(name) {
 			watcherPkg.Uninstall(name)
 			fmt.Printf("  ✓ Uninstalled %s watcher\n", name)
