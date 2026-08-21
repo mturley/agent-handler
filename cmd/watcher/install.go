@@ -12,11 +12,9 @@ import (
 )
 
 // isServiceConfigured reports whether a service has credentials in the
-// watcher library config (auth.yaml). Slack is included here (and in
-// ServiceConfiguredForWatching) so config-test callers can report Slack's
-// status, but Slack is deliberately NOT in knownWatchers/defaultIntervals
-// below: handler has no Slack poller yet (that's a later phase), so it must
-// never be offered for `handler watcher install`/`run`.
+// watcher library config (auth.yaml). Slack is a first-class watcher here
+// (and in knownWatchers/defaultIntervals below), polled just like github
+// and jira.
 func isServiceConfigured(cfg *wcfg.Config, name string) bool {
 	switch name {
 	case "github":
@@ -33,11 +31,12 @@ func isServiceConfigured(cfg *wcfg.Config, name string) bool {
 	}
 }
 
-// defaultIntervals covers only the services handler can actually poll
-// (github, jira). Slack is intentionally excluded — see isServiceConfigured.
+// defaultIntervals covers all services handler can poll: github, jira, and
+// slack.
 var defaultIntervals = map[string]time.Duration{
 	"github": 3 * time.Minute,
 	"jira":   5 * time.Minute,
+	"slack":  5 * time.Minute,
 }
 
 var installCmd = &cobra.Command{
@@ -65,9 +64,7 @@ func runInstallWatcher(cmd *cobra.Command, args []string) error {
 
 func installAll(cmd *cobra.Command) error {
 	// Run auth first, writing credentials to the watcher library config.
-	// Scoped to github+jira only, matching knownWatchers below — handler has
-	// no Slack poller to install yet, so Slack isn't offered here (use
-	// `handler watcher auth slack` to configure Slack credentials).
+	// Scoped to github+jira+slack, matching knownWatchers below.
 	authPath := wcfg.DefaultPath()
 	cfg, err := wcfg.Load(authPath)
 	if err != nil {
@@ -77,12 +74,13 @@ func installAll(cmd *cobra.Command) error {
 	prompter := newAuthPrompter()
 	ghChanged, _ := credsetup.TestAndRepair(cfg, credsetup.GitHub, prompter)
 	jiraChanged, _ := credsetup.TestAndRepair(cfg, credsetup.Jira, prompter)
+	slackChanged, _ := credsetup.TestAndRepair(cfg, credsetup.Slack, prompter)
 	if jiraChanged {
 		if err := seedDefaultJiraCustomFields(); err != nil {
 			fmt.Printf("  note: failed to seed default custom fields into config.yaml (%v)\n", err)
 		}
 	}
-	if ghChanged || jiraChanged {
+	if ghChanged || jiraChanged || slackChanged {
 		if err := cfg.Save(authPath); err != nil {
 			return fmt.Errorf("failed to write credentials: %w", err)
 		}

@@ -6,11 +6,11 @@ import "github.com/spf13/cobra"
 var JSONOutput *bool
 
 // knownWatchers lists the services handler can actually poll/install
-// watchers for. Slack is deliberately excluded: it has credential
-// auth/test+repair support (via `handler watcher auth slack` and
-// credsetup.TestAndRepair) but no poller implementation on the handler side
-// yet, so it must not be offered for `handler watcher install`/`run`.
-var knownWatchers = []string{"github", "jira"}
+// watchers for. Slack is a first-class watcher alongside github and jira:
+// it has credential auth/test+repair support (via `handler watcher auth
+// slack` and credsetup.TestAndRepair) and a poller implementation
+// (wslack.Poll), so it is offered for `handler watcher install`/`run`.
+var knownWatchers = []string{"github", "jira", "slack"}
 
 var WatcherCmd = &cobra.Command{
 	Use:   "watcher",
