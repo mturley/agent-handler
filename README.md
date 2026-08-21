@@ -1,6 +1,6 @@
 # <img src="ui/public/favicon.svg" width="36" height="36" align="top" /> agent-handler
 
-Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, [GitHub and Jira resource watchers](#external-watchers), statusline enhancements, [terminal peeking](#session-inspection-peek), [cmux integrations](#cmux-integration) and [web dashboard](#web-ui).
+Manage parallel Claude Code sessions: SQLite event ledger, pub/sub session inboxes, [GitHub, Jira, and Slack resource watchers](#external-watchers), statusline enhancements, [terminal peeking](#session-inspection-peek), [cmux integrations](#cmux-integration) and [web dashboard](#web-ui).
 
 ![Screenshot of Claude Code statusline with agent-handler installed](docs/images/handler-inbox.png)
 
@@ -115,7 +115,7 @@ These are available as `/slash-commands` in any Claude session:
 - `/inbox-clear` — dismiss unread events without reading them
 - `/inbox-mode` — configure manual, on-submit, or auto delivery
 - `/catchup` — in auto-inbox mode, summarize auto-delivered events since the last `/catchup`
-- `/watch` / `/unwatch` — subscribe to PRs and Jira issues
+- `/watch` / `/unwatch` — subscribe to PRs, Jira issues, and Slack threads (when in a worktree, `/watch` also propagates to the `worktree` CLI; see [worktree integration](#worktree-integration))
 - `/watching` — show watched resources and watcher status
 - `/message` — send messages to other sessions
 - `/reminder` — set a reminder that appears in your inbox on the next check (snoozable)
@@ -148,32 +148,38 @@ Use `/handler` in a Claude session to turn it into a command center for managing
 
 ## External Watchers
 
-Watch for external events (PR reviews, Jira comments, CI status) and deliver them to your sessions. Watchers cache current resource state (PR review status, Jira priority, blocked status) for use in triage.
+Watch for external events (PR reviews, Jira comments, CI status, Slack thread replies) and deliver them to your sessions. Watchers cache current resource state (PR review status, Jira priority, blocked status, Slack thread title/author) for use in triage.
 
-The watcher subsystem — polling, resource state, event storage, and subscription leases — is powered by the reusable [`mturley/watcher`](https://github.com/mturley/watcher) library, which owns its own `watcher_*` tables in handler's SQLite database. handler is one consumer of that library; the credentials and behavior settings it uses live under `~/.config/watcher/` (see below). handler keeps its own scheduling (launchd/cron) and its inbox/session layer on top.
+Three services are watched: **GitHub** (PRs), **Jira** (issues), and **Slack** (threads). A new reply to a watched Slack thread becomes an inbox event just like a PR review or Jira comment, and Slack appears alongside GitHub/Jira in `handler watcher list`, `handler watching`, `handler status`, and `handler triage`.
+
+The watcher subsystem — polling, resource state, event storage, and subscription leases — is powered by the reusable [`mturley/watcher`](https://github.com/mturley/watcher) library, which owns its own `watcher_*` tables in handler's SQLite database (`~/.agent-handler/data/handler.db`). handler is one consumer of that library; the credentials and behavior settings it uses live under `~/.config/watcher/` (see below). handler keeps its own scheduling (launchd/cron) and its inbox/session layer on top.
+
+> **Note:** the [`worktree`](https://github.com/mturley/worktree) tool is the library's other consumer, but the two tools do **not** share a database — they share only the library's schema. handler's rows live in `~/.agent-handler/data/handler.db`; worktree's live in a separate file. See [worktree integration](#worktree-integration) for the CLI-level coupling.
 
 ### Setup
 
 ```bash
-handler watcher install      # Configure tokens + install all authenticated watchers
+handler watcher install      # Test/repair creds + install all authenticated watchers
 ```
 
 Or step by step:
 ```bash
-handler watcher auth         # Configure API tokens (GitHub, Jira)
+handler watcher auth         # Test + repair API credentials (GitHub, Jira, Slack)
 handler watcher install github
 handler watcher install jira
+handler watcher install slack
 ```
 
-Watcher credentials (GitHub/Jira tokens, Jira host/email) are stored by the library in `~/.config/watcher/auth.yaml`; `handler watcher auth` writes them there. Non-secret behavior settings (Jira [custom fields](#jira-custom-fields) and bot usernames) live alongside it in `~/.config/watcher/config.yaml`.
+Credentials for all three services live in the shared `~/.config/watcher/auth.yaml`. `handler watcher auth`/`install` run the library's shared **credential test-and-repair** flow (`credsetup`): it validates each service's existing credentials and, if one is missing or invalid, walks you through configuring and re-validating a new one. Non-secret behavior settings (Jira [custom fields](#jira-custom-fields) and bot usernames) live alongside it in `~/.config/watcher/config.yaml`.
 
-`handler watcher install` creates a scheduled job that runs `handler watcher run <service>` periodically. On macOS this creates a launchd plist; on Linux it adds a cron entry. Both poll at a configurable interval (default: every 2 minutes).
+`handler watcher install` creates a scheduled job that runs `handler watcher run <service>` periodically. On macOS this creates a launchd plist; on Linux it adds a cron entry. Default poll intervals: GitHub every 3 minutes, Jira and Slack every 5 minutes (override with `--interval`).
 
 Alternatively, you can skip `handler watcher install` and schedule the watcher runs yourself with cron or any other scheduler:
 ```bash
-# Example crontab entries (every 2 minutes)
-*/2 * * * * /usr/local/bin/handler watcher run github
-*/2 * * * * /usr/local/bin/handler watcher run jira
+# Example crontab entries
+*/3 * * * * /usr/local/bin/handler watcher run github
+*/5 * * * * /usr/local/bin/handler watcher run jira
+*/5 * * * * /usr/local/bin/handler watcher run slack
 ```
 
 ### Jira custom fields
@@ -203,6 +209,16 @@ handler watcher logs github  # View watcher logs
 handler watcher run github   # Run once manually
 handler watcher uninstall    # Remove all watchers (or: handler watcher uninstall github)
 ```
+
+### worktree integration
+
+When a session runs inside a [`worktree`](https://github.com/mturley/worktree)-managed worktree and the `worktree` binary is on `PATH`, handler shares resource-watching intent with it — entirely at the **CLI level** (handler shells out to `worktree`; the two tools keep separate databases):
+
+- **On session registration**, handler reads the worktree's *primary* resources via `worktree resources list --json` and auto-watches them for the session (respecting any prior `/unwatch` tombstone). This replaced the older `.worktree-resources` file mechanism.
+- **`/watch`** (subscribe) additionally propagates the resource to worktree via `worktree resources add`, so it shows up in worktree's own UI/timeline. It's added as *primary* by default; pass `--related` on `handler subscribe` to add it as a related resource instead.
+- **`/unwatch`** is handler-only — it never touches worktree's subscriptions, so one session unwatching a resource doesn't stop worktree (or another session) from watching it.
+
+All of this is best-effort: if `worktree` isn't installed, handler works exactly as before with no error.
 
 ## cmux Integration
 

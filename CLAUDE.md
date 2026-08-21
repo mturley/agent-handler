@@ -31,7 +31,12 @@ go test ./...
 - `cmd/` — CLI commands (cobra). Each file is one subcommand.
 - `db/` — SQLite data layer. All DB access goes through typed Go functions here.
 - `discover/` — Claude session ID/name discovery from JSONL, PID cache, process liveness.
-- `worktree/` — `.worktree-resources` file read/write.
+- `worktreeinterop/` — CLI-level interop with the `worktree` binary: shells out to
+  `worktree resources list --json` (auto-watch a worktree's primary resources at
+  session registration) and `worktree resources add` (propagate `/watch`). Gated on
+  `exec.LookPath("worktree")`, best-effort — a no-op when worktree isn't installed.
+  (Replaced the old `.worktree-resources` file reader in Phase 5; there is no
+  `worktree/` package and no `.worktree-resources` file anymore.)
 - `hooks/` — Shell scripts for Claude Code hooks (SessionStart, UserPromptSubmit, PreCompact). See `docs/claude-hook-stdin.md` for the JSON fields available on stdin for each hook type.
 - `skills/` — Claude Code skill markdown files. Each skill is a directory with a `SKILL.md`.
 
@@ -58,9 +63,14 @@ When adding or removing cmux keyboard shortcut actions:
 
 ## Watchers (watcher library)
 
-External event watchers poll GitHub and Jira APIs for changes to subscribed
-resources, emitting events into the watcher DB. They run as one-shot commands
-scheduled via launchd (macOS) or cron (Linux).
+External event watchers poll GitHub, Jira, and **Slack** APIs for changes to
+subscribed resources, emitting events into the watcher DB. They run as one-shot
+commands scheduled via launchd (macOS) or cron (Linux). Slack became a
+first-class watcher in Phase 6 (thread replies → session inboxes; 5m poll
+interval). The canonical service list is `watcher.KnownWatchers`
+(`{"github","jira","slack"}`) — iterate it rather than hardcoding the set, so a
+new watcher type appears across `install`/`run`/`status`/`watching`/`triage` at
+once.
 
 **The polling engine, schema, DB layer, and per-source pollers live in a
 separate library — `github.com/mturley/watcher` — NOT in this repo.** Handler
@@ -107,9 +117,28 @@ Key commands: `handler triage` (what needs attention), `handler log --global` (c
 
 The `role` column on the `sessions` table drives statusline behavior. `event_recipients` supports `recipient_type = 'role'` for role-based routing.
 
-## .worktree-resources File
+## worktree integration (CLI-level, Phase 5)
 
-See [docs/worktree-resources.md](docs/worktree-resources.md) for the file format spec and integration guide.
+Handler integrates with the `worktree` CLI at the **CLI level only** — it shells
+out to the `worktree` binary via the `worktreeinterop/` package (auto-watch a
+worktree's primary resources at session registration; propagate `/watch` via
+`worktree resources add`; `/unwatch` stays handler-only). Best-effort and gated on
+`worktree` being installed. This replaced the old `.worktree-resources` FILE
+mechanism — that file, its reader package, and `docs/worktree-resources.md` are
+obsolete (the doc is retained only as historical context; do not treat it as
+current).
+
+> **IMPORTANT — separate DB, shared SCHEMA only.** Handler has its OWN watcher
+> database (`~/.agent-handler/data/handler.db`). The `worktree` tool, the library's
+> other consumer, has a DIFFERENT database file
+> (`${XDG_DATA_HOME:-~/.local/share}/worktree/worktree.db`). They share only the
+> watcher library's *schema* and code — never rows. Handler's subscriptions
+> (subscriber `handler:<session>`) and worktree's (subscriber `worktree:<path>`)
+> live in physically separate SQLite files; there is no shared table, no cross-tool
+> row, no joint query. Do not reason about "worktree's subscriptions" as if they
+> were in handler's DB — they are not. The only handler↔worktree coupling is the
+> CLI interop above (plus the shared library schema). A change to handler's DB
+> cannot affect worktree's data directly, and vice versa.
 
 ## Design
 
