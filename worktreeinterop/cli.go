@@ -46,3 +46,21 @@ func ListPrimaryResources(dir string) ([]Resource, error) {
 	}
 	return primaries, nil
 }
+
+// AddResource runs `worktree resources add` for dir. Best-effort: the caller
+// treats any error as a soft degradation.
+func AddResource(dir string, r Resource, related bool) error {
+	args := []string{"resources", "add", r.Type, r.ID}
+	if r.URL != "" {
+		args = append(args, "--url", r.URL)
+	}
+	if related {
+		args = append(args, "--related")
+	}
+	args = append(args, "--worktree", dir)
+	cmd := execCommand("worktree", args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("worktree resources add: %w (%s)", err, string(out))
+	}
+	return nil
+}

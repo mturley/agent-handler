@@ -67,6 +67,48 @@ func TestListPrimaryResources_BadJSON(t *testing.T) {
 	}
 }
 
+func TestAddResource_ArgvPrimary(t *testing.T) {
+	var gotArgs []string
+	orig := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		gotArgs = append([]string{name}, args...)
+		// return a command that exits 0 without doing anything
+		return exec.Command(os.Args[0], "-test.run=TestHelperProcess", "--")
+	}
+	t.Cleanup(func() { execCommand = orig })
+	os.Setenv("GO_WANT_HELPER_PROCESS", "1")
+	os.Setenv("HELPER_EXIT", "0")
+	t.Cleanup(func() { os.Unsetenv("GO_WANT_HELPER_PROCESS"); os.Unsetenv("HELPER_EXIT") })
+
+	err := AddResource("/d", Resource{Type: "pr", ID: "o/r#1", URL: "u1"}, false)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	want := []string{"worktree", "resources", "add", "pr", "o/r#1", "--url", "u1", "--worktree", "/d"}
+	if !reflect.DeepEqual(gotArgs, want) {
+		t.Errorf("argv got %v want %v", gotArgs, want)
+	}
+}
+
+func TestAddResource_ArgvRelatedNoURL(t *testing.T) {
+	var gotArgs []string
+	orig := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		gotArgs = append([]string{name}, args...)
+		return exec.Command(os.Args[0], "-test.run=TestHelperProcess", "--")
+	}
+	t.Cleanup(func() { execCommand = orig })
+	os.Setenv("GO_WANT_HELPER_PROCESS", "1")
+	os.Setenv("HELPER_EXIT", "0")
+	t.Cleanup(func() { os.Unsetenv("GO_WANT_HELPER_PROCESS"); os.Unsetenv("HELPER_EXIT") })
+
+	_ = AddResource("/d", Resource{Type: "jira", ID: "J-2"}, true)
+	want := []string{"worktree", "resources", "add", "jira", "J-2", "--related", "--worktree", "/d"}
+	if !reflect.DeepEqual(gotArgs, want) {
+		t.Errorf("argv got %v want %v", gotArgs, want)
+	}
+}
+
 // TestHelperProcess is not a real test — it's the fake subprocess.
 func TestHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
