@@ -18,6 +18,19 @@ func Available() bool {
 	return err == nil
 }
 
+// SetSeamsForTest overrides the exec/lookPath seams for testing and returns a
+// restore func. Pass nil to leave a seam unchanged.
+func SetSeamsForTest(execFn func(string, ...string) *exec.Cmd, lookFn func(string) (string, error)) (restore func()) {
+	origExec, origLook := execCommand, lookPath
+	if execFn != nil {
+		execCommand = execFn
+	}
+	if lookFn != nil {
+		lookPath = lookFn
+	}
+	return func() { execCommand = origExec; lookPath = origLook }
+}
+
 type listItem struct {
 	Type    string `json:"type"`
 	ID      string `json:"id"`

@@ -12,12 +12,8 @@ import (
 	"github.com/mturley/agent-handler/db"
 	"github.com/mturley/agent-handler/discover"
 	"github.com/mturley/agent-handler/terminal"
-	// TODO(phase5-task4): replaced by autoSubscribeWorktreePrimaries
-	// "github.com/mturley/agent-handler/worktreeinterop"
 	"github.com/spf13/cobra"
 
-	// TODO(phase5-task4): replaced by autoSubscribeWorktreePrimaries
-	// "github.com/google/uuid"
 	"github.com/mturley/agent-handler/config"
 	"strings"
 )
@@ -183,35 +179,8 @@ func registerSession(d *db.DB, input *promptSubmitInput) {
 		migrateSubscriptionsFromArchived(d, input.SessionID, input.SessionTitle)
 	}
 
-	// Auto-subscribe from .worktree-resources
-	// TODO(phase5-task4): replaced by autoSubscribeWorktreePrimaries
-	// resourcesPath := filepath.Join(cwd, ".worktree-resources")
-	// resources, err := worktreeinterop.ReadResources(resourcesPath)
-	// if err == nil && len(resources) > 0 {
-	// 	resCfg, _ := config.Read(config.DefaultPath())
-	// 	for _, r := range resources {
-	// 		resourceType, resourceID := worktreeinterop.ParseResourceID(r.ID)
-	// 		if resourceType == "" {
-	// 			continue
-	// 		}
-	// 		resURL := r.URL
-	// 		if resURL == "" && resCfg != nil {
-	// 			resURL = resCfg.DefaultResourceURL(resourceType, resourceID)
-	// 		}
-	// 		var urlPtr *string
-	// 		if resURL != "" {
-	// 			urlPtr = &resURL
-	// 		}
-	// 		d.SubscribeIfNew(db.Subscription{
-	// 			ID:           uuid.New().String(),
-	// 			SessionID:    input.SessionID,
-	// 			ResourceType: resourceType,
-	// 			ResourceID:   resourceID,
-	// 			ResourceURL:  urlPtr,
-	// 			CreatedAt:    now,
-	// 		})
-	// 	}
-	// }
+	// Auto-subscribe to the worktree's primary resources (best-effort).
+	autoSubscribeWorktreePrimaries(d, input.SessionID, cwd, now)
 
 	// Spawn catch-up watcher runs for subscribed resources
 	subs, _ := d.ListSubscriptions(input.SessionID, false)
