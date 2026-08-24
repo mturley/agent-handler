@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { getSessionResources, subscribeResource, unsubscribeResource, type SessionResource } from "@/api/client"
 import { formatEventType } from "@/utils/formatLabel"
-import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
+import { JiraIssueTypeIcon, PRStateIcon, SlackThreadIcon } from "@/utils/resourceIcons"
 import { ExternalLink, Mail, X, Plus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -32,8 +32,11 @@ export function ResourceItem({
   onUnwatchCancel?: () => void
 }) {
   const meta = resource.metadata
+  const isSlack = resource.resource_type === "slack"
   const label = resource.resource_type === "pr"
     ? `PR #${resource.resource_id.split("#")[1] || resource.resource_id}`
+    : isSlack
+    ? (meta?.title || resource.resource_id)
     : resource.resource_id
   const hasUnreads = resource.unread_count > 0
 
@@ -46,6 +49,7 @@ export function ResourceItem({
         {resource.resource_type === "pr" && (
           <PRStateIcon state={meta?.state} className="mt-1" />
         )}
+        {isSlack && <SlackThreadIcon className="mt-1" />}
         <div className="flex-1 min-w-0">
           {resource.resource_url ? (
             <a
@@ -60,7 +64,7 @@ export function ResourceItem({
           ) : (
             <span className="text-sm font-medium">{label}</span>
           )}
-          {meta?.title && (
+          {!isSlack && meta?.title && (
             <p className="text-xs text-muted-foreground mt-0.5">{meta.title}</p>
           )}
           {resource.resource_type === "pr" && meta?.author && (
@@ -69,6 +73,13 @@ export function ResourceItem({
           {resource.resource_type === "jira" && meta && (
             <p className="text-xs text-muted-foreground/60">
               {[meta.status, meta.priority, meta.assignee].filter(Boolean).join(" · ")}
+            </p>
+          )}
+          {isSlack && meta && (meta.channel_name || meta.author) && (
+            <p className="text-xs text-muted-foreground/60 mt-0.5">
+              {[meta.channel_name ? `#${meta.channel_name}` : "", meta.author ? `started by ${meta.author}` : ""]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
           )}
           {hasUnreads && (
@@ -168,7 +179,10 @@ export function ResourcesContent({ sessionId, scrollClassName = "max-h-[400px]",
   const sortByUnreads = (a: SessionResource, b: SessionResource) => (b.unread_count || 0) - (a.unread_count || 0)
   const prResources = resources.filter((r) => r.resource_type === "pr").sort(sortByUnreads)
   const jiraResources = resources.filter((r) => r.resource_type === "jira").sort(sortByUnreads)
-  const otherResources = resources.filter((r) => r.resource_type !== "pr" && r.resource_type !== "jira").sort(sortByUnreads)
+  const slackResources = resources.filter((r) => r.resource_type === "slack").sort(sortByUnreads)
+  const otherResources = resources
+    .filter((r) => r.resource_type !== "pr" && r.resource_type !== "jira" && r.resource_type !== "slack")
+    .sort(sortByUnreads)
 
   const key = (r: SessionResource) => `${r.resource_type}:${r.resource_id}`
 
@@ -205,6 +219,10 @@ export function ResourcesContent({ sessionId, scrollClassName = "max-h-[400px]",
         {prResources.length > 0 && renderGroup("Pull Requests", prResources)}
         {prResources.length > 0 && jiraResources.length > 0 && <Separator className="my-2" />}
         {jiraResources.length > 0 && renderGroup("Jira Issues", jiraResources)}
+        {(prResources.length > 0 || jiraResources.length > 0) && slackResources.length > 0 && (
+          <Separator className="my-2" />
+        )}
+        {slackResources.length > 0 && renderGroup("Slack Threads", slackResources)}
         {otherResources.length > 0 && renderGroup("Other", otherResources)}
       </ScrollArea>
 
@@ -225,7 +243,7 @@ export function ResourcesContent({ sessionId, scrollClassName = "max-h-[400px]",
           <div className="space-y-2">
             <Input
               autoFocus
-              placeholder="Paste a GitHub PR or Jira issue link"
+              placeholder="Paste a GitHub PR, Jira issue, or Slack thread link"
               value={watchInput}
               onChange={(e) => { setWatchInput(e.target.value); setWatchError(null) }}
               onKeyDown={(e) => {

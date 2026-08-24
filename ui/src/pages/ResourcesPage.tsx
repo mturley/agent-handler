@@ -29,12 +29,14 @@ export function ResourcesPage({
     watcherStatus,
     prResources,
     jiraResources,
+    slackResources,
     sortField,
     setSortField,
   } = useResources()
 
   const [prCollapsed, setPrCollapsed] = useState(false)
   const [jiraCollapsed, setJiraCollapsed] = useState(false)
+  const [slackCollapsed, setSlackCollapsed] = useState(false)
 
   const handleSwitch = useCallback(
     async (id: string) => {
@@ -139,10 +141,44 @@ export function ResourcesPage({
         </div>
       )}
 
+      {/* Slack Threads section */}
+      {slackResources.length > 0 && (
+        <div className="space-y-2">
+          <div
+            className="flex items-center gap-2 cursor-pointer select-none"
+            onClick={() => setSlackCollapsed(!slackCollapsed)}
+          >
+            {slackCollapsed ? (
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+            <span className="font-semibold text-sm">
+              Slack Threads ({slackResources.length})
+            </span>
+          </div>
+
+          {!slackCollapsed && (
+            <div className="space-y-2 pl-6">
+              {slackResources.map((resource) => (
+                <ResourceCard
+                  key={`${resource.resource_type}:${resource.resource_id}`}
+                  resource={resource}
+                  cmuxAvailable={cmuxAvailable}
+                  onSwitch={handleSwitch}
+                  onTimelineClick={onTimelineClick}
+                  onSessionNavigate={onSessionNavigate}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Empty state */}
-      {!loading && prResources.length === 0 && jiraResources.length === 0 && (
+      {!loading && prResources.length === 0 && jiraResources.length === 0 && slackResources.length === 0 && (
         <p className="text-sm text-muted-foreground py-8 text-center">
-          No watched resources. Use <code className="text-xs">/watch</code> to subscribe to PRs or Jira issues.
+          No watched resources. Use <code className="text-xs">/watch</code> to subscribe to PRs, Jira issues, or Slack threads.
         </p>
       )}
     </div>

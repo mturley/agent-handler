@@ -14,7 +14,7 @@ import {
   Clock,
 } from "lucide-react"
 import { SessionLinkButton } from "@/components/PeekPreview"
-import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
+import { JiraIssueTypeIcon, PRStateIcon, SlackThreadIcon } from "@/utils/resourceIcons"
 
 interface ResourceCardProps {
   resource: ResourceEntry
@@ -49,12 +49,24 @@ interface JiraState extends Record<string, unknown> {
   labels?: string[]
 }
 
+// Slack thread state interface
+interface SlackState extends Record<string, unknown> {
+  title?: string
+  channel_name?: string
+  author?: string
+  reply_count?: number
+}
+
 function isPRState(state: Record<string, unknown> | undefined): state is PRState {
   return state !== undefined && "title" in state
 }
 
 function isJiraState(state: Record<string, unknown> | undefined): state is JiraState {
   return state !== undefined && "summary" in state
+}
+
+function isSlackState(state: Record<string, unknown> | undefined): state is SlackState {
+  return state !== undefined && ("channel_name" in state || "reply_count" in state)
 }
 
 export function ResourceCard({
@@ -66,10 +78,15 @@ export function ResourceCard({
 }: ResourceCardProps) {
   const [expanded, setExpanded] = useState(false)
   const isPR = resource.resource_type === "pr"
+  const isSlack = resource.resource_type === "slack"
   const prState = isPR && isPRState(resource.state) ? resource.state : undefined
-  const jiraState = !isPR && isJiraState(resource.state) ? resource.state : undefined
+  const slackState = isSlack && isSlackState(resource.state) ? resource.state : undefined
+  const jiraState = !isPR && !isSlack && isJiraState(resource.state) ? resource.state : undefined
 
-  const title = prState?.title || jiraState?.summary || resource.resource_id
+  const title = resource.display_title || prState?.title || jiraState?.summary || resource.resource_id
+  // The Slack resource id ("channel:ts") is not human-readable, so the link
+  // text is the title; PRs read "PR #id"; Jira uses the bare key.
+  const linkLabel = isPR ? `PR #${resource.resource_id}` : isSlack ? title : resource.resource_id
 
   return (
     <Card>
@@ -78,17 +95,24 @@ export function ResourceCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               {isPR && <PRStateIcon state={prState?.state} />}
-              {!isPR && <JiraIssueTypeIcon issueType={jiraState?.issue_type} />}
+              {isSlack && <SlackThreadIcon />}
+              {!isPR && !isSlack && <JiraIssueTypeIcon issueType={jiraState?.issue_type} />}
               <a
                 href={resource.resource_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 hover:underline font-medium shrink-0"
+                className={cn(
+                  "inline-flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 hover:underline font-medium",
+                  isSlack ? "min-w-0 truncate" : "shrink-0"
+                )}
               >
-                {isPR ? `PR #${resource.resource_id}` : resource.resource_id}
-                <ExternalLink className="h-3 w-3" />
+                <span className={isSlack ? "truncate" : undefined}>{linkLabel}</span>
+                <ExternalLink className="h-3 w-3 shrink-0" />
               </a>
-              <span className="text-sm text-muted-foreground truncate">{title}</span>
+              {!isSlack && <span className="text-sm text-muted-foreground truncate">{title}</span>}
+              {isSlack && slackState?.channel_name && (
+                <span className="text-sm text-muted-foreground shrink-0">#{slackState.channel_name}</span>
+              )}
             </div>
 
             {/* Badges row */}
@@ -168,13 +192,20 @@ export function ResourceCard({
                   )}
                 </>
               )}
+
+              {isSlack && slackState && typeof slackState.reply_count === "number" && (
+                <Badge variant="outline" className="border-fuchsia-500 text-fuchsia-400">
+                  {slackState.reply_count} {slackState.reply_count === 1 ? "reply" : "replies"}
+                </Badge>
+              )}
             </div>
 
             {/* Author/Assignee line */}
-            {(prState?.author || jiraState?.assignee) && (
+            {(prState?.author || jiraState?.assignee || slackState?.author) && (
               <div className="text-xs text-muted-foreground mt-1">
                 {prState?.author && `by ${prState.author}`}
                 {jiraState?.assignee && `assigned to ${jiraState.assignee}`}
+                {slackState?.author && `started by ${slackState.author}`}
               </div>
             )}
           </div>

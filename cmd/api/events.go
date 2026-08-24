@@ -276,6 +276,16 @@ func extractResourceMetadata(resourceType, stateJSON string) map[string]string {
 		if s := str("status"); s != "" {
 			meta["status"] = s
 		}
+	case "slack":
+		if t := str("title"); t != "" {
+			meta["title"] = t
+		}
+		if c := str("channel_name"); c != "" {
+			meta["channel_name"] = c
+		}
+		if a := str("author"); a != "" {
+			meta["author"] = a
+		}
 	}
 
 	if len(meta) == 0 {

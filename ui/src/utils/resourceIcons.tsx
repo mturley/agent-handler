@@ -1,4 +1,4 @@
-import { Bug, BookOpen, Layers, CheckSquare, ListTree, GitPullRequest, GitMerge, XCircle } from "lucide-react"
+import { Bug, BookOpen, Layers, CheckSquare, ListTree, GitPullRequest, GitMerge, XCircle, MessagesSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const jiraIssueTypeConfig: Record<string, { icon: typeof Bug; color: string }> = {
@@ -31,4 +31,8 @@ export function PRStateIcon({ state, className }: { state?: string; className?: 
   if (!config) return null
   const Icon = config.icon
   return <Icon className={cn("h-3.5 w-3.5 shrink-0", config.color, className)} />
+}
+
+export function SlackThreadIcon({ className }: { className?: string }) {
+  return <MessagesSquare className={cn("h-3.5 w-3.5 shrink-0 text-fuchsia-400", className)} />
 }

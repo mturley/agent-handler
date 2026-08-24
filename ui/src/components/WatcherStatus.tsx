@@ -20,7 +20,8 @@ export function WatcherStatus({ watcherStatus }: WatcherStatusProps) {
         <div className="flex items-center gap-6 flex-wrap">
           {services.map(([service, status]) => {
             const healthy = status.configured && status.installed && !status.has_error
-            const displayName = service === "github" ? "GitHub" : service === "jira" ? "Jira" : service
+            const displayName =
+              service === "github" ? "GitHub" : service === "jira" ? "Jira" : service === "slack" ? "Slack" : service
 
             if (!status.configured) {
               return (

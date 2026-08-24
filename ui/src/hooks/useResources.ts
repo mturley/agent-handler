@@ -85,11 +85,18 @@ export function useResources() {
       : jiras.sort(sortByRecent)
   }, [resources, sortField])
 
+  // Slack threads have no urgency signal, so both sort modes fall back to
+  // most-recent-activity order.
+  const slackResources = useMemo(() => {
+    return resources.filter((r) => r.resource_type === "slack").sort(sortByRecent)
+  }, [resources])
+
   return {
     resources,
     watcherStatus: watcherStatus as Record<string, WatcherStatusInfo>,
     prResources,
     jiraResources,
+    slackResources,
     loading,
     sortField,
     setSortField,
