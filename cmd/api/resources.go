@@ -24,7 +24,12 @@ type resourceEntry struct {
 	State             map[string]interface{} `json:"state,omitempty"`
 	ResourceUpdatedAt string                 `json:"resource_updated_at,omitempty"`
 	WatcherUpdatedAt  string                 `json:"watcher_updated_at,omitempty"`
-	Sessions          []resourceSession      `json:"sessions"`
+	CustomName        string                 `json:"custom_name,omitempty"`
+	// DisplayTitle is what the UI should show for the resource: the custom
+	// name if set, else the cached platform title (e.g. a Slack thread's
+	// first message), else the resource id.
+	DisplayTitle string            `json:"display_title,omitempty"`
+	Sessions     []resourceSession `json:"sessions"`
 }
 
 type watcherStatusInfo struct {
@@ -139,6 +144,15 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 			entry.WatcherUpdatedAt = state.WatcherUpdatedAt
 		}
 
+		// Resolve the display title: custom name -> cached platform title
+		// (e.g. a Slack thread's first message) -> resource id.
+		if meta, err := wdb.GetResourceMeta(s.DB.Conn(), entry.ResourceType, entry.ResourceID); err != nil {
+			s.Logger.Printf("Error fetching meta for %s: %v", resourceKey, err)
+		} else if meta != nil {
+			entry.CustomName = meta.CustomName
+		}
+		entry.DisplayTitle = resolveDisplayTitle(entry.CustomName, entry.State, entry.ResourceID)
+
 		// Compute display_state for each session and add to Sessions list
 		for _, sess := range resourceSessions[resourceKey] {
 			displayState := computeDisplayState(sess.status, sess.pid, sess.sessionID, sess.lastPrompt)
@@ -156,10 +170,10 @@ func (s *Server) handleResources(w http.ResponseWriter, r *http.Request) {
 		resources = append(resources, *entry)
 	}
 
-	// Fetch watcher status for both github and jira
-	watchers := map[string]watcherStatusInfo{
-		"github": buildWatcherStatus(s.DB, "github"),
-		"jira":   buildWatcherStatus(s.DB, "jira"),
+	// Fetch watcher status for every known watcher (github, jira, slack).
+	watchers := make(map[string]watcherStatusInfo, len(watcher.KnownWatchers))
+	for _, name := range watcher.KnownWatchers {
+		watchers[name] = buildWatcherStatus(s.DB, name)
 	}
 
 	writeJSON(w, http.StatusOK, resourcesResponse{
@@ -182,6 +196,21 @@ func computeDisplayState(status string, pid int, sessionID, lastPrompt string) s
 }
 
 // buildWatcherStatus builds watcher status info for a service.
+// resolveDisplayTitle picks the best human-readable label for a resource:
+// the user's custom name, else the cached platform title from the resource's
+// state (e.g. a Slack thread's first message), else the raw resource id.
+func resolveDisplayTitle(customName string, state map[string]interface{}, resourceID string) string {
+	if customName != "" {
+		return customName
+	}
+	if state != nil {
+		if t, ok := state["title"].(string); ok && t != "" {
+			return t
+		}
+	}
+	return resourceID
+}
+
 func buildWatcherStatus(database *db.DB, service string) watcherStatusInfo {
 	info := watcherStatusInfo{
 		Configured: config.ServiceConfiguredForWatching(service),

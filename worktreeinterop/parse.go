@@ -5,9 +5,12 @@ import "strings"
 // Resource is a worktree-tracked resource as emitted by
 // `worktree resources list --json`.
 type Resource struct {
-	Type string `json:"type"`
-	ID   string `json:"id"`
-	URL  string `json:"url"`
+	Type              string `json:"type"`
+	ID                string `json:"id"`
+	URL               string `json:"url"`
+	CustomName        string `json:"custom_name"`
+	CustomDescription string `json:"custom_description"`
+	UpdatedAt         string `json:"updated_at"`
 }
 
 // ParseResourceID splits a "type:id" resource identifier (e.g.
