@@ -57,13 +57,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
+	claudeDirs, err := selectClaudeDirs(home, setupYes)
+	if err != nil {
+		return err
+	}
+
 	handlerDir := db.HandlerHome()
 	hooksDir := filepath.Join(handlerDir, "hooks")
 	skillsDir := filepath.Join(handlerDir, "skills")
 	rulesDir := filepath.Join(handlerDir, "rules")
-	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
-	claudeRulesDir := filepath.Join(home, ".claude", "rules")
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
 	// Detect cmux availability early
 	cmuxAvailable := false
@@ -93,21 +95,20 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Initialize SQLite database at %s\n", db.DefaultPath())
 	fmt.Printf("  Extract hooks to %s\n", hooksDir)
 	fmt.Printf("  Extract skills to %s\n", skillsDir)
-	fmt.Printf("  Symlink %d skills into %s:\n", len(skillNames), claudeSkillsDir)
-	for _, name := range skillNames {
-		fmt.Printf("    - /%s\n", name)
+	fmt.Printf("  Set up in %d Claude Code configuration director%s:\n", len(claudeDirs), pluralIES(len(claudeDirs)))
+	for _, cd := range claudeDirs {
+		fmt.Printf("    - %s\n", cd)
 	}
-	fmt.Printf("  Install global rules to %s:\n", claudeRulesDir)
-	if ruleFiles, err := fs.Glob(embeddedRules, "rules/*.md"); err == nil {
-		for _, r := range ruleFiles {
-			fmt.Printf("    - %s\n", filepath.Base(r))
+	for _, cd := range claudeDirs {
+		fmt.Printf("  In %s:\n", cd)
+		fmt.Printf("    Symlink %d skills into %s\n", len(skillNames), filepath.Join(cd, "skills"))
+		fmt.Printf("    Install global rules to %s\n", filepath.Join(cd, "rules"))
+		fmt.Printf("    Configure Claude Code hooks in %s:\n", filepath.Join(cd, "settings.json"))
+		for _, hook := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact", "Stop"} {
+			fmt.Printf("      - %s\n", hook)
 		}
+		fmt.Printf("    Configure status line widget in %s\n", filepath.Join(cd, "settings.json"))
 	}
-	fmt.Printf("  Configure Claude Code hooks in %s:\n", settingsPath)
-	for _, hook := range []string{"SessionEnd", "UserPromptSubmit", "PreCompact", "Stop"} {
-		fmt.Printf("    - %s\n", hook)
-	}
-	fmt.Printf("  Configure status line widget in %s\n", settingsPath)
 	if cmuxAvailable {
 		fmt.Printf("  Add cmux actions to %s:\n", cmuxConfigFilePath())
 		for _, id := range handlerCmuxActionIDs {
@@ -165,80 +166,87 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  ✓ Extracted %s\n", filepath.Base(hookPath))
 	}
 
-	// 4. Clean stale skills from previous installs
-	fmt.Println("")
-	currentSkills := make(map[string]bool)
-	for _, name := range skillNames {
-		currentSkills[name] = true
-	}
-	if entries, err := os.ReadDir(skillsDir); err == nil {
-		for _, entry := range entries {
-			if entry.IsDir() && !currentSkills[entry.Name()] {
-				os.RemoveAll(filepath.Join(skillsDir, entry.Name()))
-				staleSymlink := filepath.Join(claudeSkillsDir, entry.Name())
-				if info, err := os.Lstat(staleSymlink); err == nil && info.Mode()&os.ModeSymlink != 0 {
-					os.Remove(staleSymlink)
+	for _, cd := range claudeDirs {
+		fmt.Printf("\n— %s —\n", cd)
+		claudeSkillsDir := filepath.Join(cd, "skills")
+		claudeRulesDir := filepath.Join(cd, "rules")
+
+		// 4. Clean stale skills from previous installs
+		currentSkills := make(map[string]bool)
+		for _, name := range skillNames {
+			currentSkills[name] = true
+		}
+		if entries, err := os.ReadDir(skillsDir); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() && !currentSkills[entry.Name()] {
+					os.RemoveAll(filepath.Join(skillsDir, entry.Name()))
+					staleSymlink := filepath.Join(claudeSkillsDir, entry.Name())
+					if info, err := os.Lstat(staleSymlink); err == nil && info.Mode()&os.ModeSymlink != 0 {
+						os.Remove(staleSymlink)
+					}
+					fmt.Printf("  ✓ Removed stale skill %s\n", entry.Name())
 				}
-				fmt.Printf("  ✓ Removed stale skill %s\n", entry.Name())
 			}
 		}
+
+		// 5. Extract skills and create symlinks
+		os.MkdirAll(claudeSkillsDir, 0755)
+		for _, skillName := range skillNames {
+			skillSrcPath := filepath.Join("skills", skillName, "SKILL.md")
+			data, err := fs.ReadFile(embeddedSkills, skillSrcPath)
+			if err != nil {
+				return fmt.Errorf("reading embedded skill %s: %w", skillName, err)
+			}
+
+			dstDir := filepath.Join(skillsDir, skillName)
+			os.MkdirAll(dstDir, 0755)
+			if err := os.WriteFile(filepath.Join(dstDir, "SKILL.md"), data, 0644); err != nil {
+				return fmt.Errorf("writing skill %s: %w", skillName, err)
+			}
+
+			symlinkDst := filepath.Join(claudeSkillsDir, skillName)
+			if _, err := os.Lstat(symlinkDst); err == nil {
+				os.Remove(symlinkDst)
+			}
+			if err := os.Symlink(dstDir, symlinkDst); err != nil {
+				return fmt.Errorf("symlinking skill %s: %w", skillName, err)
+			}
+			fmt.Printf("  ✓ %s -> %s\n", skillName, dstDir)
+		}
+
+		// 6. Extract rules and install to <claudeDir>/rules/
+		os.MkdirAll(rulesDir, 0755)
+		os.MkdirAll(claudeRulesDir, 0755)
+		ruleFiles, _ := fs.Glob(embeddedRules, "rules/*.md")
+		for _, rulePath := range ruleFiles {
+			data, err := fs.ReadFile(embeddedRules, rulePath)
+			if err != nil {
+				return fmt.Errorf("reading embedded rule %s: %w", rulePath, err)
+			}
+			baseName := filepath.Base(rulePath)
+			// Extract to handler dir (idempotent across claude dirs)
+			if err := os.WriteFile(filepath.Join(rulesDir, baseName), data, 0644); err != nil {
+				return fmt.Errorf("writing rule %s: %w", baseName, err)
+			}
+			// Copy to <claudeDir>/rules/
+			if err := os.WriteFile(filepath.Join(claudeRulesDir, baseName), data, 0644); err != nil {
+				return fmt.Errorf("installing rule %s: %w", baseName, err)
+			}
+			fmt.Printf("  ✓ Installed rule %s\n", baseName)
+		}
+
+		// 8. Configure Claude Code hooks and status line
+		if err := configureHooks(cd, hooksDir); err != nil {
+			return fmt.Errorf("configuring hooks in %s: %w", cd, err)
+		}
+		if err := configureStatusLine(cd); err != nil {
+			return fmt.Errorf("configuring status line in %s: %w", cd, err)
+		}
+
+		// 11. Offer to auto-allow handler commands
+		configurePermissions(cd)
 	}
-
-	// 5. Extract skills and create symlinks
-	os.MkdirAll(claudeSkillsDir, 0755)
-	for _, skillName := range skillNames {
-		skillSrcPath := filepath.Join("skills", skillName, "SKILL.md")
-		data, err := fs.ReadFile(embeddedSkills, skillSrcPath)
-		if err != nil {
-			return fmt.Errorf("reading embedded skill %s: %w", skillName, err)
-		}
-
-		dstDir := filepath.Join(skillsDir, skillName)
-		os.MkdirAll(dstDir, 0755)
-		if err := os.WriteFile(filepath.Join(dstDir, "SKILL.md"), data, 0644); err != nil {
-			return fmt.Errorf("writing skill %s: %w", skillName, err)
-		}
-
-		symlinkDst := filepath.Join(claudeSkillsDir, skillName)
-		if _, err := os.Lstat(symlinkDst); err == nil {
-			os.Remove(symlinkDst)
-		}
-		if err := os.Symlink(dstDir, symlinkDst); err != nil {
-			return fmt.Errorf("symlinking skill %s: %w", skillName, err)
-		}
-		fmt.Printf("  ✓ %s -> %s\n", skillName, dstDir)
-	}
-
-	// 6. Extract rules and install to ~/.claude/rules/
 	fmt.Println("")
-	os.MkdirAll(rulesDir, 0755)
-	os.MkdirAll(claudeRulesDir, 0755)
-	ruleFiles, _ := fs.Glob(embeddedRules, "rules/*.md")
-	for _, rulePath := range ruleFiles {
-		data, err := fs.ReadFile(embeddedRules, rulePath)
-		if err != nil {
-			return fmt.Errorf("reading embedded rule %s: %w", rulePath, err)
-		}
-		baseName := filepath.Base(rulePath)
-		// Extract to handler dir
-		if err := os.WriteFile(filepath.Join(rulesDir, baseName), data, 0644); err != nil {
-			return fmt.Errorf("writing rule %s: %w", baseName, err)
-		}
-		// Copy to ~/.claude/rules/
-		if err := os.WriteFile(filepath.Join(claudeRulesDir, baseName), data, 0644); err != nil {
-			return fmt.Errorf("installing rule %s: %w", baseName, err)
-		}
-		fmt.Printf("  ✓ Installed rule %s\n", baseName)
-	}
-
-	// 8. Configure Claude Code hooks and status line
-	fmt.Println("")
-	if err := configureHooks(home, hooksDir); err != nil {
-		return fmt.Errorf("configuring hooks: %w", err)
-	}
-	if err := configureStatusLine(home); err != nil {
-		return fmt.Errorf("configuring status line: %w", err)
-	}
 
 	// 9. Install shell completions for all detected shells
 	if err := installAllCompletions(); err != nil {
@@ -251,10 +259,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("\n  %scmux not detected. Optional cmux features (session switching shortcuts)\n  are available — run 'handler setup' again after installing cmux.%s\n", "\033[2m", "\033[0m")
 	}
-
-	// 11. Offer to auto-allow handler commands
-	fmt.Println("")
-	configurePermissions(home)
 
 	// 12. Set up external service watchers (auth + install)
 	if setupYes {
@@ -276,8 +280,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func configureHooks(home, hooksDir string) error {
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
+func pluralIES(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
+}
+
+func configureHooks(claudeDir, hooksDir string) error {
+	settingsPath := filepath.Join(claudeDir, "settings.json")
 
 	settings := make(map[string]interface{})
 	if data, err := os.ReadFile(settingsPath); err == nil {
@@ -340,8 +351,8 @@ func configureHooks(home, hooksDir string) error {
 	return os.WriteFile(settingsPath, data, 0644)
 }
 
-func configureStatusLine(home string) error {
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
+func configureStatusLine(claudeDir string) error {
+	settingsPath := filepath.Join(claudeDir, "settings.json")
 
 	settings := make(map[string]interface{})
 	if data, err := os.ReadFile(settingsPath); err == nil {
@@ -369,8 +380,8 @@ func configureStatusLine(home string) error {
 	return os.WriteFile(settingsPath, data, 0644)
 }
 
-func configurePermissions(home string) {
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
+func configurePermissions(claudeDir string) {
+	settingsPath := filepath.Join(claudeDir, "settings.json")
 	permission := "Bash(handler *)"
 
 	data, err := os.ReadFile(settingsPath)

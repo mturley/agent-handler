@@ -31,6 +31,7 @@ const (
 	colorBoldYellow  = "\033[1;33m"
 	colorGreen       = "\033[32m"
 	colorRed         = "\033[31m"
+	colorLightRed    = "\033[91m"
 	colorPurple      = "\033[35m"
 	colorBlue        = "\033[34m"
 	colorHint        = "\033[35m"
@@ -607,7 +608,13 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		costStr += fmt.Sprintf(" ($%s today)", formatMoney(todayCost))
 	}
 
-	return fmt.Sprintf("%s%s%s %s%s%s %d%% ctx %s· %s%s",
+	vertexStr := ""
+	if os.Getenv("CLAUDE_CODE_USE_VERTEX") == "1" {
+		vertexStr = fmt.Sprintf("%sVertex AI%s · ", colorLightRed, colorReset)
+	}
+
+	return fmt.Sprintf("%s%s%s%s %s%s%s %d%% ctx %s· %s%s",
+		vertexStr,
 		colorClaudeOrange, input.Model.DisplayName, colorReset,
 		barColor, bar, colorReset,
 		pct,

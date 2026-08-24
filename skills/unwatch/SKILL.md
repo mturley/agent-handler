@@ -1,11 +1,11 @@
 ---
 name: unwatch
-description: "agent-handler: Stop watching a PR or Jira issue. Use when the user says 'unwatch PR #123', 'unwatch RHOAIENG-456', or wants to stop monitoring a resource."
+description: "agent-handler: Stop watching a PR, Jira issue, or Slack thread. Use when the user says 'unwatch PR #123', 'unwatch RHOAIENG-456', or wants to stop monitoring a resource."
 ---
 
 # /unwatch — Stop Watching a Resource
 
-Unsubscribe from a PR or Jira issue so you stop receiving updates about it.
+Unsubscribe from a PR, Jira issue, or Slack thread so you stop receiving updates about it.
 
 ## If invoked with no arguments
 
@@ -15,6 +15,7 @@ Run `handler watching --json` and list the watched resources. Then say:
 
 > Use `/unwatch <resource>` to stop watching. For example:
 > - `/unwatch #123` or `/unwatch RHOAIENG-456`
+> - `/unwatch https://your-workspace.slack.com/archives/C0123ABCD/p1787257539775119`
 
 After printing the list, stop.
 
@@ -29,6 +30,7 @@ The user's args contain a resource identifier. Parse it the same way as `/watch`
 | `#123` or `PR #123` | Get `owner/repo` from `git remote get-url origin`, then `pr:owner/repo#123` |
 | `owner/repo#123` | `pr:owner/repo#123` |
 | `RHOAIENG-456` | `jira:RHOAIENG-456` |
+| Slack thread URL (`.../archives/<CHANNEL>/p<TS>`) | `slack:<CHANNEL>:<ts>` — restore the dot in `p<TS>` 6 digits from the right (`p1787257539775119` → `1787257539.775119`) |
 | Full GitHub or Jira URL | Extract the resource type and ID |
 
 ### Step 2: Unsubscribe

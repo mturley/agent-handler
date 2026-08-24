@@ -48,31 +48,89 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get home directory: %w", err)
 	}
 
+	claudeDirs, err := selectClaudeDirs(home, false)
+	if err != nil {
+		return err
+	}
+
 	agentHandlerDir := db.HandlerHome()
-	claudeSkillsDir := filepath.Join(home, ".claude", "skills")
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
 
 	// Summarize what will be done
 	fmt.Println("agent-handler uninstall will:")
 	fmt.Println("")
 
-	// Check skill symlinks
-	symlinkTargets := findAgentHandlerSkills(claudeSkillsDir)
-	if len(symlinkTargets) > 0 {
-		fmt.Printf("  Remove %d skill symlinks from %s:\n", len(symlinkTargets), claudeSkillsDir)
-		for _, name := range symlinkTargets {
-			fmt.Printf("    - %s\n", name)
-		}
+	fmt.Printf("  Clean up %d Claude Code configuration director%s:\n", len(claudeDirs), pluralIES(len(claudeDirs)))
+	for _, cd := range claudeDirs {
+		fmt.Printf("    - %s\n", cd)
 	}
 
-	// Check hooks
-	hookNames := findAgentHandlerHooks(settingsPath)
-	if len(hookNames) > 0 {
-		fmt.Printf("  Remove %d hooks from %s:\n", len(hookNames), settingsPath)
-		for _, name := range hookNames {
-			fmt.Printf("    - %s\n", name)
-		}
+	type dirTargets struct {
+		dir             string
+		claudeSkillsDir string
+		settingsPath    string
+		claudeRulesDir  string
+		symlinkTargets  []string
+		hookNames       []string
+		installedRules  []string
+		hasPermission   bool
 	}
+	var perDir []dirTargets
+
+	for _, cd := range claudeDirs {
+		claudeSkillsDir := filepath.Join(cd, "skills")
+		settingsPath := filepath.Join(cd, "settings.json")
+		claudeRulesDir := filepath.Join(cd, "rules")
+
+		symlinkTargets := findAgentHandlerSkills(claudeSkillsDir)
+		hookNames := findAgentHandlerHooks(settingsPath)
+		hasPermission := hasHandlerPermission(settingsPath)
+
+		var installedRules []string
+		rulesPath := filepath.Join(agentHandlerDir, "rules")
+		if entries, err := os.ReadDir(rulesPath); err == nil {
+			for _, entry := range entries {
+				ruleDst := filepath.Join(claudeRulesDir, entry.Name())
+				if _, err := os.Stat(ruleDst); err == nil {
+					installedRules = append(installedRules, entry.Name())
+				}
+			}
+		}
+
+		fmt.Printf("\n  In %s:\n", cd)
+		if len(symlinkTargets) > 0 {
+			fmt.Printf("    Remove %d skill symlinks from %s:\n", len(symlinkTargets), claudeSkillsDir)
+			for _, name := range symlinkTargets {
+				fmt.Printf("      - %s\n", name)
+			}
+		}
+		if len(hookNames) > 0 {
+			fmt.Printf("    Remove %d hooks from %s:\n", len(hookNames), settingsPath)
+			for _, name := range hookNames {
+				fmt.Printf("      - %s\n", name)
+			}
+		}
+		if len(installedRules) > 0 {
+			fmt.Printf("    Remove %d global rule(s) from %s:\n", len(installedRules), claudeRulesDir)
+			for _, name := range installedRules {
+				fmt.Printf("      - %s\n", name)
+			}
+		}
+		if hasPermission {
+			fmt.Printf("    Remove Bash(handler *) permission from %s\n", settingsPath)
+		}
+
+		perDir = append(perDir, dirTargets{
+			dir:             cd,
+			claudeSkillsDir: claudeSkillsDir,
+			settingsPath:    settingsPath,
+			claudeRulesDir:  claudeRulesDir,
+			symlinkTargets:  symlinkTargets,
+			hookNames:       hookNames,
+			installedRules:  installedRules,
+			hasPermission:   hasPermission,
+		})
+	}
+	fmt.Println("")
 
 	// Check cmux actions
 	cmuxActionsPresent := hasCmuxActions()
@@ -108,7 +166,6 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	hooksPath := filepath.Join(agentHandlerDir, "hooks")
 	skillsPath := filepath.Join(agentHandlerDir, "skills")
 	rulesPath := filepath.Join(agentHandlerDir, "rules")
-	claudeRulesDir := filepath.Join(home, ".claude", "rules")
 	if _, err := os.Stat(hooksPath); err == nil {
 		fmt.Printf("  Remove extracted hooks from %s\n", hooksPath)
 	}
@@ -117,23 +174,6 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 	if _, err := os.Stat(rulesPath); err == nil {
 		fmt.Printf("  Remove extracted rules from %s\n", rulesPath)
-	}
-
-	// Check for installed global rules
-	var installedRules []string
-	if entries, err := os.ReadDir(rulesPath); err == nil {
-		for _, entry := range entries {
-			ruleDst := filepath.Join(claudeRulesDir, entry.Name())
-			if _, err := os.Stat(ruleDst); err == nil {
-				installedRules = append(installedRules, entry.Name())
-			}
-		}
-	}
-	if len(installedRules) > 0 {
-		fmt.Printf("  Remove %d global rule(s) from %s:\n", len(installedRules), claudeRulesDir)
-		for _, name := range installedRules {
-			fmt.Printf("    - %s\n", name)
-		}
 	}
 
 	// Check shell completions
@@ -151,10 +191,6 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if hasHandlerPermission(settingsPath) {
-		fmt.Printf("  Remove Bash(handler *) permission from %s\n", settingsPath)
-	}
-
 	fmt.Println("")
 
 	if !confirm("Proceed?") {
@@ -163,10 +199,12 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("")
 
-	for _, name := range symlinkTargets {
-		dst := filepath.Join(claudeSkillsDir, name)
-		os.Remove(dst)
-		fmt.Printf("  ✓ Removed skill symlink %s\n", name)
+	for _, pd := range perDir {
+		for _, name := range pd.symlinkTargets {
+			dst := filepath.Join(pd.claudeSkillsDir, name)
+			os.Remove(dst)
+			fmt.Printf("  ✓ Removed skill symlink %s (%s)\n", name, pd.dir)
+		}
 	}
 
 	// Remove cmux actions (only if inside cmux)
@@ -182,18 +220,20 @@ func runUninstall(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Remove installed global rules
-	for _, name := range installedRules {
-		os.Remove(filepath.Join(claudeRulesDir, name))
-		fmt.Printf("  ✓ Removed global rule %s\n", name)
+	for _, pd := range perDir {
+		// Remove installed global rules
+		for _, name := range pd.installedRules {
+			os.Remove(filepath.Join(pd.claudeRulesDir, name))
+			fmt.Printf("  ✓ Removed global rule %s (%s)\n", name, pd.dir)
+		}
+
+		if len(pd.hookNames) > 0 {
+			removeHooks(pd.dir)
+		}
 	}
 
 	// Remove shell completions
 	removeAllCompletions()
-
-	if len(hookNames) > 0 {
-		removeHooks(home)
-	}
 
 	// Remove binary last (since we're running from it)
 	if realBinaryPath != "" {
@@ -274,8 +314,8 @@ func findAgentHandlerHooks(settingsPath string) []string {
 	return found
 }
 
-func removeHooks(home string) error {
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
+func removeHooks(claudeDir string) error {
+	settingsPath := filepath.Join(claudeDir, "settings.json")
 
 	data, err := os.ReadFile(settingsPath)
 	if err != nil {
