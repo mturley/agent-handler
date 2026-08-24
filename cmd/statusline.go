@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -873,9 +874,22 @@ func renderWatchingLine(d *db.DB, session *db.Session, cfg *config.Config, globa
 				}
 				return false
 			})
+			slackCount := 0
+			for _, sub := range subs {
+				if sub.ResourceType == "slack" {
+					slackCount++
+				}
+			}
 			var links []string
 			for _, sub := range subs {
 				label := shortResourceLabel(sub.ResourceType, sub.ResourceID)
+				if sub.ResourceType == "slack" {
+					width := slackTitleWidthSingle
+					if slackCount > 1 {
+						width = slackTitleWidthMulti
+					}
+					label = truncateTitle(slackDisplayTitle(d.Conn(), sub.ResourceID), width)
+				}
 				resKey := sub.ResourceType + ":" + sub.ResourceID
 				hasUnread := unreadResources[resKey]
 				url := ""
@@ -917,6 +931,42 @@ func shortResourceLabel(resourceType, resourceID string) string {
 	if resourceType == "pr" {
 		if idx := strings.LastIndex(resourceID, "#"); idx >= 0 {
 			return resourceID[idx:]
+		}
+	}
+	return resourceID
+}
+
+// Slack thread titles are truncated in the statusline; the width shrinks when
+// several Slack threads are watched so the line stays compact.
+const (
+	slackTitleWidthSingle = 28
+	slackTitleWidthMulti  = 14
+)
+
+// truncateTitle collapses surrounding whitespace and truncates to n runes
+// (not bytes) with a trailing ellipsis, mirroring the watcher library's
+// fallbackTitle so statusline and cached titles agree.
+func truncateTitle(s string, n int) string {
+	s = strings.TrimSpace(s)
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return strings.TrimRight(string(r[:n]), " ") + "…"
+}
+
+// slackDisplayTitle resolves a Slack thread's label from this handler's own DB:
+// custom name -> cached first-message title (state_json["title"]) -> raw id.
+func slackDisplayTitle(conn *sql.DB, resourceID string) string {
+	if m, err := wdb.GetResourceMeta(conn, "slack", resourceID); err == nil && m != nil && m.CustomName != "" {
+		return m.CustomName
+	}
+	if st, err := wdb.GetResourceState(conn, "slack", resourceID); err == nil && st != nil {
+		var sm map[string]any
+		if json.Unmarshal([]byte(st.StateJSON), &sm) == nil {
+			if t, ok := sm["title"].(string); ok && t != "" {
+				return t
+			}
 		}
 	}
 	return resourceID
