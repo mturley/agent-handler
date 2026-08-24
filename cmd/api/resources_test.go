@@ -62,4 +62,36 @@ func TestHandleResourcesReadsWatcherSubscriptions(t *testing.T) {
 	if len(entry.Sessions) != 1 || entry.Sessions[0].SessionID != "S1" {
 		t.Errorf("sessions = %+v, want [S1]", entry.Sessions)
 	}
+	// With no custom name and no cached title, display_title falls back to id.
+	if entry.DisplayTitle != "example/repo#1" {
+		t.Errorf("display_title = %q, want the resource id fallback", entry.DisplayTitle)
+	}
+	// The Slack watcher must appear in the status map (Phase 6 made it
+	// first-class; Phase 7 wired it into this endpoint via KnownWatchers).
+	if _, ok := resp.Watchers["slack"]; !ok {
+		t.Errorf("watchers map missing slack: %+v", resp.Watchers)
+	}
+}
+
+func TestResolveDisplayTitle(t *testing.T) {
+	cases := []struct {
+		name   string
+		custom string
+		state  map[string]interface{}
+		id     string
+		want   string
+	}{
+		{"custom name wins", "My Name", map[string]interface{}{"title": "Cached"}, "id", "My Name"},
+		{"cached title when no custom", "", map[string]interface{}{"title": "Cached"}, "id", "Cached"},
+		{"id when neither", "", nil, "slack:C1:1.2", "slack:C1:1.2"},
+		{"id when title empty", "", map[string]interface{}{"title": ""}, "id", "id"},
+		{"id when title not a string", "", map[string]interface{}{"title": 42}, "id", "id"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := resolveDisplayTitle(c.custom, c.state, c.id); got != c.want {
+				t.Errorf("resolveDisplayTitle(%q, %v, %q) = %q, want %q", c.custom, c.state, c.id, got, c.want)
+			}
+		})
+	}
 }
