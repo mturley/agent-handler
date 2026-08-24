@@ -107,6 +107,62 @@ func TestAddResource_ArgvRelatedNoURL(t *testing.T) {
 	}
 }
 
+func TestListResources_ReturnsAllWithMeta(t *testing.T) {
+	json := `[{"type":"slack","id":"C1:1.2","url":"u1","primary":true,"custom_name":"Root","custom_description":"d","updated_at":"2030-01-01T00:00:00Z"},` +
+		`{"type":"slack","id":"C2:3.4","url":"u2","primary":false}]`
+	defer fakeExec(t, json, 0)()
+
+	got, err := ListResources("/some/dir")
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	want := []Resource{
+		{Type: "slack", ID: "C1:1.2", URL: "u1", CustomName: "Root", CustomDescription: "d", UpdatedAt: "2030-01-01T00:00:00Z"},
+		{Type: "slack", ID: "C2:3.4", URL: "u2"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func captureArgv(t *testing.T) *[]string {
+	t.Helper()
+	gotArgs := &[]string{}
+	orig := execCommand
+	execCommand = func(name string, args ...string) *exec.Cmd {
+		*gotArgs = append([]string{name}, args...)
+		c := exec.Command(os.Args[0], "-test.run=TestHelperProcess", "--")
+		c.Env = append(os.Environ(), "GO_WANT_HELPER_PROCESS=1", "HELPER_EXIT=0")
+		return c
+	}
+	t.Cleanup(func() { execCommand = orig })
+	return gotArgs
+}
+
+func TestSetName_ArgvWithUpdatedAtAndDescription(t *testing.T) {
+	got := captureArgv(t)
+	err := SetName("/d", Resource{Type: "slack", ID: "C1:1.2"}, "Nice name", "a desc", "2030-06-07T08:09:10Z")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	want := []string{"worktree", "resources", "set-name", "slack", "C1:1.2",
+		"--name", "Nice name", "--updated-at", "2030-06-07T08:09:10Z",
+		"--description", "a desc", "--worktree", "/d"}
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("argv got %v want %v", *got, want)
+	}
+}
+
+func TestSetName_ArgvEmptyDescriptionOmitsFlag(t *testing.T) {
+	got := captureArgv(t)
+	_ = SetName("/d", Resource{Type: "slack", ID: "C1:1.2"}, "Name", "", "2030-06-07T08:09:10Z")
+	want := []string{"worktree", "resources", "set-name", "slack", "C1:1.2",
+		"--name", "Name", "--updated-at", "2030-06-07T08:09:10Z", "--worktree", "/d"}
+	if !reflect.DeepEqual(*got, want) {
+		t.Errorf("argv got %v want %v", *got, want)
+	}
+}
+
 // TestHelperProcess is not a real test — it's the fake subprocess.
 func TestHelperProcess(t *testing.T) {
 	if os.Getenv("GO_WANT_HELPER_PROCESS") != "1" {
