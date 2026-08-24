@@ -7,7 +7,7 @@ import { formatEventType } from "@/utils/formatLabel"
 import { timeAgo } from "@/utils/timeAgo"
 import { eventDotColor, eventBadgeVariant } from "@/utils/eventColors"
 import { ChevronRight, ChevronDown, ExternalLink, OctagonAlert, ArrowUp, ArrowDown, Minus, Equal } from "lucide-react"
-import { JiraIssueTypeIcon, PRStateIcon } from "@/utils/resourceIcons"
+import { JiraIssueTypeIcon, PRStateIcon, SlackThreadIcon } from "@/utils/resourceIcons"
 import { SessionLinkButton } from "@/components/PeekPreview"
 import { cn } from "@/lib/utils"
 
@@ -89,8 +89,11 @@ export function TimelineEvent({ event, cmuxAvailable, onSwitch, onNavigate }: Ti
             <div className="space-y-1">
               {event.resources.map((resource, i) => {
                 const meta = resource.metadata
+                const isSlack = resource.resource_type === "slack"
                 const label = resource.resource_type === "pr"
                   ? `PR ${resource.resource_id}`
+                  : isSlack
+                  ? (meta?.title || resource.resource_id)
                   : resource.resource_id
                 return (
                   <div key={i} className="text-xs flex items-start gap-1">
@@ -100,6 +103,7 @@ export function TimelineEvent({ event, cmuxAvailable, onSwitch, onNavigate }: Ti
                     {resource.resource_type === "pr" && (
                       <PRStateIcon state={meta?.state} className="mt-0.5" />
                     )}
+                    {isSlack && <SlackThreadIcon className="mt-0.5" />}
                     <div>
                     <a
                       href={resource.resource_url || "#"}
@@ -110,8 +114,11 @@ export function TimelineEvent({ event, cmuxAvailable, onSwitch, onNavigate }: Ti
                       {label}
                       <ExternalLink className="h-3 w-3" />
                     </a>
-                    {meta?.title && (
+                    {!isSlack && meta?.title && (
                       <span className="text-muted-foreground ml-1.5">{meta.title}</span>
+                    )}
+                    {isSlack && meta?.channel_name && (
+                      <span className="text-muted-foreground/60 ml-1.5">#{meta.channel_name}</span>
                     )}
                     {resource.resource_type === "pr" && meta?.author && (
                       <span className="text-muted-foreground/60 ml-1.5">by {meta.author}</span>

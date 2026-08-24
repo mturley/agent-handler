@@ -37,6 +37,7 @@ export const CATEGORY_TYPES: Record<string, string[]> = {
   CI: ["ci_check_passed", "ci_check_failed", "ci_passed", "ci_failed", "ci_pending", "ci_partial_failure"],
   "PR Activity": ["pr_comment", "pr_review_comment", "pr_approved", "pr_merged", "pr_closed"],
   Jira: ["jira_comment", "jira_status_change", "jira_assigned", "jira_labels_changed", "jira_description_changed"],
+  Slack: ["slack_reply"],
 }
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_TYPES)
@@ -87,8 +88,12 @@ export function TimelineFilters({
     if (!resourcesData?.resources) return []
     return resourcesData.resources.map((r) => ({
       value: `${r.resource_type}:${r.resource_id}`,
-      label: resourceLabel(r.resource_type, r.resource_id),
-      title: r.state?.title as string || r.state?.summary as string || undefined,
+      label: r.resource_type === "slack"
+        ? (r.display_title || r.resource_id)
+        : resourceLabel(r.resource_type, r.resource_id),
+      title: r.resource_type === "slack"
+        ? (r.state?.channel_name ? `#${r.state.channel_name as string}` : undefined)
+        : (r.state?.title as string || r.state?.summary as string || undefined),
     }))
   }, [resourcesData])
 

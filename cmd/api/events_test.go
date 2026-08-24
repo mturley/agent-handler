@@ -262,3 +262,16 @@ func TestHandleEventsResourcesIncludesWatcherEventResources(t *testing.T) {
 		t.Errorf("resources = %+v, want exactly [pr/example/repo#7]", found.Resources)
 	}
 }
+
+func TestExtractResourceMetadata_Slack(t *testing.T) {
+	stateJSON := `{"title":"Deploy question","channel_name":"eng-releases","author":"Ada","reply_count":4,"created_ts":"1787257539.775119"}`
+	meta := extractResourceMetadata("slack", stateJSON)
+	if meta == nil {
+		t.Fatal("expected non-nil metadata for slack state")
+	}
+	for k, want := range map[string]string{"title": "Deploy question", "channel_name": "eng-releases", "author": "Ada"} {
+		if meta[k] != want {
+			t.Errorf("meta[%q] = %q, want %q", k, meta[k], want)
+		}
+	}
+}

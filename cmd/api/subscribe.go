@@ -22,7 +22,33 @@ var (
 	jiraKeyRe = regexp.MustCompile(`^[A-Z][A-Z0-9]+-\d+$`)
 	// .../browse/RHOAIENG-12345
 	jiraBrowseRe = regexp.MustCompile(`/browse/([A-Z][A-Z0-9]+-\d+)`)
+	// A Slack thread permalink: .../archives/C0CHANNEL/p1787257539775119
+	slackArchiveRe = regexp.MustCompile(`/archives/([A-Z0-9]+)/p(\d+)`)
+	// A ?thread_ts=…&… query param carrying the thread root ts (already dotted)
+	slackThreadTSRe = regexp.MustCompile(`[?&]thread_ts=(\d+\.\d+)`)
 )
+
+// parseSlackURL extracts (channel, ts) from a Slack thread permalink. The path
+// segment is `p` followed by the message ts with the dot removed
+// (p1787257539775119); the dot is restored 6 digits from the right. When a
+// `?thread_ts=` query param is present it is the thread's root ts and is
+// preferred over the path (which may point at a reply). Returns ok=false when
+// the string is not a Slack thread URL.
+func parseSlackURL(s string) (channel, ts string, ok bool) {
+	m := slackArchiveRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", "", false
+	}
+	channel = m[1]
+	if tm := slackThreadTSRe.FindStringSubmatch(s); tm != nil {
+		return channel, tm[1], true
+	}
+	digits := m[2]
+	if len(digits) <= 6 {
+		return "", "", false
+	}
+	return channel, digits[:len(digits)-6] + "." + digits[len(digits)-6:], true
+}
 
 // parseResourceInput turns a user-pasted string (a GitHub PR URL, a Jira URL, a
 // Jira key, an owner/repo#N ref, or an explicit type:id) into a resource
@@ -30,7 +56,7 @@ var (
 func parseResourceInput(cfg *config.Config, input string) (resType, resID, resURL string, err error) {
 	s := strings.TrimSpace(input)
 	if s == "" {
-		return "", "", "", fmt.Errorf("enter a PR or Jira link")
+		return "", "", "", fmt.Errorf("enter a PR, Jira, or Slack link")
 	}
 
 	switch {
@@ -47,11 +73,18 @@ func parseResourceInput(cfg *config.Config, input string) (resType, resID, resUR
 		resType, resID = "pr", m[1]+"#"+m[2]
 	case jiraKeyRe.MatchString(s):
 		resType, resID = "jira", s
-	case strings.HasPrefix(s, "pr:") || strings.HasPrefix(s, "jira:"):
+	case slackArchiveRe.MatchString(s):
+		channel, ts, ok := parseSlackURL(s)
+		if !ok {
+			return "", "", "", fmt.Errorf("could not parse a Slack thread id from %q", input)
+		}
+		resType, resID = "slack", channel+":"+ts
+		resURL = s
+	case strings.HasPrefix(s, "pr:") || strings.HasPrefix(s, "jira:") || strings.HasPrefix(s, "slack:"):
 		i := strings.Index(s, ":")
 		resType, resID = s[:i], s[i+1:]
 	default:
-		return "", "", "", fmt.Errorf("unrecognized resource — paste a GitHub PR URL (…/pull/123) or a Jira issue link/key (e.g. RHOAIENG-123)")
+		return "", "", "", fmt.Errorf("unrecognized resource — paste a GitHub PR URL (…/pull/123), a Jira issue link/key (e.g. RHOAIENG-123), or a Slack thread link")
 	}
 
 	if resID == "" {

@@ -35,6 +35,7 @@ const EVENT_COLORS: Record<string, EventColorScheme> = {
   jira_assigned: blue,
   jira_labels_changed: blue,
   jira_description_changed: blue,
+  slack_reply: indigo,
   handoff: orange,
   followup: orange,
   session_end: gray,

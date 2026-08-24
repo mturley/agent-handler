@@ -94,7 +94,19 @@ export interface ResourceEntry {
   state?: Record<string, unknown>
   resource_updated_at?: string
   watcher_updated_at?: string
+  /** User-supplied custom name, if any. */
+  custom_name?: string
+  /** What the UI should show: custom name → cached platform title → id. */
+  display_title?: string
   sessions: ResourceSession[]
+}
+
+/** Cached state for a Slack thread resource (watcher slack poller). */
+export interface SlackState extends Record<string, unknown> {
+  title?: string
+  channel_name?: string
+  author?: string
+  reply_count?: number
 }
 
 export interface WatcherStatusInfo {
