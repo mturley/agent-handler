@@ -37,6 +37,14 @@ go test ./...
   `exec.LookPath("worktree")`, best-effort — a no-op when worktree isn't installed.
   (Replaced the old `.worktree-resources` file reader in Phase 5; there is no
   `worktree/` package and no `.worktree-resources` file anymore.)
+  Phase 7 added `ListResources` (all tracked resources + custom name/desc/updated_at)
+  and `SetName` (`worktree resources set-name … --updated-at …`), used by
+  `cmd/namesync.go`: the statusline heartbeat mirrors Slack-thread **custom names**
+  between the worktree DB and this handler DB via newest-wins on `updated_at`
+  (throttled ~60s, best-effort, CLI-only toward worktree — it never opens the
+  worktree DB; it only reads/writes handler's own DB). Timestamps are preserved on
+  replication (never re-stamped `now()`) so the two sides converge instead of
+  ping-ponging.
 - `hooks/` — Shell scripts for Claude Code hooks (SessionStart, UserPromptSubmit, PreCompact). See `docs/claude-hook-stdin.md` for the JSON fields available on stdin for each hook type.
 - `skills/` — Claude Code skill markdown files. Each skill is a directory with a `SKILL.md`.
 
