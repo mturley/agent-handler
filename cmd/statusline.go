@@ -152,6 +152,10 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		termType, termID, workspaceID := terminal.Detect()
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)
+
+		// Mirror Slack-thread custom names to/from the worktree DB
+		// (best-effort, throttled, CLI-only toward worktree).
+		syncSlackNames(wd, input.CWD)
 		wd.Close()
 	}
 
