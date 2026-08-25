@@ -14,6 +14,7 @@ type Config struct {
 	Services     Services            `yaml:"services"`
 	Statusline   *StatuslineConfig   `yaml:"statusline,omitempty"`
 	Experimental *ExperimentalConfig `yaml:"experimental,omitempty"`
+	Reminders    *RemindersConfig    `yaml:"reminders,omitempty"`
 	Debug        bool                `yaml:"debug,omitempty"`
 }
 

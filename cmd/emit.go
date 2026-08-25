@@ -110,6 +110,11 @@ func runEmit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to insert event: %w", err)
 	}
 
+	// A status event satisfies the status reminder: restart its clock.
+	if emitType == "status" && evt.SessionID != nil {
+		d.ResetStatusReminderBaseline(*evt.SessionID, ts)
+	}
+
 	if jsonOutput {
 		output := map[string]interface{}{
 			"event_id":  eventID,

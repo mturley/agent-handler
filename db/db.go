@@ -96,6 +96,14 @@ func runMigrations(conn *sql.DB) error {
 		return fmt.Errorf("failed to create dismissed_events table: %w", err)
 	}
 
+	// Status-emit reminder tracking (see cmd/status_reminder.go).
+	if err := addColumnIfMissing(conn, "sessions", "prompts_since_status", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(conn, "sessions", "status_baseline_at", "TEXT"); err != nil {
+		return err
+	}
+
 	// cost_epoch_state replaces cost_snapshots (epoch-anchored cost tracking).
 	// Create it for existing databases and drop the obsolete snapshot table.
 	if _, err := conn.Exec(`

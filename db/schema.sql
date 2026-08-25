@@ -58,7 +58,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     context_percent INTEGER,
     working INTEGER NOT NULL DEFAULT 0,
     registered_at TEXT NOT NULL,
-    jsonl_path TEXT NOT NULL
+    jsonl_path TEXT NOT NULL,
+    prompts_since_status INTEGER NOT NULL DEFAULT 0,
+    status_baseline_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS session_cursors (

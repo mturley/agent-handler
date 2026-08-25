@@ -34,6 +34,31 @@ Do not use `--broadcast` unless the user specifically asks to broadcast or messa
 
 Emit `blocked` whenever you are waiting on something external. Emit `unblocked` when the blocker is resolved. These feed into the handler's blocked session count and triage report.
 
+### Status reminders
+
+If you go too long without emitting a `status` event, the UserPromptSubmit hook
+injects a reminder into your context:
+
+> Reminder: it has been 10 turns since your last emitted status. Use `handler emit --type status` to update the ledger with what you have been doing since the last status and what you are doing now. Be concise.
+
+When you see it, emit a status covering what you did since your last one and what
+you are doing now — concisely — then carry on with the user's request. Emitting a
+status resets the reminder; so does the reminder itself firing, so it will not
+nag you on consecutive turns.
+
+Defaults are 10 turns or 3 hours, whichever comes first, measured from your last
+status (or from session registration if you have never emitted one). Automated
+`/inbox --auto` polls do not count as turns, and sessions with the `handler` role
+are exempt. The user can tune or disable it in `~/.agent-handler/config.yaml`:
+
+```yaml
+reminders:
+  status:
+    enabled: true   # false disables the reminder entirely
+    turns: 10       # 0 disables the turn-count check
+    hours: 3        # 0 disables the elapsed-time check
+```
+
 ## Watching resources
 
 **Immediately after creating or opening a PR or Jira issue, run `/watch` to subscribe to it.** Do not wait for the user to ask — this is automatic. This enables watchers to deliver updates (reviews, comments, status changes) to your inbox.

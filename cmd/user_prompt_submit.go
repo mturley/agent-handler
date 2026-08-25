@@ -100,6 +100,11 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	termType, termID, workspaceID := terminal.Detect()
 	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID, input.CWD, "", -1)
 
+	// Nudge the session if it has gone too long without emitting a status.
+	if msg := checkStatusReminder(d, session, input.Prompt, time.Now().UTC()); msg != "" {
+		fmt.Println(msg)
+	}
+
 	// On-submit mode: notify about unread events
 	if session.InboxMode == "on-submit" {
 		unreadCount, _, err := d.UnreadCountForSession(input.SessionID)
