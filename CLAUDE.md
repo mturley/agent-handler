@@ -58,7 +58,7 @@ When adding or removing skills, update the `skillNames` slice in `cmd/uninstall.
 
 When adding or removing hooks, update `configureHooks()` in `cmd/setup.go` and `removeHooks()` in `cmd/uninstall.go`.
 
-**IMPORTANT: When adding, removing, or changing skills, commands, or capabilities, you MUST update `rules/agent-handler.md`.** This rules file is loaded automatically at every session start — it introduces agent-handler to the user, lists available skills and CLI commands, and contains the emit event reference. It must stay current.
+**IMPORTANT: When adding, removing, or changing skills, commands, or capabilities, you MUST update `rules/agent-handler.md`.** This rules file is loaded automatically at every session start — it orients the session on agent-handler, lists available skills and CLI commands, and contains the emit event reference. It must stay current.
 
 ## cmux Integration
 
