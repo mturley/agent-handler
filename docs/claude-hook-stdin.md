@@ -229,6 +229,16 @@ Received on each statusline refresh (configurable interval, default 10s). Contai
   "thinking": {
     "enabled": false
   },
+  "rate_limits": {
+    "five_hour": {
+      "used_percentage": 21,
+      "resets_at": 1787790000
+    },
+    "seven_day": {
+      "used_percentage": 12,
+      "resets_at": 1788296400
+    }
+  },
   "pr": {
     "number": 8431,
     "url": "https://github.com/opendatahub-io/odh-dashboard/pull/8431",
@@ -268,6 +278,11 @@ Received on each statusline refresh (configurable interval, default 10s). Contai
 | `exceeds_200k_tokens` | boolean | Whether the session has exceeded 200k total tokens |
 | `fast_mode` | boolean | Whether fast mode is enabled |
 | `thinking.enabled` | boolean | Whether extended thinking is enabled |
+| `rate_limits` | object | **First-party Anthropic API sessions only** — absent on Vertex/Bedrock sessions. See below. |
+| `rate_limits.five_hour.used_percentage` | number | Percentage of the rolling 5-hour usage limit consumed |
+| `rate_limits.five_hour.resets_at` | number | Unix epoch seconds when the 5-hour window resets |
+| `rate_limits.seven_day.used_percentage` | number | Percentage of the rolling 7-day usage limit consumed |
+| `rate_limits.seven_day.resets_at` | number | Unix epoch seconds when the 7-day window resets |
 | `pr.number` | number | Associated PR number (if session is linked to a PR) |
 | `pr.url` | string | PR URL |
 | `pr.review_state` | string | PR review state (`"pending"`, etc.) |
@@ -400,8 +415,31 @@ The session name field is called `session_title` in UserPromptSubmit but `sessio
 ### Model field inconsistency
 SessionStart provides `model` as a plain string (e.g. `"claude-opus-4-8[1m]"`). The statusline provides it as an object with `id` and `display_name` fields.
 
+### rate_limits is first-party-API only
+The statusline payload carries a `rate_limits` object **only for sessions running against
+the first-party Anthropic API**. Sessions on Google Vertex (the work account) omit the key
+entirely — everything else in the payload is identical in shape between the two.
+
+```json
+"rate_limits": {
+  "five_hour": { "used_percentage": 21, "resets_at": 1787790000 },
+  "seven_day": { "used_percentage": 12, "resets_at": 1788296400 }
+}
+```
+
+Both windows are rolling usage quotas; `resets_at` is Unix epoch **seconds**. Treat the whole
+object as optional — presence/absence is a reliable signal for which backend a session is on,
+but any consumer must handle the missing case.
+
+A related tell: first-party sessions report a bare model id (`claude-opus-5`), while Vertex
+sessions on the 1M-context variant report the `[1m]` suffix (`claude-opus-4-8[1m]`,
+`claude-sonnet-5[1m]`). Both report `context_window_size: 1000000`, so the suffix — not the
+window size — is what distinguishes them.
+
 ### prompt_id availability
-`prompt_id` is present on most hooks but absent from SessionStart.
+`prompt_id` is present on most hooks but absent from SessionStart. It is also absent from
+statusline payloads on older Claude Code versions (seen missing on 2.1.235, present on
+2.1.245/2.1.246) — a version difference, not an account/backend one.
 
 ### Session crons in Stop hooks
 Stop and SubagentStop include `session_crons` — an array of scheduled cron jobs active in the session. Each entry has `id`, `schedule`, `recurring`, and `prompt`.
