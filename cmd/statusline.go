@@ -81,6 +81,22 @@ type hookInput struct {
 	Cost struct {
 		TotalCostUSD float64 `json:"total_cost_usd"`
 	} `json:"cost"`
+	// RateLimits is only sent for sessions on the first-party Anthropic API.
+	// Vertex/Bedrock sessions omit the key entirely, so it stays a pointer:
+	// nil means "this backend doesn't report limits", not "0% used".
+	RateLimits *rateLimits `json:"rate_limits"`
+}
+
+// rateLimits mirrors the statusline hook's rate_limits object. Each window
+// reports how much of its rolling quota is spent and when it rolls over.
+type rateLimits struct {
+	FiveHour rateLimitWindow `json:"five_hour"`
+	SevenDay rateLimitWindow `json:"seven_day"`
+}
+
+type rateLimitWindow struct {
+	UsedPercentage int   `json:"used_percentage"`
+	ResetsAt       int64 `json:"resets_at"`
 }
 
 func recordCostSnapshot(wd *db.DB, input *hookInput) {
@@ -319,6 +335,11 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 		fmt.Println(formatModelLine(input, trueCost, todayCost))
 	}
 
+	// Rate limits (first-party Anthropic API sessions only)
+	if line, ok := formatRateLimitsLine(input, time.Now()); ok {
+		fmt.Println(line)
+	}
+
 	// Blocked status
 	renderBlockedLine(d, session)
 
@@ -405,6 +426,11 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	// Model line (if from hook)
 	if input != nil && input.Model.DisplayName != "" {
 		fmt.Println(formatModelLine(input, trueCost, todayCost))
+	}
+
+	// Rate limits (first-party Anthropic API sessions only)
+	if line, ok := formatRateLimitsLine(input, time.Now()); ok {
+		fmt.Println(line)
 	}
 
 	// Aggregate cost line (experimental)
@@ -596,17 +622,7 @@ func formatGitLine(gs *gitpkg.Status) string {
 
 func formatModelLine(input *hookInput, trueCost float64, todayCost float64) string {
 	pct := input.ContextWindow.UsedPercentage
-	filled := pct * 20 / 100
-	empty := 20 - filled
-
-	bar := strings.Repeat("▓", filled) + strings.Repeat("░", empty)
-
-	barColor := colorGreen
-	if pct >= 80 {
-		barColor = colorRed
-	} else if pct >= 50 {
-		barColor = colorYellow
-	}
+	bar, barColor := usageBar(pct, 20)
 
 	costStr := "$" + formatMoney(trueCost)
 	if todayCost > 0 {
@@ -624,6 +640,70 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		barColor, bar, colorReset,
 		pct,
 		colorDim, costStr, colorReset)
+}
+
+// usageBar renders a width-character progress bar for pct (0-100) and returns
+// it with the color for that fill level: green under 50%, yellow at 50%, red at
+// 80%. Shared by the context bar and the rate limit bars so both read the same.
+func usageBar(pct, width int) (string, string) {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	filled := pct * width / 100
+	bar := strings.Repeat("▓", filled) + strings.Repeat("░", width-filled)
+
+	color := colorGreen
+	if pct >= 80 {
+		color = colorRed
+	} else if pct >= 50 {
+		color = colorYellow
+	}
+	return bar, color
+}
+
+// formatResetTime renders when a rate limit window rolls over, relative to now:
+// a clock time ("8:20pm") when that happens within a day, otherwise the weekday
+// ("Tue"). Returns "" for a missing or unparseable timestamp so the caller can
+// drop the suffix rather than print a bogus date.
+func formatResetTime(epoch int64, now time.Time) string {
+	if epoch <= 0 {
+		return ""
+	}
+	t := time.Unix(epoch, 0)
+	if t.Sub(now) < 24*time.Hour {
+		return strings.ToLower(t.Format("3:04pm"))
+	}
+	return t.Format("Mon")
+}
+
+// formatRateLimitsLine renders the usage line for the two rolling rate limit
+// windows. Reports ok=false when the session has no rate limit data (any
+// backend other than the first-party Anthropic API), in which case no line
+// should be printed at all.
+func formatRateLimitsLine(input *hookInput, now time.Time) (string, bool) {
+	if input == nil || input.RateLimits == nil {
+		return "", false
+	}
+
+	window := func(label string, w rateLimitWindow) string {
+		bar, color := usageBar(w.UsedPercentage, 10)
+		out := fmt.Sprintf("%s%s%s %s%s%s %d%%",
+			colorDim, label, colorReset,
+			color, bar, colorReset,
+			w.UsedPercentage)
+		if reset := formatResetTime(w.ResetsAt, now); reset != "" {
+			out += fmt.Sprintf(" %s·%s%s", colorDim, reset, colorReset)
+		}
+		return out
+	}
+
+	return fmt.Sprintf("%sLimits:%s %s  %s",
+		colorDim, colorReset,
+		window("5h", input.RateLimits.FiveHour),
+		window("7d", input.RateLimits.SevenDay)), true
 }
 
 func formatMoney(v float64) string {
