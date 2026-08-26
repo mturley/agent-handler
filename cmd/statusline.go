@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,9 +95,12 @@ type rateLimits struct {
 	SevenDay rateLimitWindow `json:"seven_day"`
 }
 
+// Both fields are JSON numbers, not integers: the API reports percentages like
+// 14.000000000000002, so decoding into an int fails outright. Decode as float64
+// and round at the point of display.
 type rateLimitWindow struct {
-	UsedPercentage int   `json:"used_percentage"`
-	ResetsAt       int64 `json:"resets_at"`
+	UsedPercentage float64 `json:"used_percentage"`
+	ResetsAt       float64 `json:"resets_at"`
 }
 
 func recordCostSnapshot(wd *db.DB, input *hookInput) {
@@ -140,7 +144,11 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 
 	var input hookInput
 	if err := json.Unmarshal(data, &input); err != nil {
-		return fmt.Errorf("failed to parse stdin JSON: %w", err)
+		// Returning here would render nothing at all — the session loses its
+		// whole statusline over one unexpected field. Say so on one line
+		// instead, so the failure is visible and diagnosable.
+		fmt.Printf("%s⚠ handler: could not parse statusline input: %v%s\n", colorDim, err, colorReset)
+		return nil
 	}
 
 	if input.SessionID == "" {
@@ -689,12 +697,13 @@ func formatRateLimitsLine(input *hookInput, now time.Time) (string, bool) {
 	}
 
 	window := func(label string, w rateLimitWindow) string {
-		bar, color := usageBar(w.UsedPercentage, 10)
+		pct := int(math.Round(w.UsedPercentage))
+		bar, color := usageBar(pct, 10)
 		out := fmt.Sprintf("%s%s%s %s%s%s %d%%",
 			colorDim, label, colorReset,
 			color, bar, colorReset,
-			w.UsedPercentage)
-		if reset := formatResetTime(w.ResetsAt, now); reset != "" {
+			pct)
+		if reset := formatResetTime(int64(w.ResetsAt), now); reset != "" {
 			out += fmt.Sprintf(" %s·%s%s", colorDim, reset, colorReset)
 		}
 		return out

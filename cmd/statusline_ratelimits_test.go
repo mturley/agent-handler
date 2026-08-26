@@ -88,8 +88,8 @@ func TestFormatRateLimitsLine(t *testing.T) {
 	now := time.Date(2026, 8, 26, 16, 8, 0, 0, time.Local)
 	in := &hookInput{}
 	in.RateLimits = &rateLimits{
-		FiveHour: rateLimitWindow{UsedPercentage: 21, ResetsAt: now.Add(4 * time.Hour).Unix()},
-		SevenDay: rateLimitWindow{UsedPercentage: 12, ResetsAt: now.Add(6 * 24 * time.Hour).Unix()},
+		FiveHour: rateLimitWindow{UsedPercentage: 21, ResetsAt: float64(now.Add(4 * time.Hour).Unix())},
+		SevenDay: rateLimitWindow{UsedPercentage: 12, ResetsAt: float64(now.Add(6 * 24 * time.Hour).Unix())},
 	}
 
 	line, ok := formatRateLimitsLine(in, now)
@@ -108,8 +108,8 @@ func TestFormatRateLimitsLineColorsHotWindow(t *testing.T) {
 	now := time.Date(2026, 8, 26, 16, 8, 0, 0, time.Local)
 	in := &hookInput{}
 	in.RateLimits = &rateLimits{
-		FiveHour: rateLimitWindow{UsedPercentage: 92, ResetsAt: now.Add(time.Hour).Unix()},
-		SevenDay: rateLimitWindow{UsedPercentage: 12, ResetsAt: now.Add(6 * 24 * time.Hour).Unix()},
+		FiveHour: rateLimitWindow{UsedPercentage: 92, ResetsAt: float64(now.Add(time.Hour).Unix())},
+		SevenDay: rateLimitWindow{UsedPercentage: 12, ResetsAt: float64(now.Add(6 * 24 * time.Hour).Unix())},
 	}
 
 	line, ok := formatRateLimitsLine(in, now)
@@ -149,6 +149,48 @@ func TestHookInputParsesRateLimits(t *testing.T) {
 	}
 	if in.RateLimits != nil {
 		t.Errorf("RateLimits = %+v, want nil", in.RateLimits)
+	}
+}
+
+// The API reports percentages as JSON numbers that are not always integral —
+// a real payload carried 14.000000000000002. Decoding that into an int failed,
+// and because a parse error aborts before any output, the affected sessions
+// lost their entire statusline rather than just this line.
+func TestFormatRateLimitsLineFractionalPercentages(t *testing.T) {
+	raw := `{"session_id":"abc","rate_limits":{"five_hour":{"used_percentage":43,"resets_at":1787790000},"seven_day":{"used_percentage":14.000000000000002,"resets_at":1788296400}}}`
+	in, err := parseHookInputForTest(raw)
+	if err != nil {
+		t.Fatalf("unmarshal of a real captured payload failed: %v", err)
+	}
+	if in.RateLimits == nil {
+		t.Fatal("RateLimits was not parsed")
+	}
+
+	now := time.Unix(1787790000, 0).Add(-2 * time.Hour)
+	line, ok := formatRateLimitsLine(in, now)
+	if !ok {
+		t.Fatal("expected a line")
+	}
+	// 14.000000000000002 rounds to a clean 14%, not 14.000000000000002%.
+	if got := stripANSI(line); !strings.Contains(got, "14%") {
+		t.Errorf("line = %q, want it to contain \"14%%\"", got)
+	}
+}
+
+func TestFormatRateLimitsLineRoundsHalfUp(t *testing.T) {
+	now := time.Date(2026, 8, 26, 16, 8, 0, 0, time.Local)
+	in := &hookInput{}
+	in.RateLimits = &rateLimits{
+		FiveHour: rateLimitWindow{UsedPercentage: 49.6, ResetsAt: float64(now.Add(time.Hour).Unix())},
+		SevenDay: rateLimitWindow{UsedPercentage: 0.4, ResetsAt: float64(now.Add(6 * 24 * time.Hour).Unix())},
+	}
+	line, _ := formatRateLimitsLine(in, now)
+	got := stripANSI(line)
+	if !strings.Contains(got, "50%") {
+		t.Errorf("49.6 should display as 50%%, got %q", got)
+	}
+	if !strings.Contains(got, "0%") {
+		t.Errorf("0.4 should display as 0%%, got %q", got)
 	}
 }
 
