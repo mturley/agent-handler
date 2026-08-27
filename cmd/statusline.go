@@ -343,11 +343,6 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 		fmt.Println(formatModelLine(input, trueCost, todayCost))
 	}
 
-	// Rate limits (first-party Anthropic API sessions only)
-	if line, ok := formatRateLimitsLine(input, time.Now()); ok {
-		fmt.Println(line)
-	}
-
 	// Blocked status
 	renderBlockedLine(d, session)
 
@@ -434,11 +429,6 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 	// Model line (if from hook)
 	if input != nil && input.Model.DisplayName != "" {
 		fmt.Println(formatModelLine(input, trueCost, todayCost))
-	}
-
-	// Rate limits (first-party Anthropic API sessions only)
-	if line, ok := formatRateLimitsLine(input, time.Now()); ok {
-		fmt.Println(line)
 	}
 
 	// Aggregate cost line (experimental)
@@ -642,12 +632,19 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		vertexStr = fmt.Sprintf("%sVertex AI%s · ", colorLightRed, colorReset)
 	}
 
-	return fmt.Sprintf("%s%s%s%s %s%s%s %d%% ctx %s· %s%s",
+	line := fmt.Sprintf("%s%s%s%s %s%s%s %d%% ctx %s· %s%s",
 		vertexStr,
 		colorClaudeOrange, input.Model.DisplayName, colorReset,
 		barColor, bar, colorReset,
 		pct,
 		colorDim, costStr, colorReset)
+
+	// Rate limits (first-party Anthropic API sessions only) trail the cost.
+	if limits, ok := formatRateLimits(input, time.Now()); ok {
+		line += fmt.Sprintf(" %s·%s %s", colorDim, colorReset, limits)
+	}
+
+	return line
 }
 
 // usageBar renders a width-character progress bar for pct (0-100) and returns
@@ -687,11 +684,12 @@ func formatResetTime(epoch int64, now time.Time) string {
 	return t.Format("Mon")
 }
 
-// formatRateLimitsLine renders the usage line for the two rolling rate limit
-// windows. Reports ok=false when the session has no rate limit data (any
-// backend other than the first-party Anthropic API), in which case no line
-// should be printed at all.
-func formatRateLimitsLine(input *hookInput, now time.Time) (string, bool) {
+// formatRateLimits renders the usage segment for the two rolling rate limit
+// windows, for appending to the model line. The 5h/7d labels identify it
+// without a prefix, which would only cost width on an already-long line. Reports ok=false when the session
+// has no rate limit data (any backend other than the first-party Anthropic
+// API), in which case nothing should be appended at all.
+func formatRateLimits(input *hookInput, now time.Time) (string, bool) {
 	if input == nil || input.RateLimits == nil {
 		return "", false
 	}
@@ -709,8 +707,7 @@ func formatRateLimitsLine(input *hookInput, now time.Time) (string, bool) {
 		return out
 	}
 
-	return fmt.Sprintf("%sLimits:%s %s  %s",
-		colorDim, colorReset,
+	return fmt.Sprintf("%s  %s",
 		window("5h", input.RateLimits.FiveHour),
 		window("7d", input.RateLimits.SevenDay)), true
 }

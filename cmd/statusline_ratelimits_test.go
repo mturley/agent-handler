@@ -73,18 +73,18 @@ func TestFormatResetTime(t *testing.T) {
 	}
 }
 
-func TestFormatRateLimitsLineOmittedWithoutData(t *testing.T) {
+func TestFormatRateLimitsOmittedWithoutData(t *testing.T) {
 	// Vertex/Bedrock sessions omit rate_limits entirely — no line at all,
 	// which must not be confused with a session sitting at 0%.
-	if _, ok := formatRateLimitsLine(&hookInput{}, time.Now()); ok {
+	if _, ok := formatRateLimits(&hookInput{}, time.Now()); ok {
 		t.Error("expected no line when RateLimits is nil")
 	}
-	if _, ok := formatRateLimitsLine(nil, time.Now()); ok {
+	if _, ok := formatRateLimits(nil, time.Now()); ok {
 		t.Error("expected no line for nil input")
 	}
 }
 
-func TestFormatRateLimitsLine(t *testing.T) {
+func TestFormatRateLimits(t *testing.T) {
 	now := time.Date(2026, 8, 26, 16, 8, 0, 0, time.Local)
 	in := &hookInput{}
 	in.RateLimits = &rateLimits{
@@ -92,19 +92,19 @@ func TestFormatRateLimitsLine(t *testing.T) {
 		SevenDay: rateLimitWindow{UsedPercentage: 12, ResetsAt: float64(now.Add(6 * 24 * time.Hour).Unix())},
 	}
 
-	line, ok := formatRateLimitsLine(in, now)
+	line, ok := formatRateLimits(in, now)
 	if !ok {
-		t.Fatal("expected a line when RateLimits is present")
+		t.Fatal("expected a segment when RateLimits is present")
 	}
 
 	got := stripANSI(line)
-	want := "Limits: 5h ▓▓░░░░░░░░ 21% ·8:08pm  7d ▓░░░░░░░░░ 12% ·Tue"
+	want := "5h ▓▓░░░░░░░░ 21% ·8:08pm  7d ▓░░░░░░░░░ 12% ·Tue"
 	if got != want {
 		t.Errorf("line = %q, want %q", got, want)
 	}
 }
 
-func TestFormatRateLimitsLineColorsHotWindow(t *testing.T) {
+func TestFormatRateLimitsColorsHotWindow(t *testing.T) {
 	now := time.Date(2026, 8, 26, 16, 8, 0, 0, time.Local)
 	in := &hookInput{}
 	in.RateLimits = &rateLimits{
@@ -112,7 +112,7 @@ func TestFormatRateLimitsLineColorsHotWindow(t *testing.T) {
 		SevenDay: rateLimitWindow{UsedPercentage: 12, ResetsAt: float64(now.Add(6 * 24 * time.Hour).Unix())},
 	}
 
-	line, ok := formatRateLimitsLine(in, now)
+	line, ok := formatRateLimits(in, now)
 	if !ok {
 		t.Fatal("expected a line when RateLimits is present")
 	}
@@ -156,7 +156,7 @@ func TestHookInputParsesRateLimits(t *testing.T) {
 // a real payload carried 14.000000000000002. Decoding that into an int failed,
 // and because a parse error aborts before any output, the affected sessions
 // lost their entire statusline rather than just this line.
-func TestFormatRateLimitsLineFractionalPercentages(t *testing.T) {
+func TestFormatRateLimitsFractionalPercentages(t *testing.T) {
 	raw := `{"session_id":"abc","rate_limits":{"five_hour":{"used_percentage":43,"resets_at":1787790000},"seven_day":{"used_percentage":14.000000000000002,"resets_at":1788296400}}}`
 	in, err := parseHookInputForTest(raw)
 	if err != nil {
@@ -167,7 +167,7 @@ func TestFormatRateLimitsLineFractionalPercentages(t *testing.T) {
 	}
 
 	now := time.Unix(1787790000, 0).Add(-2 * time.Hour)
-	line, ok := formatRateLimitsLine(in, now)
+	line, ok := formatRateLimits(in, now)
 	if !ok {
 		t.Fatal("expected a line")
 	}
@@ -177,20 +177,49 @@ func TestFormatRateLimitsLineFractionalPercentages(t *testing.T) {
 	}
 }
 
-func TestFormatRateLimitsLineRoundsHalfUp(t *testing.T) {
+func TestFormatRateLimitsRoundsHalfUp(t *testing.T) {
 	now := time.Date(2026, 8, 26, 16, 8, 0, 0, time.Local)
 	in := &hookInput{}
 	in.RateLimits = &rateLimits{
 		FiveHour: rateLimitWindow{UsedPercentage: 49.6, ResetsAt: float64(now.Add(time.Hour).Unix())},
 		SevenDay: rateLimitWindow{UsedPercentage: 0.4, ResetsAt: float64(now.Add(6 * 24 * time.Hour).Unix())},
 	}
-	line, _ := formatRateLimitsLine(in, now)
+	line, _ := formatRateLimits(in, now)
 	got := stripANSI(line)
 	if !strings.Contains(got, "50%") {
 		t.Errorf("49.6 should display as 50%%, got %q", got)
 	}
 	if !strings.Contains(got, "0%") {
 		t.Errorf("0.4 should display as 0%%, got %q", got)
+	}
+}
+
+// The limits ride on the model line, trailing the cost after a dot separator.
+func TestFormatModelLineAppendsRateLimits(t *testing.T) {
+	in := &hookInput{}
+	in.Model.DisplayName = "Opus 5"
+	in.ContextWindow.UsedPercentage = 60
+	in.RateLimits = &rateLimits{
+		FiveHour: rateLimitWindow{UsedPercentage: 43, ResetsAt: float64(time.Now().Add(2 * time.Hour).Unix())},
+		SevenDay: rateLimitWindow{UsedPercentage: 14.000000000000002, ResetsAt: float64(time.Now().Add(5 * 24 * time.Hour).Unix())},
+	}
+
+	got := stripANSI(formatModelLine(in, 12.34, 0))
+	if !strings.Contains(got, "60% ctx · $12.34 · 5h ") {
+		t.Errorf("limits should follow the cost after a dot separator, got %q", got)
+	}
+	if !strings.Contains(got, "14%") {
+		t.Errorf("fractional percentage should round for display, got %q", got)
+	}
+
+	// Without rate limits the line ends at the cost, unchanged from before.
+	in.RateLimits = nil
+	got = stripANSI(formatModelLine(in, 12.34, 0))
+	if strings.Contains(got, "5h ") || strings.Contains(got, "7d ") {
+		t.Errorf("no limits segment expected, got %q", got)
+	}
+	if !strings.HasSuffix(got, "$12.34") {
+		t.Errorf("line should end at the cost, got %q", got)
 	}
 }
 
