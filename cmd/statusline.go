@@ -618,9 +618,25 @@ func formatGitLine(gs *gitpkg.Status) string {
 	return result
 }
 
+// contextBarWidth is the full width of the context bar, narrowed to
+// narrowContextBarWidth when the rate limit bars share the line.
+const (
+	contextBarWidth       = 20
+	narrowContextBarWidth = 10
+)
+
 func formatModelLine(input *hookInput, trueCost float64, todayCost float64) string {
+	// Resolve the limits first: when they are present they claim most of the
+	// line, so the context bar gives up half its width to make room.
+	limits, hasLimits := formatRateLimits(input, time.Now())
+
+	barWidth := contextBarWidth
+	if hasLimits {
+		barWidth = narrowContextBarWidth
+	}
+
 	pct := input.ContextWindow.UsedPercentage
-	bar, barColor := usageBar(pct, 20)
+	bar, barColor := usageBar(pct, barWidth)
 
 	costStr := "$" + formatMoney(trueCost)
 	if todayCost > 0 {
@@ -640,7 +656,7 @@ func formatModelLine(input *hookInput, trueCost float64, todayCost float64) stri
 		colorDim, costStr, colorReset)
 
 	// Rate limits (first-party Anthropic API sessions only) trail the cost.
-	if limits, ok := formatRateLimits(input, time.Now()); ok {
+	if hasLimits {
 		line += fmt.Sprintf(" %s·%s %s", colorDim, colorReset, limits)
 	}
 

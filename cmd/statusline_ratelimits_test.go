@@ -205,6 +205,10 @@ func TestFormatModelLineAppendsRateLimits(t *testing.T) {
 	}
 
 	got := stripANSI(formatModelLine(in, 12.34, 0))
+	// The context bar halves to make room for the two limit bars.
+	if !strings.Contains(got, strings.Repeat("▓", 6)+strings.Repeat("░", 4)+" 60% ctx") {
+		t.Errorf("context bar should narrow to %d chars alongside limits, got %q", narrowContextBarWidth, got)
+	}
 	if !strings.Contains(got, "60% ctx · $12.34 · 5h ") {
 		t.Errorf("limits should follow the cost after a dot separator, got %q", got)
 	}
@@ -220,6 +224,10 @@ func TestFormatModelLineAppendsRateLimits(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "$12.34") {
 		t.Errorf("line should end at the cost, got %q", got)
+	}
+	// With the line to itself, the context bar keeps its full width.
+	if !strings.Contains(got, strings.Repeat("▓", 12)+strings.Repeat("░", 8)+" 60% ctx") {
+		t.Errorf("context bar should stay %d chars without limits, got %q", contextBarWidth, got)
 	}
 }
 
