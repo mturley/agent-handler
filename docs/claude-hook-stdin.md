@@ -2,7 +2,8 @@
 
 Claude Code passes JSON on stdin to all hook scripts. The available fields vary by hook type — lifecycle hooks (SessionStart, UserPromptSubmit) receive a minimal set, while the statusline hook receives a rich session snapshot.
 
-All data captured from Claude Code version 2.1.198–2.1.201 (July 2026). Field availability may change across versions.
+All data captured from Claude Code version 2.1.198–2.1.201 (July 2026), except where a
+section notes a later version. Field availability may change across versions.
 
 ## Common Fields (All Hooks)
 
@@ -66,6 +67,62 @@ Received on each user prompt submission.
 | `permission_mode` | string | Current permission mode (`"default"`, `"acceptEdits"`, `"plan"`, etc.) |
 | `prompt` | string | The user's prompt text |
 | `session_title` | string | Display name of the session (set via `/name` or auto-generated) |
+
+## PostToolUse
+
+Received after a tool call completes. The `matcher` field filters by **tool name**
+(exact string or regex) and works for any tool, including built-ins — `"CronCreate|CronDelete"`
+is a valid matcher. (Verified 2026-08-31 on 2.1.248.)
+
+```json
+{
+  "session_id": "3cb5b8fb-a547-4831-b660-ef782dda3660",
+  "transcript_path": "/Users/mturley/.claude-personal/projects/-Users-mturley-git-agent-handler/3cb5b8fb-a547-4831-b660-ef782dda3660.jsonl",
+  "cwd": "/Users/mturley/git/agent-handler",
+  "prompt_id": "ff9550fe-ed2a-41e6-95d8-599d9981a0a7",
+  "permission_mode": "auto",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "CronCreate",
+  "tool_input": {
+    "cron": "23 11 31 8 *",
+    "prompt": "Scheduled test fire for tool-use hooks...",
+    "recurring": false
+  },
+  "tool_response": {
+    "id": "f158ff6e",
+    "humanSchedule": "23 11 31 8 *",
+    "recurring": false,
+    "durable": false
+  },
+  "tool_use_id": "toolu_01CMEijY1ncNKfqkxnaTPRXr",
+  "duration_ms": 1
+}
+```
+
+### Additional fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `tool_name` | string | Name of the tool that ran (e.g. `"CronCreate"`, `"Edit"`) |
+| `tool_input` | object | The arguments the tool was called with — shape varies per tool |
+| `tool_response` | object | The tool's result — shape varies per tool |
+| `tool_use_id` | string | `toolu_`-prefixed id, correlates with the transcript JSONL entry |
+| `duration_ms` | number | How long the tool call took |
+
+### Cron tool payloads
+
+For `CronCreate`, `tool_input` carries `cron`, `prompt`, and `recurring`; `tool_response`
+carries the assigned job `id`, plus `humanSchedule`, `recurring`, and `durable`. For
+`CronDelete`, both `tool_input` and `tool_response` are just `{"id": "<job id>"}`.
+
+`durable` is echoed back as `false` — the `CronCreate` tool accepts a `durable` parameter
+but documents it as having no effect, and this confirms it at runtime.
+
+**These events are deltas, not state.** See "Tracking a session's cron jobs" under Key
+Observations — `session_crons` on Stop is the better source.
 
 ## Stop
 
@@ -441,8 +498,58 @@ window size — is what distinguishes them.
 statusline payloads on older Claude Code versions (seen missing on 2.1.235, present on
 2.1.245/2.1.246) — a version difference, not an account/backend one.
 
-### Session crons in Stop hooks
-Stop and SubagentStop include `session_crons` — an array of scheduled cron jobs active in the session. Each entry has `id`, `schedule`, `recurring`, and `prompt`.
+### Tracking a session's cron jobs
+Stop and SubagentStop include `session_crons` — an array of the cron jobs active in the
+session. Each entry has `id`, `schedule`, `recurring`, and `prompt`. This is a **full
+snapshot**, refreshed once per turn, and it is the right source for tracking what a session
+currently has scheduled.
+
+The alternative — reconstructing state from `PostToolUse` on `CronCreate`/`CronDelete` —
+looks appealing because those events carry the job id and cron expression (see the
+PostToolUse section), but it is strictly worse:
+
+- **Auto-deletions emit no event.** A one-shot job fires and is removed from the in-memory
+  store with no `CronDelete` hook call; recurring jobs auto-expire after 7 days the same way.
+  Verified 2026-08-31: a one-shot scheduled for 10:27 fired on time, and the probe log
+  recorded only its `CronCreate` — never a delete. A delta-derived table accumulates ghost
+  rows unless the consumer also parses the cron expression and expires rows itself.
+- **The snapshot has no such gap.** Jobs removed by any path — explicit delete,
+  fire-and-auto-delete, 7-day expiry — are absent from the next `session_crons`.
+  Verified 2026-08-31 with a Stop-hook capture across a fire, using a recurring control
+  job to prove the array stayed live:
+
+  ```
+  11:42:33  cron_count: 2  [f4bfbfcc "0 4 * * *" recurring, 5438be8f "45 11 31 8 *" one-shot]
+  11:45:03  cron_count: 1  [f4bfbfcc "0 4 * * *" recurring]
+  ```
+
+  The one-shot fired at 11:45 and was gone from the very next snapshot; the control
+  remained. No `CronDelete` PostToolUse event accompanied its removal.
+
+Deltas are still useful for *reacting* to the moment a job is created or deleted. For
+maintaining a table of what exists, prefer the snapshot.
+
+### scheduled_tasks.lock is not a job-state signal
+Scheduling a cron job writes `<cwd>/.claude/scheduled_tasks.lock` (note: in the **project**
+directory, not the Claude config dir):
+
+```json
+{"sessionId":"54f043a8-...","pid":91959,"procStart":"Thu Aug 27 17:30:58 2026","acquiredAt":1787852029379}
+```
+
+It is a first-acquirer lock held until the owning process exits, and it is misleading for
+anything else. Verified 2026-08-31:
+
+- **It goes stale.** A session that created a job on Aug 27 still owned the lock on Aug 31,
+  while a *different* session created and fired jobs in the same directory without ever
+  touching the file.
+- **It does not track job existence.** The file survived deletion of the only job that
+  caused it to be written.
+- **It does not gate firing.** The non-owning session's job fired on schedule while another
+  session held the lock.
+
+Use `session_crons` instead.
+
 
 ### Transcript path
 The `transcript_path` field provides the full path to the JSONL file without needing to discover it from the filesystem. SubagentStop additionally provides `agent_transcript_path` for the subagent's separate transcript.
