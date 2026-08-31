@@ -332,7 +332,7 @@ func removeHooks(claudeDir string) error {
 		return nil
 	}
 
-	for _, event := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
+	for _, event := range []string{"SessionStart", "SessionEnd", "UserPromptSubmit", "PreCompact", "Stop", "PostToolUse"} {
 		existing, ok := hooks[event].([]interface{})
 		if !ok {
 			continue

@@ -108,6 +108,10 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	// Clean up peek_state for archived sessions
 	d.DeletePeekStatesForSessions(toArchive)
 
+	// Claude cron jobs are in-memory and die with the session, so archived
+	// sessions can never have live ones.
+	d.DeleteSessionCronsForSessions(toArchive)
+
 	// Revoke subscriptions for archived sessions so they stop being polled.
 	for _, id := range toArchive {
 		_, _ = d.SoftDeleteSubscriptionsForSession(id)

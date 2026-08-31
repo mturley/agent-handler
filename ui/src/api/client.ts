@@ -45,6 +45,20 @@ export async function getSessionResources(sessionId: string): Promise<SessionRes
   return (await fetchJSON<SessionResource[] | null>(`/api/sessions/${encodeURIComponent(sessionId)}/resources`)) ?? []
 }
 
+export interface SessionCron {
+  session_id: string
+  job_id: string
+  schedule: string
+  recurring: boolean
+  prompt: string
+  created_at: string
+  last_seen_at: string
+}
+
+export async function getSessionCrons(sessionId: string): Promise<SessionCron[]> {
+  return (await fetchJSON<SessionCron[] | null>(`/api/sessions/${encodeURIComponent(sessionId)}/crons`)) ?? []
+}
+
 export interface SessionCostSummary {
   enabled: boolean
   total_cost_usd: number

@@ -62,3 +62,22 @@ reminders:
 ## Watching resources
 
 **Immediately after creating or opening a PR or Jira issue, run `/watch` to subscribe to it.** Do not wait for the user to ask — this is automatic. This enables watchers to deliver updates (reviews, comments, status changes) to your inbox.
+
+## Scheduled cron jobs
+
+Claude Code cron jobs (`CronCreate` / `CronDelete`) created in this session are
+tracked in the handler DB automatically — a `PostToolUse` hook records them as
+they are created or deleted, and the `Stop` hook reconciles the table each turn
+against Claude's authoritative `session_crons` snapshot.
+
+Run `handler crons` to see this session's tracked jobs, or `handler crons --all`
+for every session. Both support `--json`.
+
+Reconciliation matters because Claude removes jobs without any tool call: a
+one-shot job auto-deletes the moment it fires, and a recurring job auto-expires
+after 7 days. The snapshot is what catches those; the create/delete hooks alone
+would leave stale rows behind.
+
+Note that these jobs are **in-memory and session-scoped** — they do not survive
+the session that created them. Do not use them for anything that must outlive
+the session; the handler DB tracks them, but cannot resurrect them.

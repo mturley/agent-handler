@@ -8,4 +8,5 @@ export const queryKeys = {
   inbox: (sessionId: string) => ["inbox", sessionId] as const,
   resources: ["resources"] as const,
   peek: (sessionId: string) => ["peek", sessionId] as const,
+  sessionCrons: (sessionId: string) => ["session-crons", sessionId] as const,
 }

@@ -96,6 +96,25 @@ func runMigrations(conn *sql.DB) error {
 		return fmt.Errorf("failed to create dismissed_events table: %w", err)
 	}
 
+	// session_crons: per-session Claude Code cron jobs (see db/session_crons.go).
+	// Also in schema.sql; CREATE TABLE IF NOT EXISTS in both is idempotent and
+	// matches the existing safety-net pattern for pre-existing databases.
+	if _, err := conn.Exec(`
+		CREATE TABLE IF NOT EXISTS session_crons (
+			session_id   TEXT NOT NULL,
+			job_id       TEXT NOT NULL,
+			schedule     TEXT NOT NULL,
+			recurring    INTEGER NOT NULL DEFAULT 0,
+			prompt       TEXT,
+			created_at   TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			PRIMARY KEY (session_id, job_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_session_crons_session ON session_crons(session_id);
+	`); err != nil {
+		return fmt.Errorf("failed to create session_crons table: %w", err)
+	}
+
 	// Status-emit reminder tracking (see cmd/status_reminder.go).
 	if err := addColumnIfMissing(conn, "sessions", "prompts_since_status", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err

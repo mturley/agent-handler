@@ -7,11 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SessionCard } from "@/components/SessionCard"
 import { InboxContent } from "@/components/InboxContent"
 import { ResourcesContent } from "@/components/ResourcesContent"
+import { CronsContent } from "@/components/CronsContent"
 import { AttentionCard } from "@/components/AttentionCard"
 import { DailySpendChart } from "@/components/DailySpendChart"
 import { useSessions } from "@/hooks/useSessions"
 import { TimelinePage } from "@/pages/TimelinePage"
-import { getSessions, getArchivedSessions, getEvents, getSessionResources, getSessionCost, switchSession } from "@/api/client"
+import { getSessions, getArchivedSessions, getEvents, getSessionResources, getSessionCost, getSessionCrons, switchSession } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
 import { formatEventType } from "@/utils/formatLabel"
@@ -23,7 +24,7 @@ interface SessionDetailPageProps {
   cmuxAvailable: boolean
 }
 
-const VALID_TABS = ["timeline", "resources", "cost"] as const
+const VALID_TABS = ["timeline", "resources", "crons", "cost"] as const
 
 function getTab(): string {
   const t = new URLSearchParams(window.location.search).get("tab")
@@ -83,6 +84,12 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
       return `${count} ${label}`
     })
     .join(", ")
+
+  const { data: sessionCrons } = useQuery({
+    queryKey: queryKeys.sessionCrons(sessionId),
+    queryFn: () => getSessionCrons(sessionId),
+  })
+  const cronCount = sessionCrons?.length ?? 0
 
   const { data: cost } = useQuery({
     queryKey: ["session-cost", sessionId],
@@ -179,6 +186,14 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="crons">
+                Cron jobs
+                {cronCount > 0 && (
+                  <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] font-normal">
+                    {cronCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
               {costEnabled && (
                 <TabsTrigger value="cost">
                   Cost
@@ -203,6 +218,10 @@ export function SessionDetailPage({ sessionId, cmuxAvailable }: SessionDetailPag
 
             <TabsContent value="resources">
               <ResourcesContent sessionId={sessionId} scrollClassName="max-h-[60vh]" editable />
+            </TabsContent>
+
+            <TabsContent value="crons">
+              <CronsContent sessionId={sessionId} scrollClassName="max-h-[60vh]" />
             </TabsContent>
 
             {costEnabled && (

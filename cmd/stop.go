@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
 )
 
@@ -29,17 +30,27 @@ func runStopHook(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	var input stopHookInput
-	if err := json.Unmarshal(data, &input); err != nil || input.SessionID == "" {
-		return nil
-	}
-
 	d, err := openDB()
 	if err != nil {
 		return nil
 	}
 	defer d.Close()
 
+	return applyStopHook(d, data)
+}
+
+// applyStopHook handles both jobs the Stop hook is responsible for: marking the
+// session idle, and reconciling its cron rows against the authoritative
+// session_crons snapshot. Cron reconciliation is best-effort — a failure there
+// must not stop the session being marked idle, since the working flag drives
+// the statusline.
+func applyStopHook(d *db.DB, data []byte) error {
+	var input stopHookInput
+	if err := json.Unmarshal(data, &input); err != nil || input.SessionID == "" {
+		return nil
+	}
+
 	d.SetWorking(input.SessionID, false)
+	applyStopHookCrons(d, data)
 	return nil
 }

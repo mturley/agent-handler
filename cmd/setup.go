@@ -297,17 +297,19 @@ func configureHooks(claudeDir, hooksDir string) error {
 		}
 	}
 
-	hookEntries := map[string]string{
-		"SessionEnd":       "session_end.sh",
-		"UserPromptSubmit": "user_prompt_submit.sh",
-		"PreCompact":       "pre_compact.sh",
-		"Stop":             "stop.sh",
+	// matcher is "" for lifecycle hooks (fire on every invocation). PostToolUse
+	// filters by tool name, so it carries a real matcher.
+	type hookSpec struct {
+		script  string
+		timeout int
+		matcher string
 	}
-	timeouts := map[string]int{
-		"SessionEnd":       10,
-		"UserPromptSubmit": 5,
-		"PreCompact":       10,
-		"Stop":             2,
+	hookEntries := map[string]hookSpec{
+		"SessionEnd":       {"session_end.sh", 10, ""},
+		"UserPromptSubmit": {"user_prompt_submit.sh", 5, ""},
+		"PreCompact":       {"pre_compact.sh", 10, ""},
+		"Stop":             {"stop.sh", 2, ""},
+		"PostToolUse":      {"post_tool_use.sh", 5, "CronCreate|CronDelete"},
 	}
 
 	existingHooks, ok := settings["hooks"].(map[string]interface{})
@@ -315,15 +317,15 @@ func configureHooks(claudeDir, hooksDir string) error {
 		existingHooks = make(map[string]interface{})
 	}
 
-	for event, script := range hookEntries {
-		scriptPath := filepath.Join(hooksDir, script)
+	for event, spec := range hookEntries {
+		scriptPath := filepath.Join(hooksDir, spec.script)
 		newMatcherGroup := map[string]interface{}{
-			"matcher": "",
+			"matcher": spec.matcher,
 			"hooks": []interface{}{
 				map[string]interface{}{
 					"type":    "command",
 					"command": scriptPath,
-					"timeout": timeouts[event],
+					"timeout": spec.timeout,
 				},
 			},
 		}

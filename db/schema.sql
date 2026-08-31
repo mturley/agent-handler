@@ -115,3 +115,20 @@ CREATE TABLE IF NOT EXISTS peek_state (
     reason TEXT,
     updated_at TEXT NOT NULL
 );
+
+-- session_crons: Claude Code cron jobs belonging to a session. Maintained by
+-- the PostToolUse hook (CronCreate/CronDelete, immediate) and reconciled
+-- against the Stop hook's authoritative session_crons snapshot, which is the
+-- only signal that catches one-shot jobs auto-deleting when they fire.
+CREATE TABLE IF NOT EXISTS session_crons (
+    session_id   TEXT NOT NULL,
+    job_id       TEXT NOT NULL,
+    schedule     TEXT NOT NULL,
+    recurring    INTEGER NOT NULL DEFAULT 0,
+    prompt       TEXT,
+    created_at   TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, job_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_crons_session ON session_crons(session_id);
