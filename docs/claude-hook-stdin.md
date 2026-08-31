@@ -460,6 +460,19 @@ Note: StopFailure does NOT include cost or token data.
 
 ## Key Observations
 
+### Hook config reloads without a session restart
+Changes to `settings.json` hooks take effect in sessions that are **already
+running** — no restart, no `/reload`, nothing. Verified 2026-08-31: `handler
+setup` added a `PostToolUse` hook mid-session, and it fired on the very next
+tool call in a session that had started hours earlier, before the hook existed.
+
+This is worth knowing when iterating on a hook: edit `settings.json`, then
+exercise the hook in the session you already have open. (It also means a hook
+edit takes effect in every running session at once, which is a footgun if the
+script is mid-edit and not yet executable — write the script first, register it
+second.)
+
+
 ### Cost data is statusline-only
 No hook other than the statusline carries cost or token data. Stop, SubagentStop, SessionEnd, and all other lifecycle hooks lack `cost` and `context_window` fields. The statusline hook (firing every ~10s) is the only source.
 
