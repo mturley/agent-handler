@@ -129,3 +129,123 @@ func TestHandleSessionCronsOrdersByCreatedAt(t *testing.T) {
 		t.Errorf("expected creation order, got %q then %q", crons[0].JobID, crons[1].JobID)
 	}
 }
+
+// --- next fire time ---------------------------------------------------------
+
+func mustParseTime(t *testing.T, s string) time.Time {
+	t.Helper()
+	ts, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatalf("bad test time %q: %v", s, err)
+	}
+	return ts
+}
+
+func TestNextFireAtRecurringDaily(t *testing.T) {
+	from := mustParseTime(t, "2026-08-31T13:20:00Z")
+	got := nextFireAt("37 4 * * *", from)
+	want := "2026-09-01T04:37:00Z"
+	if got != want {
+		t.Errorf("nextFireAt = %q, want %q", got, want)
+	}
+}
+
+func TestNextFireAtRecurringLaterToday(t *testing.T) {
+	from := mustParseTime(t, "2026-08-31T13:20:00Z")
+	got := nextFireAt("32 13 * * *", from)
+	want := "2026-08-31T13:32:00Z"
+	if got != want {
+		t.Errorf("nextFireAt = %q, want %q", got, want)
+	}
+}
+
+func TestNextFireAtStepExpression(t *testing.T) {
+	from := mustParseTime(t, "2026-08-31T13:20:30Z")
+	got := nextFireAt("*/5 * * * *", from)
+	want := "2026-08-31T13:25:00Z"
+	if got != want {
+		t.Errorf("nextFireAt = %q, want %q", got, want)
+	}
+}
+
+func TestNextFireAtPinnedOneShot(t *testing.T) {
+	from := mustParseTime(t, "2026-08-31T13:20:00Z")
+	got := nextFireAt("53 3 28 12 *", from)
+	want := "2026-12-28T03:53:00Z"
+	if got != want {
+		t.Errorf("nextFireAt = %q, want %q", got, want)
+	}
+}
+
+// A pinned one-shot whose time has passed has no next occurrence this year.
+// robfig rolls to the next matching year; the point is it must not report a
+// time in the past.
+func TestNextFireAtNeverReturnsPastTime(t *testing.T) {
+	from := mustParseTime(t, "2026-12-29T00:00:00Z")
+	got := nextFireAt("53 3 28 12 *", from)
+	if got == "" {
+		t.Fatal("expected a next occurrence, got empty")
+	}
+	next := mustParseTime(t, got)
+	if !next.After(from) {
+		t.Errorf("next fire %q is not after %q", got, from.Format(time.RFC3339))
+	}
+}
+
+func TestNextFireAtInvalidExpressionIsEmpty(t *testing.T) {
+	from := mustParseTime(t, "2026-08-31T13:20:00Z")
+	for _, expr := range []string{"", "not a cron", "* * *", "99 99 * * *"} {
+		if got := nextFireAt(expr, from); got != "" {
+			t.Errorf("nextFireAt(%q) = %q, want empty", expr, got)
+		}
+	}
+}
+
+// The handler must enrich each job with next_fire_at without dropping jobs
+// whose expression cannot be parsed.
+func TestHandleSessionCronsIncludesNextFireAt(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{
+		JobID: "good", Schedule: "*/5 * * * *", Recurring: true,
+	}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{
+		JobID: "bad", Schedule: "not a cron", Recurring: false,
+	}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/S1/crons", nil)
+	req.SetPathValue("id", "S1")
+	w := httptest.NewRecorder()
+	s.handleSessionCrons(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", w.Code, w.Body.String())
+	}
+	var crons []sessionCronInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &crons); err != nil {
+		t.Fatalf("unmarshal %q: %v", w.Body.String(), err)
+	}
+	if len(crons) != 2 {
+		t.Fatalf("expected both jobs listed, got %d", len(crons))
+	}
+
+	byID := map[string]sessionCronInfo{}
+	for _, c := range crons {
+		byID[c.JobID] = c
+	}
+	if byID["good"].NextFireAt == "" {
+		t.Error("expected next_fire_at for a valid expression")
+	}
+	if byID["bad"].NextFireAt != "" {
+		t.Errorf("expected empty next_fire_at for an unparseable expression, got %q", byID["bad"].NextFireAt)
+	}
+	if byID["good"].Schedule != "*/5 * * * *" {
+		t.Errorf("expected embedded cron fields preserved, got %+v", byID["good"])
+	}
+}

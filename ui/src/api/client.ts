@@ -53,6 +53,8 @@ export interface SessionCron {
   prompt: string
   created_at: string
   last_seen_at: string
+  /** RFC3339 next occurrence, or "" when the schedule cannot be parsed. */
+  next_fire_at: string
 }
 
 export async function getSessionCrons(sessionId: string): Promise<SessionCron[]> {

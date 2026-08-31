@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { getSessionCrons, type SessionCron } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
 import { timeAgo } from "@/utils/timeAgo"
+import { formatNextFire } from "@/utils/nextFire"
 import { Repeat, Clock } from "lucide-react"
 
 /**
@@ -14,6 +15,8 @@ import { Repeat, Clock } from "lucide-react"
  * Stop hook's session_crons snapshot, so it reflects what is actually live.
  */
 export function CronItem({ cron }: { cron: SessionCron }) {
+  const nextFire = formatNextFire(cron.next_fire_at)
+
   return (
     <div className="py-2 px-2 rounded space-y-1">
       <div className="flex items-start gap-2">
@@ -45,6 +48,7 @@ export function CronItem({ cron }: { cron: SessionCron }) {
 
           <p className="text-[10px] text-muted-foreground/60 mt-1">
             created {timeAgo(cron.created_at)}
+            {nextFire && <> · {nextFire}</>}
             {cron.last_seen_at && cron.last_seen_at !== cron.created_at && (
               <> · confirmed {timeAgo(cron.last_seen_at)}</>
             )}
