@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const cmuxConfigPath = ".config/cmux/cmux.json"
@@ -45,38 +46,69 @@ func cmuxConfigFilePath() string {
 	return filepath.Join(home, cmuxConfigPath)
 }
 
-func findCmuxSettings() string {
-	home, _ := os.UserHomeDir()
-	candidates := []string{
-		filepath.Join(home, ".agents/skills/cmux-settings/scripts/cmux-settings"),
-		filepath.Join(home, ".codex/skills/cmux-settings/scripts/cmux-settings"),
+// readCmuxConfig reads and parses ~/.config/cmux/cmux.json directly. Handler
+// owns this end-to-end — it never shells out to any external "cmux-settings"
+// helper (that was a skill-provided script that is not guaranteed to be
+// installed, and must not be depended on here).
+func readCmuxConfig() map[string]interface{} {
+	data, err := os.ReadFile(cmuxConfigFilePath())
+	if err != nil {
+		return nil
 	}
-	for _, c := range candidates {
-		if info, err := os.Stat(c); err == nil && info.Mode()&0111 != 0 {
-			return c
+	var cfg map[string]interface{}
+	if json.Unmarshal(data, &cfg) != nil {
+		return nil
+	}
+	return cfg
+}
+
+// writeCmuxConfig backs up the existing cmux.json to a timestamped .bak
+// alongside it (per cmux's own docs: "back up any existing cmux.json file to
+// a timestamped .bak copy before editing"), then writes the new config and
+// asks cmux to reload it.
+func writeCmuxConfig(cfg map[string]interface{}) error {
+	path := cmuxConfigFilePath()
+	if data, err := os.ReadFile(path); err == nil {
+		backupPath := fmt.Sprintf("%s.%s.bak", path, time.Now().Format("20060102-150405"))
+		if err := os.WriteFile(backupPath, data, 0644); err != nil {
+			return fmt.Errorf("backing up cmux.json: %w", err)
 		}
 	}
-	return ""
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling cmux.json: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("creating cmux config dir: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("writing cmux.json: %w", err)
+	}
+	exec.Command("cmux", "reload-config").Run()
+	return nil
 }
 
 func configureCmuxActions() {
-	cmuxSettings := findCmuxSettings()
-	if cmuxSettings == "" {
-		fmt.Println("  \033[2mcmux-settings helper not found, skipping cmux action configuration\033[0m")
-		return
+	cfg := readCmuxConfig()
+	if cfg == nil {
+		cfg = map[string]interface{}{}
+	}
+	actions, ok := cfg["actions"].(map[string]interface{})
+	if !ok {
+		actions = map[string]interface{}{}
 	}
 
 	// Set each action (always overwrite to pick up updates)
 	for _, id := range handlerCmuxActionIDs {
-		actionJSON, _ := json.Marshal(handlerCmuxActions[id])
-		key := "actions." + id
-		if err := exec.Command(cmuxSettings, "set", key, string(actionJSON)).Run(); err != nil {
-			fmt.Printf("  ⚠ Failed to set cmux action %s: %v\n", id, err)
-			return
-		}
+		actions[id] = handlerCmuxActions[id]
+	}
+	cfg["actions"] = actions
+
+	if err := writeCmuxConfig(cfg); err != nil {
+		fmt.Printf("  ⚠ Failed to configure cmux actions: %v\n", err)
+		return
 	}
 
-	exec.Command("cmux", "reload-config").Run()
 	var actionSummary []string
 	for _, id := range handlerCmuxActionIDs {
 		if s, ok := handlerCmuxActions[id]["shortcut"].(string); ok {
@@ -86,21 +118,25 @@ func configureCmuxActions() {
 	fmt.Printf("  ✓ Configured cmux actions: %s\n", strings.Join(actionSummary, ", "))
 }
 
+func cmuxConfigActions() map[string]interface{} {
+	cfg := readCmuxConfig()
+	if cfg == nil {
+		return nil
+	}
+	actions, ok := cfg["actions"].(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	return actions
+}
+
 func hasCmuxActions() bool {
-	cmuxSettings := findCmuxSettings()
-	if cmuxSettings == "" {
-		return false
-	}
-	out, _ := exec.Command(cmuxSettings, "get", "actions").Output()
-	if len(out) == 0 {
-		return false
-	}
-	var existing map[string]interface{}
-	if json.Unmarshal(out, &existing) != nil {
+	actions := cmuxConfigActions()
+	if actions == nil {
 		return false
 	}
 	for _, id := range handlerCmuxActionIDs {
-		if _, ok := existing[id]; ok {
+		if _, ok := actions[id]; ok {
 			return true
 		}
 	}
@@ -116,49 +152,41 @@ type CmuxShortcuts struct {
 	FocusForward     string
 }
 
-// GetCmuxShortcuts reads the configured shortcuts from the cmux config.
-// Returns nil if cmux-settings is not available or actions aren't configured.
+// GetCmuxShortcuts reads the configured shortcuts directly from
+// ~/.config/cmux/cmux.json. Returns nil if the config is missing or the
+// handler actions aren't configured in it.
 func GetCmuxShortcuts() *CmuxShortcuts {
-	cmuxSettings := findCmuxSettings()
-	if cmuxSettings == "" {
+	cfg := readCmuxConfig()
+	if cfg == nil {
 		return nil
 	}
-	out, err := exec.Command(cmuxSettings, "get", "actions").Output()
-	if err != nil || len(out) == 0 {
-		return nil
-	}
-	var actions map[string]map[string]interface{}
-	if json.Unmarshal(out, &actions) != nil {
-		return nil
-	}
-	shortcuts := &CmuxShortcuts{}
-	if a, ok := actions["handler-switch-to-awaiting"]; ok {
-		if s, ok := a["shortcut"].(string); ok {
-			shortcuts.SwitchToAwaiting = s
+	actions, _ := cfg["actions"].(map[string]interface{})
+
+	shortcutFor := func(id string) string {
+		a, ok := actions[id].(map[string]interface{})
+		if !ok {
+			return ""
 		}
+		s, _ := a["shortcut"].(string)
+		return s
 	}
-	if a, ok := actions["handler-switch-to-session"]; ok {
-		if s, ok := a["shortcut"].(string); ok {
-			shortcuts.SwitchToSession = s
-		}
+
+	shortcuts := &CmuxShortcuts{
+		SwitchToAwaiting: shortcutFor("handler-switch-to-awaiting"),
+		SwitchToSession:  shortcutFor("handler-switch-to-session"),
+		SwitchToUnread:   shortcutFor("handler-switch-to-unread"),
 	}
-	if a, ok := actions["handler-switch-to-unread"]; ok {
-		if s, ok := a["shortcut"].(string); ok {
-			shortcuts.SwitchToUnread = s
-		}
-	}
-	// Read browser back/forward from cmux shortcuts bindings
-	// These have defaults even without explicit config, so try to read them
-	if sOut, err := exec.Command(cmuxSettings, "get", "shortcuts.bindings.browserBack").Output(); err == nil {
-		s := strings.TrimSpace(strings.Trim(string(sOut), "\""))
-		if s != "" {
-			shortcuts.FocusBack = s
-		}
-	}
-	if sOut, err := exec.Command(cmuxSettings, "get", "shortcuts.bindings.browserForward").Output(); err == nil {
-		s := strings.TrimSpace(strings.Trim(string(sOut), "\""))
-		if s != "" {
-			shortcuts.FocusForward = s
+
+	// Read browser back/forward from cmux shortcuts bindings.
+	// These have defaults even without explicit config.
+	if shortcutsCfg, ok := cfg["shortcuts"].(map[string]interface{}); ok {
+		if bindings, ok := shortcutsCfg["bindings"].(map[string]interface{}); ok {
+			if s, ok := bindings["browserBack"].(string); ok && s != "" {
+				shortcuts.FocusBack = s
+			}
+			if s, ok := bindings["browserForward"].(string); ok && s != "" {
+				shortcuts.FocusForward = s
+			}
 		}
 	}
 	// Default cmux shortcuts if not explicitly configured
@@ -176,36 +204,30 @@ func GetCmuxShortcuts() *CmuxShortcuts {
 }
 
 func removeCmuxActions() {
-	cmuxSettings := findCmuxSettings()
-	if cmuxSettings == "" {
+	cfg := readCmuxConfig()
+	if cfg == nil {
 		return
 	}
-
-	// Check if any of our actions exist
-	out, _ := exec.Command(cmuxSettings, "get", "actions").Output()
-	if len(out) == 0 {
-		return
-	}
-	var existing map[string]interface{}
-	if json.Unmarshal(out, &existing) != nil {
+	actions, ok := cfg["actions"].(map[string]interface{})
+	if !ok {
 		return
 	}
 
 	found := false
 	for _, id := range handlerCmuxActionIDs {
-		if _, ok := existing[id]; ok {
+		if _, ok := actions[id]; ok {
 			found = true
-			break
+			delete(actions, id)
 		}
 	}
 	if !found {
 		return
 	}
+	cfg["actions"] = actions
 
-	for _, id := range handlerCmuxActionIDs {
-		exec.Command(cmuxSettings, "unset", "actions."+id).Run()
+	if err := writeCmuxConfig(cfg); err != nil {
+		fmt.Printf("  ⚠ Failed to remove cmux actions: %v\n", err)
+		return
 	}
-
-	exec.Command("cmux", "reload-config").Run()
 	fmt.Println("  ✓ Removed cmux actions (handler-switch-to-awaiting, handler-switch-to-session)")
 }
