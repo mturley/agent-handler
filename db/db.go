@@ -115,6 +115,23 @@ func runMigrations(conn *sql.DB) error {
 		return fmt.Errorf("failed to create session_crons table: %w", err)
 	}
 
+	// session_rate_limits: per-session 5h rate limit state (see db/rate_limits.go).
+	if _, err := conn.Exec(`
+		CREATE TABLE IF NOT EXISTS session_rate_limits (
+			session_id          TEXT PRIMARY KEY,
+			five_hour_percent   REAL NOT NULL,
+			five_hour_resets_at TEXT,
+			updated_at          TEXT NOT NULL
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create session_rate_limits table: %w", err)
+	}
+
+	// last_error_at records rate_limit StopFailures (see db/rate_limits.go).
+	if err := addColumnIfMissing(conn, "session_rate_limits", "last_error_at", "TEXT"); err != nil {
+		return err
+	}
+
 	// Status-emit reminder tracking (see cmd/status_reminder.go).
 	if err := addColumnIfMissing(conn, "sessions", "prompts_since_status", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err

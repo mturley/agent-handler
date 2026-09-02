@@ -177,6 +177,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		termType, termID, workspaceID := terminal.Detect()
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)
+		recordRateLimit(wd, &input)
 
 		// Mirror Slack-thread custom names to/from the worktree DB
 		// (best-effort, throttled, CLI-only toward worktree).
@@ -1346,4 +1347,35 @@ func migrateOldCursor(d *db.DB, newSessionID, sessionName string) {
 	if err == nil && oldCursor != "" {
 		d.AdvanceCursor(newSessionID, oldCursor)
 	}
+}
+
+// recordRateLimit persists the session's 5h rate limit window so the wake hooks
+// can read it. The statusline is the ONLY hook that receives rate_limits, so
+// without this the data is unavailable anywhere else.
+//
+// Sessions whose backend omits rate_limits (Vertex/Bedrock) get NO row at all:
+// writing 0% would look like abundant budget on a freshly-updated row, which is
+// worse than having no data.
+func recordRateLimit(wd *db.DB, input *hookInput) {
+	if input == nil || input.SessionID == "" || input.RateLimits == nil {
+		return
+	}
+	resetsAt := ""
+	if epoch := input.RateLimits.FiveHour.ResetsAt; epoch > 0 {
+		resetsAt = time.Unix(int64(epoch), 0).UTC().Format(time.RFC3339)
+	}
+	wd.UpsertRateLimit(
+		input.SessionID,
+		input.RateLimits.FiveHour.UsedPercentage,
+		resetsAt,
+		time.Now().UTC().Format(time.RFC3339),
+	)
+
+	// Maintain the fast-path marker the PostToolUse wake hook tests for.
+	cfg, _ := config.Read(config.DefaultPath())
+	threshold := 90
+	if cfg != nil {
+		threshold = cfg.AutoWakeThresholdPercent()
+	}
+	setWakeArmed(input.SessionID, input.RateLimits.FiveHour.UsedPercentage >= float64(threshold))
 }

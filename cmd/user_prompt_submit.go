@@ -101,6 +101,14 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID, input.CWD, "", -1)
 
 	// Nudge the session if it has gone too long without emitting a status.
+	// Ask for a wake job before work starts, if usage is already high. The hook
+	// does every check itself, so the message is a complete directive.
+	if cfg, _ := config.Read(config.DefaultPath()); cfg != nil && cfg.AutoWakeOnRateLimit() {
+		if msg := wakeCheckMessage(d, cfg, input.SessionID, time.Now()); msg != "" {
+			fmt.Println(msg)
+		}
+	}
+
 	if msg := checkStatusReminder(d, session, input.Prompt, time.Now().UTC()); msg != "" {
 		fmt.Println(msg)
 	}

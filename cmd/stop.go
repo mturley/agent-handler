@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"time"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +24,8 @@ func init() {
 }
 
 type stopHookInput struct {
-	SessionID string `json:"session_id"`
+	SessionID      string `json:"session_id"`
+	StopHookActive bool   `json:"stop_hook_active"`
 }
 
 func runStopHook(cmd *cobra.Command, args []string) error {
@@ -52,5 +56,18 @@ func applyStopHook(d *db.DB, data []byte) error {
 
 	d.SetWorking(input.SessionID, false)
 	applyStopHookCrons(d, data)
+
+	// A wake job is pointless once the session is idle, and firing one would
+	// interrupt a session waiting on the user. Only Claude can call CronDelete,
+	// so hold the session open for one turn to let it cancel. stop_hook_active
+	// is the loop guard.
+	cfg, _ := config.Read(config.DefaultPath())
+	if cfg != nil && cfg.AutoWakeOnRateLimit() {
+		if ids, force := wakeStopDecision(d, input.SessionID, time.Now(), input.StopHookActive); force {
+			fmt.Fprintln(os.Stderr, wakeDeleteInstruction(ids))
+			d.Close()
+			os.Exit(2)
+		}
+	}
 	return nil
 }

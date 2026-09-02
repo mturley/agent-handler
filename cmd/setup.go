@@ -304,12 +304,19 @@ func configureHooks(claudeDir, hooksDir string) error {
 		timeout int
 		matcher string
 	}
-	hookEntries := map[string]hookSpec{
-		"SessionEnd":       {"session_end.sh", 10, ""},
-		"UserPromptSubmit": {"user_prompt_submit.sh", 5, ""},
-		"PreCompact":       {"pre_compact.sh", 10, ""},
-		"Stop":             {"stop.sh", 2, ""},
-		"PostToolUse":      {"post_tool_use.sh", 5, "CronCreate|CronDelete"},
+	// An event may carry more than one group: PostToolUse both records cron
+	// jobs (narrow matcher) and runs the rate-limit wake check (all tools).
+	hookEntries := map[string][]hookSpec{
+		"SessionEnd":       {{"session_end.sh", 10, ""}},
+		"UserPromptSubmit": {{"user_prompt_submit.sh", 5, ""}},
+		"PreCompact":       {{"pre_compact.sh", 10, ""}},
+		"Stop":             {{"stop.sh", 2, ""}},
+		"PostToolUse": {
+			{"post_tool_use.sh", 5, "CronCreate|CronDelete"},
+			{"post_tool_use_wake.sh", 5, ""},
+		},
+		"PreToolUse":  {{"pre_tool_use.sh", 5, "CronCreate"}},
+		"StopFailure": {{"stop_failure.sh", 5, ""}},
 	}
 
 	existingHooks, ok := settings["hooks"].(map[string]interface{})
@@ -317,19 +324,7 @@ func configureHooks(claudeDir, hooksDir string) error {
 		existingHooks = make(map[string]interface{})
 	}
 
-	for event, spec := range hookEntries {
-		scriptPath := filepath.Join(hooksDir, spec.script)
-		newMatcherGroup := map[string]interface{}{
-			"matcher": spec.matcher,
-			"hooks": []interface{}{
-				map[string]interface{}{
-					"type":    "command",
-					"command": scriptPath,
-					"timeout": spec.timeout,
-				},
-			},
-		}
-
+	for event, specs := range hookEntries {
 		// Preserve existing matcher groups from other tools, remove any existing agent-handler ones
 		var kept []interface{}
 		if existing, ok := existingHooks[event].([]interface{}); ok {
@@ -339,8 +334,21 @@ func configureHooks(claudeDir, hooksDir string) error {
 				}
 			}
 		}
-		existingHooks[event] = append(kept, newMatcherGroup)
-		fmt.Printf("  ✓ %s -> %s\n", event, scriptPath)
+		for _, spec := range specs {
+			scriptPath := filepath.Join(hooksDir, spec.script)
+			kept = append(kept, map[string]interface{}{
+				"matcher": spec.matcher,
+				"hooks": []interface{}{
+					map[string]interface{}{
+						"type":    "command",
+						"command": scriptPath,
+						"timeout": spec.timeout,
+					},
+				},
+			})
+			fmt.Printf("  ✓ %s -> %s\n", event, scriptPath)
+		}
+		existingHooks[event] = kept
 	}
 
 	settings["hooks"] = existingHooks

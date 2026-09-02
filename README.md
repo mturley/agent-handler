@@ -89,6 +89,7 @@ handler claude          # Start a peekable Claude session
 handler watching        # Show watched resources and watcher status
 handler health          # Database health and statistics
 handler cleanup         # Archive dead sessions
+handler crons           # Cron jobs tracked for this session (--all for every session)
 handler query "SQL"     # Run ad-hoc read-only SQL
 ```
 
@@ -105,8 +106,12 @@ Once registered, sessions emit events to a central SQLite ledger as they work. T
 Hooks wire Claude Code session lifecycle events to handler:
 - **UserPromptSubmit** — registers sessions on first prompt, heartbeat, event injection based on inbox mode, auto-catchup summary on user return
 - **SessionEnd** — archives the session and soft-deletes subscriptions
-- **Statusline** — heartbeat, session metadata sync, unread notifications, awaiting-approval scan
+- **Statusline** — heartbeat, session metadata sync, unread notifications, awaiting-approval scan, rate-limit tracking
 - **PreCompact** — snapshots context before compaction
+- **Stop** — marks the session idle, reconciles tracked cron jobs, cancels a spent wake job
+- **PostToolUse** — records `CronCreate`/`CronDelete`, and checks rate-limit usage mid-task
+- **PreToolUse** — auto-approves agent-handler's own wake job, and nothing else
+- **StopFailure** — records turns that ended on a rate limit
 
 ### Slash commands
 
@@ -127,6 +132,60 @@ These are available as `/slash-commands` in any Claude session:
 ## Reminders
 
 Use `/reminder check CI on PR #42` to leave yourself a note. Reminders appear in your inbox on the next `/inbox` check, presented separately from other events. When reviewing reminders, you can snooze them — this re-delivers them to your inbox on the next check, so they keep coming back until you're done with them.
+
+## Scheduled Cron Jobs
+
+Claude Code sessions can schedule cron jobs with `CronCreate`. handler tracks them so you can
+see what a session has pending — `handler crons`, `handler crons --all`, or the **Cron jobs**
+tab on the session detail page.
+
+Tracking combines two signals. A `PostToolUse` hook records jobs as they are created and
+deleted, and the `Stop` hook reconciles the table each turn against Claude's own
+`session_crons` snapshot. The reconciliation is what makes this accurate: Claude removes jobs
+without any tool call — a one-shot auto-deletes the moment it fires, and a recurring job
+expires after 7 days — so the create/delete events alone would leave stale rows behind.
+
+These jobs are **in-memory and session-scoped**. They do not survive the session that created
+them, and handler tracks them but cannot resurrect them.
+
+## Automatic Rate-Limit Wake Jobs
+
+When a session's 5-hour rate limit usage crosses a threshold (90% by default), handler asks it
+to schedule a **wake job**: a one-shot cron job that fires just after the limit resets and
+resumes whatever was in progress. The point is unattended work — if you walk away mid-task and
+the limit is hit, the session picks itself back up instead of sitting idle until you return.
+
+The scheduling has to happen *early*, because once a session is actually rate-limited it cannot
+call `CronCreate` at all. That is why the trigger is a threshold rather than the limit itself,
+and why a job is sometimes scheduled for a limit you never reach.
+
+How it fits together:
+
+- The **statusline** hook is the only one that receives `rate_limits`, so it persists the 5h
+  window (percentage and reset time) for the other hooks to read.
+- **UserPromptSubmit** asks for a wake job before a turn begins; **PostToolUse** covers a long
+  turn that crosses the threshold while still running, since `Stop` only fires once a turn is
+  over.
+- Every check — usage, freshness, threshold, whether a job already exists — happens in the hook.
+  The session receives a complete `CronCreate` directive and is never asked to verify anything.
+- A **PreToolUse** hook auto-approves that one job, identified by handler's own marker and
+  validated against stored state. Every other `CronCreate` follows normal permission rules. No
+  entry is added to your `permissions.allow` list.
+- **Stop** cancels a spent wake job when the session goes idle, since waking a finished session
+  would interrupt one that is waiting on your reply. Only Claude can call `CronDelete`, so Stop
+  holds the session open for one turn to do it — guarded against loops, and skipped when the
+  turn just died on a rate limit and the job is needed.
+
+Configure in `~/.agent-handler/config.yaml`:
+
+```yaml
+auto_wake:
+  enabled: true          # default; false disables every path
+  threshold_percent: 90  # default
+```
+
+Only sessions on the first-party Anthropic API report rate limits. Sessions on Vertex or
+Bedrock omit the data entirely, and the feature stays dormant for them.
 
 ## Inbox Modes
 
@@ -295,7 +354,7 @@ View all active and idle sessions grouped by repo and cmux workspace. Features:
 
 ### Session Detail Page
 
-Clicking a session card (or running `handler ui-open` / the `/ui` skill) opens a focused page for one session at `/sessions/{id}`. It shows the session card, that session's inbox inline (expand and dismiss individual events, or dismiss all), and **Timeline** and **Resources** tabs hard-filtered to the session. The Timeline tab badge shows the time since the last event; the Resources tab badge shows per-type counts. This view is designed to live in its own cmux browser pane pointed at a single session.
+Clicking a session card (or running `handler ui-open` / the `/ui` skill) opens a focused page for one session at `/sessions/{id}`. It shows the session card, that session's inbox inline (expand and dismiss individual events, or dismiss all), and **Timeline**, **Resources**, and **Cron jobs** tabs hard-filtered to the session. The Timeline tab badge shows the time since the last event; the Resources tab badge shows per-type counts; the Cron jobs badge shows how many jobs are scheduled, each listed with its schedule, recurrence, prompt, and next fire time. This view is designed to live in its own cmux browser pane pointed at a single session.
 
 ### Timeline Tab
 

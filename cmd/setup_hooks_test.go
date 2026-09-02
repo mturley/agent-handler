@@ -44,15 +44,16 @@ func TestConfigureHooksInstallsCronPostToolUseHook(t *testing.T) {
 	}
 
 	matchers, commands := readHookMatchers(t, filepath.Join(claudeDir, "settings.json"), "PostToolUse")
-	if len(matchers) != 1 {
-		t.Fatalf("expected 1 PostToolUse matcher group, got %d", len(matchers))
-	}
-	if matchers[0] != "CronCreate|CronDelete" {
-		t.Errorf("expected matcher %q, got %q", "CronCreate|CronDelete", matchers[0])
-	}
 	want := filepath.Join(hooksDir, "post_tool_use.sh")
-	if len(commands) != 1 || commands[0] != want {
-		t.Errorf("expected command %q, got %v", want, commands)
+	var found bool
+	for i, m := range matchers {
+		if m == "CronCreate|CronDelete" && commands[i] == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected a %q group pointing at %q; got %v / %v",
+			"CronCreate|CronDelete", want, matchers, commands)
 	}
 }
 
@@ -88,10 +89,15 @@ func TestConfigureHooksIsIdempotent(t *testing.T) {
 		}
 	}
 
-	for _, event := range []string{"PostToolUse", "Stop", "SessionEnd", "UserPromptSubmit", "PreCompact"} {
+	// PostToolUse legitimately carries two groups (cron recorder + wake check);
+	// the rest carry one. Repeated setup must not grow either.
+	expected := map[string]int{
+		"PostToolUse": 2, "Stop": 1, "SessionEnd": 1, "UserPromptSubmit": 1, "PreCompact": 1,
+	}
+	for event, want := range expected {
 		matchers, _ := readHookMatchers(t, filepath.Join(claudeDir, "settings.json"), event)
-		if len(matchers) != 1 {
-			t.Errorf("%s: expected 1 group after repeated setup, got %d", event, len(matchers))
+		if len(matchers) != want {
+			t.Errorf("%s: expected %d group(s) after repeated setup, got %d", event, want, len(matchers))
 		}
 	}
 }
@@ -112,8 +118,8 @@ func TestConfigureHooksPreservesForeignPostToolUseHooks(t *testing.T) {
 	}
 
 	matchers, commands := readHookMatchers(t, settingsPath, "PostToolUse")
-	if len(matchers) != 2 {
-		t.Fatalf("expected foreign hook preserved alongside ours, got %d groups", len(matchers))
+	if len(matchers) != 3 {
+		t.Fatalf("expected the foreign hook preserved alongside our two, got %d groups", len(matchers))
 	}
 	var foundForeign bool
 	for _, c := range commands {
@@ -165,5 +171,92 @@ func TestRemoveHooksPreservesForeignHooks(t *testing.T) {
 	_, commands := readHookMatchers(t, settingsPath, "PostToolUse")
 	if len(commands) != 1 || commands[0] != "/opt/other/lint.sh" {
 		t.Errorf("expected only the foreign hook to remain, got %v", commands)
+	}
+}
+
+// --- wake hooks -------------------------------------------------------------
+
+func TestConfigureHooksInstallsWakeHooks(t *testing.T) {
+	claudeDir := t.TempDir()
+	hooksDir := filepath.Join(t.TempDir(), "agent-handler", "hooks")
+
+	if err := configureHooks(claudeDir, hooksDir); err != nil {
+		t.Fatalf("configureHooks failed: %v", err)
+	}
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+
+	// PostToolUse now carries two groups: the cron recorder and the wake check.
+	matchers, commands := readHookMatchers(t, settingsPath, "PostToolUse")
+	if len(matchers) != 2 {
+		t.Fatalf("expected 2 PostToolUse groups, got %d (%v)", len(matchers), commands)
+	}
+	var sawCron, sawWake bool
+	for i, m := range matchers {
+		switch m {
+		case "CronCreate|CronDelete":
+			sawCron = commands[i] == filepath.Join(hooksDir, "post_tool_use.sh")
+		case "":
+			sawWake = commands[i] == filepath.Join(hooksDir, "post_tool_use_wake.sh")
+		}
+	}
+	if !sawCron {
+		t.Errorf("missing the CronCreate|CronDelete recorder group; got %v / %v", matchers, commands)
+	}
+	if !sawWake {
+		t.Errorf("missing the all-tools wake group; got %v / %v", matchers, commands)
+	}
+
+	preMatchers, preCommands := readHookMatchers(t, settingsPath, "PreToolUse")
+	if len(preMatchers) != 1 || preMatchers[0] != "CronCreate" {
+		t.Errorf("expected one PreToolUse group matching CronCreate, got %v", preMatchers)
+	}
+	if len(preCommands) != 1 || preCommands[0] != filepath.Join(hooksDir, "pre_tool_use.sh") {
+		t.Errorf("unexpected PreToolUse command: %v", preCommands)
+	}
+
+	sfMatchers, sfCommands := readHookMatchers(t, settingsPath, "StopFailure")
+	if len(sfMatchers) != 1 {
+		t.Errorf("expected one StopFailure group, got %v", sfMatchers)
+	}
+	if len(sfCommands) != 1 || sfCommands[0] != filepath.Join(hooksDir, "stop_failure.sh") {
+		t.Errorf("unexpected StopFailure command: %v", sfCommands)
+	}
+}
+
+func TestConfigureHooksIsIdempotentWithWakeHooks(t *testing.T) {
+	claudeDir := t.TempDir()
+	hooksDir := filepath.Join(t.TempDir(), "agent-handler", "hooks")
+	for i := 0; i < 3; i++ {
+		if err := configureHooks(claudeDir, hooksDir); err != nil {
+			t.Fatalf("run %d failed: %v", i, err)
+		}
+	}
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+
+	if m, c := readHookMatchers(t, settingsPath, "PostToolUse"); len(m) != 2 {
+		t.Errorf("expected PostToolUse to stay at 2 groups, got %d (%v)", len(m), c)
+	}
+	for _, event := range []string{"PreToolUse", "StopFailure"} {
+		if m, _ := readHookMatchers(t, settingsPath, event); len(m) != 1 {
+			t.Errorf("%s: expected 1 group after repeated setup, got %d", event, len(m))
+		}
+	}
+}
+
+func TestRemoveHooksRemovesWakeHooks(t *testing.T) {
+	claudeDir := t.TempDir()
+	hooksDir := filepath.Join(t.TempDir(), "agent-handler", "hooks")
+	if err := configureHooks(claudeDir, hooksDir); err != nil {
+		t.Fatalf("configureHooks failed: %v", err)
+	}
+	if err := removeHooks(claudeDir); err != nil {
+		t.Fatalf("removeHooks failed: %v", err)
+	}
+	settingsPath := filepath.Join(claudeDir, "settings.json")
+
+	for _, event := range []string{"PostToolUse", "PreToolUse", "StopFailure"} {
+		if m, c := readHookMatchers(t, settingsPath, event); len(m) != 0 {
+			t.Errorf("%s: expected removal, got %d groups (%v)", event, len(m), c)
+		}
 	}
 }

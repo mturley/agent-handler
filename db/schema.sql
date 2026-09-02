@@ -132,3 +132,14 @@ CREATE TABLE IF NOT EXISTS session_crons (
 );
 
 CREATE INDEX IF NOT EXISTS idx_session_crons_session ON session_crons(session_id);
+
+-- session_rate_limits: last observed 5h rate limit usage per session, written
+-- by the statusline hook (the only hook that receives rate_limits) so the wake
+-- hooks can read it. Absence means "unknown", not "zero".
+CREATE TABLE IF NOT EXISTS session_rate_limits (
+    session_id          TEXT PRIMARY KEY,
+    five_hour_percent   REAL NOT NULL,
+    five_hour_resets_at TEXT,
+    updated_at          TEXT NOT NULL,
+    last_error_at       TEXT
+);

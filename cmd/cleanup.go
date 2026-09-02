@@ -112,6 +112,11 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 	// sessions can never have live ones.
 	d.DeleteSessionCronsForSessions(toArchive)
 
+	// Rate limit state and wake markers are per-session and meaningless once
+	// the session is gone.
+	d.DeleteRateLimitsForSessions(toArchive)
+	clearWakeMarkers(toArchive)
+
 	// Revoke subscriptions for archived sessions so they stop being polled.
 	for _, id := range toArchive {
 		_, _ = d.SoftDeleteSubscriptionsForSession(id)

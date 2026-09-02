@@ -15,7 +15,16 @@ type Config struct {
 	Statusline   *StatuslineConfig   `yaml:"statusline,omitempty"`
 	Experimental *ExperimentalConfig `yaml:"experimental,omitempty"`
 	Reminders    *RemindersConfig    `yaml:"reminders,omitempty"`
+	AutoWake     *AutoWakeConfig     `yaml:"auto_wake,omitempty"`
 	Debug        bool                `yaml:"debug,omitempty"`
+}
+
+// AutoWakeConfig controls automatic rate-limit wake jobs: when a session's
+// 5-hour rate limit usage crosses the threshold, hooks ask the session to
+// schedule a one-shot cron job that resumes its work after the limit resets.
+type AutoWakeConfig struct {
+	Enabled          *bool `yaml:"enabled,omitempty"`
+	ThresholdPercent *int  `yaml:"threshold_percent,omitempty"`
 }
 
 // ExperimentalConfig contains flags for experimental features
@@ -205,4 +214,32 @@ func slackResourceURL(resourceID string) string {
 	channel, ts := parts[0], parts[1]
 	tsDigits := strings.ReplaceAll(ts, ".", "")
 	return "https://" + domain + "/archives/" + channel + "/p" + tsDigits
+}
+
+// AutoWakeOnRateLimit reports whether automatic rate-limit wake jobs are
+// enabled (default true). When disabled, every wake hook path is a no-op.
+func (c *Config) AutoWakeOnRateLimit() bool {
+	if c.AutoWake == nil || c.AutoWake.Enabled == nil {
+		return true
+	}
+	return *c.AutoWake.Enabled
+}
+
+// defaultAutoWakeThreshold is the 5h usage percentage at which a session is
+// asked to schedule a wake job. High enough to avoid scheduling for limits that
+// are never reached, low enough to leave budget for the CronCreate call itself.
+const defaultAutoWakeThreshold = 90
+
+// AutoWakeThresholdPercent returns the 5h usage percentage that triggers a wake
+// job (default 90). Values outside 1-100 are nonsense — they would either never
+// fire or fire constantly — so they fall back to the default.
+func (c *Config) AutoWakeThresholdPercent() int {
+	if c.AutoWake == nil || c.AutoWake.ThresholdPercent == nil {
+		return defaultAutoWakeThreshold
+	}
+	v := *c.AutoWake.ThresholdPercent
+	if v < 1 || v > 100 {
+		return defaultAutoWakeThreshold
+	}
+	return v
 }

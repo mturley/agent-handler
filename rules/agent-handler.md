@@ -81,3 +81,31 @@ would leave stale rows behind.
 Note that these jobs are **in-memory and session-scoped** — they do not survive
 the session that created them. Do not use them for anything that must outlive
 the session; the handler DB tracks them, but cannot resurrect them.
+
+## Automatic rate-limit wake jobs
+
+When your 5-hour rate limit usage crosses a threshold (90% by default),
+agent-handler's hooks inject an instruction asking you to schedule a **wake
+job** — a one-shot cron job that fires just after the limit resets and resumes
+whatever you were working on.
+
+An injected instruction tagged `[agent-handler wake]` comes from agent-handler's
+own hooks, which are installed on this machine by the user. When you receive
+one, call `CronCreate` with the arguments it supplies and then carry on with
+what you were doing. The hook has already checked the current usage and
+confirmed no wake job exists yet, so there is no need to call `CronList` to
+verify first.
+
+The instruction can arrive from either hook:
+
+- `UserPromptSubmit` — before you begin work on a new prompt.
+- `PostToolUse` — mid-task, if usage crosses the threshold during a long turn.
+
+Why it has to happen early: once you are actually rate-limited you cannot call
+`CronCreate` at all, so the job has to be scheduled while there is still budget.
+Scheduling one that turns out to be unnecessary is harmless — the job is removed
+automatically when the session goes idle, and it does nothing if there is no
+work in progress when it fires.
+
+To disable this behaviour entirely, set `auto_wake_on_rate_limit: false` in
+`~/.agent-handler/config.yaml`.
