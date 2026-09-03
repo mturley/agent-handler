@@ -69,3 +69,39 @@ func (s *Server) handleSessionCrons(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, out)
 }
+
+// cronsFingerprint summarises every tracked cron job across all sessions. The
+// SSE stream compares it between ticks and emits crons_changed only when it
+// differs, so a page sitting on the Cron jobs tab does not refetch on every
+// heartbeat.
+//
+// It covers the mutable fields, not just the job ids: reconciliation can
+// rewrite a schedule in place without changing the job count.
+func cronsFingerprint(d *db.DB) string {
+	var fp string
+	d.QueryRow(`
+		SELECT COALESCE(GROUP_CONCAT(session_id || ':' || job_id || ':' || schedule || ':' || recurring, ','), '')
+		FROM (SELECT * FROM session_crons ORDER BY session_id, job_id)
+	`).Scan(&fp)
+	return fp
+}
+
+// resourcesFingerprint summarises the subscription set across all sessions, so
+// the stream can emit resources_changed when a resource is watched or unwatched
+// — including by a watcher or another session, which the UI would otherwise not
+// see until remount.
+//
+// It covers deleted_at because unsubscribing is a soft delete: the row stays,
+// only the timestamp appears.
+//
+// Unread COUNTS are not covered here; those move when events arrive, which the
+// existing events_new signal already reports.
+func resourcesFingerprint(d *db.DB) string {
+	var fp string
+	d.QueryRow(`
+		SELECT COALESCE(GROUP_CONCAT(id || ':' || subscriber || ':' || resource_type || ':' ||
+		                             resource_id || ':' || COALESCE(deleted_at, ''), ','), '')
+		FROM (SELECT * FROM watcher_subscriptions ORDER BY id)
+	`).Scan(&fp)
+	return fp
+}

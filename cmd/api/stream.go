@@ -25,6 +25,8 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	s.DB.QueryRow("SELECT MAX(ts) FROM events").Scan(&lastEventTS)
 	var lastWorkingState string
 	s.DB.QueryRow("SELECT COALESCE(GROUP_CONCAT(session_id || ':' || working, ','), '') FROM sessions WHERE status = 'active'").Scan(&lastWorkingState)
+	lastCronsFP := cronsFingerprint(s.DB)
+	lastResourcesFP := resourcesFingerprint(s.DB)
 
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
@@ -49,6 +51,20 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			s.DB.QueryRow("SELECT COALESCE(GROUP_CONCAT(session_id || ':' || working, ','), '') FROM sessions WHERE status = 'active'").Scan(&currentWorkingState)
 			if currentWorkingState != lastWorkingState {
 				lastWorkingState = currentWorkingState
+			}
+
+			// Check for cron job changes (create/delete/reconcile)
+			if currentCronsFP := cronsFingerprint(s.DB); currentCronsFP != lastCronsFP {
+				lastCronsFP = currentCronsFP
+				data, _ := json.Marshal(map[string]string{"type": "crons_changed"})
+				fmt.Fprintf(w, "event: crons_changed\ndata: %s\n\n", data)
+			}
+
+			// Check for subscription changes (watch/unwatch, incl. by watchers)
+			if currentResourcesFP := resourcesFingerprint(s.DB); currentResourcesFP != lastResourcesFP {
+				lastResourcesFP = currentResourcesFP
+				data, _ := json.Marshal(map[string]string{"type": "resources_changed"})
+				fmt.Fprintf(w, "event: resources_changed\ndata: %s\n\n", data)
 			}
 
 			// Always send heartbeat (triggers sessions refetch)

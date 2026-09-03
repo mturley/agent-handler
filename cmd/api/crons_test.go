@@ -249,3 +249,147 @@ func TestHandleSessionCronsIncludesNextFireAt(t *testing.T) {
 		t.Errorf("expected embedded cron fields preserved, got %+v", byID["good"])
 	}
 }
+
+// --- SSE change detection ---------------------------------------------------
+//
+// The stream emits crons_changed only when the tracked cron set actually
+// differs, so an idle page does not refetch every heartbeat.
+
+func TestCronsFingerprintChangesWhenJobAdded(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	before := cronsFingerprint(s.DB)
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{JobID: "j1", Schedule: "* * * * *"}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	after := cronsFingerprint(s.DB)
+
+	if before == after {
+		t.Errorf("expected the fingerprint to change when a job is added (both %q)", before)
+	}
+}
+
+func TestCronsFingerprintChangesWhenJobRemoved(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{JobID: "j1", Schedule: "* * * * *"}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	before := cronsFingerprint(s.DB)
+	if err := s.DB.DeleteSessionCron("S1", "j1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	after := cronsFingerprint(s.DB)
+
+	if before == after {
+		t.Errorf("expected the fingerprint to change when a job is removed (both %q)", before)
+	}
+}
+
+// A schedule edit must be visible too — reconciliation can rewrite fields in
+// place without changing the job count.
+func TestCronsFingerprintChangesWhenScheduleChanges(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{JobID: "j1", Schedule: "1 2 3 4 *"}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	before := cronsFingerprint(s.DB)
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{JobID: "j1", Schedule: "5 6 7 8 *"}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	after := cronsFingerprint(s.DB)
+
+	if before == after {
+		t.Errorf("expected the fingerprint to change when a schedule changes (both %q)", before)
+	}
+}
+
+// Steady state must be stable, or the page would refetch on every heartbeat.
+func TestCronsFingerprintStableWhenNothingChanges(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := s.DB.UpsertSessionCron("S1", db.SessionCron{JobID: "j1", Schedule: "* * * * *"}, now); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	if a, b := cronsFingerprint(s.DB), cronsFingerprint(s.DB); a != b {
+		t.Errorf("expected a stable fingerprint, got %q then %q", a, b)
+	}
+}
+
+func TestCronsFingerprintEmptyDatabase(t *testing.T) {
+	s := newTestServer(t)
+	if got := cronsFingerprint(s.DB); got != "" {
+		t.Errorf("expected an empty fingerprint with no jobs, got %q", got)
+	}
+}
+
+// --- resources SSE change detection -----------------------------------------
+//
+// The Resources tab had the same gap as Cron jobs: ["session-resources", id]
+// was invalidated only by its own subscribe/unsubscribe mutations, so a
+// resource added by a watcher never appeared until remount.
+
+func TestResourcesFingerprintChangesOnSubscribe(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	before := resourcesFingerprint(s.DB)
+	if err := s.DB.Subscribe(db.Subscription{
+		ID: "sub1", SessionID: "S1", ResourceType: "pr", ResourceID: "example/repo#1", CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	if after := resourcesFingerprint(s.DB); after == before {
+		t.Errorf("expected the fingerprint to change on subscribe (both %q)", before)
+	}
+}
+
+func TestResourcesFingerprintChangesOnUnsubscribe(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	if err := s.DB.Subscribe(db.Subscription{
+		ID: "sub1", SessionID: "S1", ResourceType: "pr", ResourceID: "example/repo#1", CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	before := resourcesFingerprint(s.DB)
+	if _, err := s.DB.SoftDeleteSubscriptionsForSession("S1"); err != nil {
+		t.Fatalf("unsubscribe: %v", err)
+	}
+	if after := resourcesFingerprint(s.DB); after == before {
+		t.Errorf("expected the fingerprint to change on unsubscribe (both %q)", before)
+	}
+}
+
+func TestResourcesFingerprintStableWhenNothingChanges(t *testing.T) {
+	s := newTestServer(t)
+	seedCronSession(t, s, "S1")
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := s.DB.Subscribe(db.Subscription{
+		ID: "sub1", SessionID: "S1", ResourceType: "pr", ResourceID: "example/repo#1", CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("subscribe: %v", err)
+	}
+	if a, b := resourcesFingerprint(s.DB), resourcesFingerprint(s.DB); a != b {
+		t.Errorf("expected a stable fingerprint, got %q then %q", a, b)
+	}
+}
+
+func TestResourcesFingerprintEmptyDatabase(t *testing.T) {
+	s := newTestServer(t)
+	if got := resourcesFingerprint(s.DB); got != "" {
+		t.Errorf("expected an empty fingerprint with no subscriptions, got %q", got)
+	}
+}

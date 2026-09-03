@@ -17,6 +17,17 @@ export function useSSE() {
 
       es.addEventListener("events_new", () => {
         queryClient.invalidateQueries({ queryKey: ["events"] })
+        // New events move unread counts on watched resources.
+        queryClient.invalidateQueries({ queryKey: ["session-resources"] })
+      })
+
+      es.addEventListener("resources_changed", () => {
+        queryClient.invalidateQueries({ queryKey: ["session-resources"] })
+      })
+
+      // Prefix match: invalidates every session's cron query at once.
+      es.addEventListener("crons_changed", () => {
+        queryClient.invalidateQueries({ queryKey: ["session-crons"] })
       })
 
       es.onerror = () => {
