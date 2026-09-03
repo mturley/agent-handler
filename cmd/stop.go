@@ -2,12 +2,9 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
-	"time"
 
-	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	"github.com/spf13/cobra"
 )
@@ -24,8 +21,7 @@ func init() {
 }
 
 type stopHookInput struct {
-	SessionID      string `json:"session_id"`
-	StopHookActive bool   `json:"stop_hook_active"`
+	SessionID string `json:"session_id"`
 }
 
 func runStopHook(cmd *cobra.Command, args []string) error {
@@ -57,17 +53,9 @@ func applyStopHook(d *db.DB, data []byte) error {
 	d.SetWorking(input.SessionID, false)
 	applyStopHookCrons(d, data)
 
-	// A wake job is pointless once the session is idle, and firing one would
-	// interrupt a session waiting on the user. Only Claude can call CronDelete,
-	// so hold the session open for one turn to let it cancel. stop_hook_active
-	// is the loop guard.
-	cfg, _ := config.Read(config.DefaultPath())
-	if cfg != nil && cfg.AutoWakeOnRateLimit() {
-		if ids, force := wakeStopDecision(d, input.SessionID, time.Now(), input.StopHookActive); force {
-			fmt.Fprintln(os.Stderr, wakeDeleteInstruction(ids))
-			d.Close()
-			os.Exit(2)
-		}
-	}
+	// Stop deliberately does NOT touch wake jobs. The end of a turn is not the
+	// end of the session's work — subagents may still be running — and an
+	// earlier cancel-on-Stop fought with the PostToolUse create path, with the
+	// two hooks issuing opposing instructions every turn. See wakeStopForces.
 	return nil
 }

@@ -76,10 +76,12 @@ func decideWake(cfg *config.Config, rl *db.RateLimitState, crons []db.SessionCro
 		Inject: true,
 		Cron: fmt.Sprintf("%d %d %d %d *",
 			fireAt.Minute(), fireAt.Hour(), fireAt.Day(), int(fireAt.Month())),
-		Prompt: wakeMarker + " The rate limit that paused you has reset. Resume the " +
-			"work that was in progress before the pause, picking up where you left " +
-			"off without asking the user to repeat themselves. If no work was in " +
-			"progress, do nothing.",
+		Prompt: wakeMarker + " The rate limit that paused you has reset. If work was " +
+			"in progress before the pause, resume it, picking up where you left off " +
+			"without asking the user to repeat themselves. If you were waiting for the " +
+			"user to answer a question, do not start anything — restate the question " +
+			"and wait. If there was no work in progress and no pending question, do " +
+			"nothing at all.",
 		FireAt: fireAt,
 	}
 }
@@ -123,26 +125,6 @@ func wakeCheckMessage(d *db.DB, cfg *config.Config, sessionID string, now time.T
 	return wakeInstruction(decideWake(cfg, rl, crons, now))
 }
 
-// wakeCleanupJobIDs returns the ids of the session's wake jobs. Cleanup is
-// unconditional at Stop: once the session is idle there is nothing to resume,
-// and waking it would interrupt a session waiting on the user's reply.
-func wakeCleanupJobIDs(d *db.DB, sessionID string) []string {
-	if d == nil || sessionID == "" {
-		return nil
-	}
-	crons, err := d.ListSessionCrons(sessionID)
-	if err != nil {
-		return nil
-	}
-	var ids []string
-	for _, c := range crons {
-		if isWakeCron(c) {
-			ids = append(ids, c.JobID)
-		}
-	}
-	return ids
-}
-
 // shouldAllowCronCreate decides whether a CronCreate call is the wake job
 // handler is currently asking for, and may therefore skip the permission
 // prompt. Anything else returns false and falls through to normal handling —
@@ -166,60 +148,20 @@ func shouldAllowCronCreate(d *db.DB, cfg *config.Config, sessionID, prompt strin
 	return rl.FiveHourPercent >= float64(cfg.AutoWakeThresholdPercent())
 }
 
-// wakeStopFailureWindow is how long after a rate_limit StopFailure the Stop
-// hook declines to clean up. It only needs to span the gap between the two
-// events if both fire for the same turn.
-const wakeStopFailureWindow = 2 * time.Minute
-
-// wakeStopCleanupIDs returns the wake job ids the Stop hook should delete.
+// NOTE: Stop deliberately has no wake-job behaviour at all.
 //
-// Cleanup is unconditional with respect to usage: once the session is idle
-// there is nothing to resume, and firing a wake job then would interrupt a
-// session that is waiting on the user's reply. The one exception is a turn that
-// just died on a rate limit — there the wake job is precisely what is needed,
-// so it is left alone.
-func wakeStopCleanupIDs(d *db.DB, sessionID string, now time.Time) []string {
-	if d == nil || sessionID == "" {
-		return nil
-	}
-	if d.HadRecentRateLimitError(sessionID, now.UTC(), wakeStopFailureWindow) {
-		return nil
-	}
-	return wakeCleanupJobIDs(d, sessionID)
-}
-
-// wakeStopDecision decides whether the Stop hook should force a continuation so
-// the session can cancel its wake job.
+// An earlier version cancelled a wake job when the session went idle, holding
+// the session open for a turn (Stop exit 2) so it could call CronDelete. Two
+// things killed it in live use:
 //
-// Only Claude can call CronDelete — a hook cannot cancel a cron job — so
-// removing a wake job when the session goes idle requires holding the session
-// open for one more turn (Stop exit 2).
+//  1. Stop fires at the end of an assistant TURN, which is not the same as the
+//     session's work being done — a turn can end with subagents still running.
+//  2. Cancel-on-Stop and create-on-PostToolUse contradicted each other every
+//     turn, so the two hooks issued opposing instructions and oscillated.
 //
-// The stopHookActive flag is the loop guard and is not optional: if a stop hook
-// is already keeping the session alive, forcing again could prevent it from
-// ever stopping. It is also skipped right after a rate-limit failure, where the
-// wake job is wanted and a forced continuation would fail regardless.
-func wakeStopDecision(d *db.DB, sessionID string, now time.Time, stopHookActive bool) ([]string, bool) {
-	if stopHookActive {
-		return nil, false
-	}
-	ids := wakeStopCleanupIDs(d, sessionID, now)
-	if len(ids) == 0 {
-		return nil, false
-	}
-	return ids, true
-}
-
-// wakeDeleteInstruction is the message shown when Stop holds the session open to
-// cancel a wake job. It goes to stderr with exit 2, which is how a Stop hook
-// tells Claude why it must keep going.
-func wakeDeleteInstruction(ids []string) string {
-	return fmt.Sprintf(
-		"[agent-handler wake] This session is going idle, so its rate-limit wake job is "+
-			"no longer needed. Call CronDelete for job id(s) %s, then stop. Do not start "+
-			"any other work.",
-		strings.Join(ids, ", "))
-}
+// A wake job now outlives the turn. If it fires with nothing to resume it does
+// nothing; if the session was waiting on the user it restates the question
+// rather than barging ahead. See the prompt in decideWake.
 
 // The PostToolUse wake hook runs after every tool call. Spawning the handler
 // binary each time would be wasteful when nothing is near the limit, so the

@@ -108,10 +108,10 @@ Hooks wire Claude Code session lifecycle events to handler:
 - **SessionEnd** — archives the session and soft-deletes subscriptions
 - **Statusline** — heartbeat, session metadata sync, unread notifications, awaiting-approval scan, rate-limit tracking
 - **PreCompact** — snapshots context before compaction
-- **Stop** — marks the session idle, reconciles tracked cron jobs, cancels a spent wake job
+- **Stop** — marks the session idle and reconciles tracked cron jobs
 - **PostToolUse** — records `CronCreate`/`CronDelete`, and checks rate-limit usage mid-task
 - **PreToolUse** — auto-approves agent-handler's own wake job, and nothing else
-- **StopFailure** — records turns that ended on a rate limit
+- **StopFailure** — records turns that ended on a rate limit (`last_error_at`)
 
 ### Slash commands
 
@@ -171,10 +171,13 @@ How it fits together:
 - A **PreToolUse** hook auto-approves that one job, identified by handler's own marker and
   validated against stored state. Every other `CronCreate` follows normal permission rules. No
   entry is added to your `permissions.allow` list.
-- **Stop** cancels a spent wake job when the session goes idle, since waking a finished session
-  would interrupt one that is waiting on your reply. Only Claude can call `CronDelete`, so Stop
-  holds the session open for one turn to do it — guarded against loops, and skipped when the
-  turn just died on a rate limit and the job is needed.
+- **Stop** deliberately leaves wake jobs alone. An earlier version cancelled them when the
+  session went idle; that was wrong twice over. Stop fires at the end of an assistant *turn*,
+  which is not the same as the work being finished — a turn can end with subagents still
+  running — and cancel-on-Stop fought with create-on-PostToolUse, so the two hooks issued
+  opposing instructions every turn. Instead the wake job simply outlives the turn, and its
+  prompt decides what to do when it fires: resume in-progress work, restate a pending question
+  if the session was waiting on you, or do nothing.
 
 Configure in `~/.agent-handler/config.yaml`:
 

@@ -21,6 +21,10 @@ type RateLimitState struct {
 	FiveHourPercent  float64 `json:"five_hour_percent"`
 	FiveHourResetsAt string  `json:"five_hour_resets_at"`
 	UpdatedAt        string  `json:"updated_at"`
+	// LastErrorAt is when a turn last ended on a rate_limit API error
+	// (StopFailure). Telemetry: it is the ground truth for whether the wake
+	// mechanism was ever actually needed.
+	LastErrorAt string `json:"last_error_at"`
 }
 
 // IsStale reports whether the row is older than window as of now. An
@@ -62,9 +66,10 @@ func (db *DB) UpsertRateLimit(sessionID string, fiveHourPercent float64, fiveHou
 func (db *DB) GetRateLimit(sessionID string) (*RateLimitState, error) {
 	var r RateLimitState
 	err := db.conn.QueryRow(`
-		SELECT session_id, five_hour_percent, COALESCE(five_hour_resets_at, ''), updated_at
+		SELECT session_id, five_hour_percent, COALESCE(five_hour_resets_at, ''), updated_at,
+		       COALESCE(last_error_at, '')
 		FROM session_rate_limits WHERE session_id = ?
-	`, sessionID).Scan(&r.SessionID, &r.FiveHourPercent, &r.FiveHourResetsAt, &r.UpdatedAt)
+	`, sessionID).Scan(&r.SessionID, &r.FiveHourPercent, &r.FiveHourResetsAt, &r.UpdatedAt, &r.LastErrorAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -111,21 +116,4 @@ func (db *DB) RecordRateLimitError(sessionID, now string) error {
 		return fmt.Errorf("failed to record rate limit error: %w", err)
 	}
 	return nil
-}
-
-// HadRecentRateLimitError reports whether a rate_limit failure was recorded for
-// the session within the given window.
-func (db *DB) HadRecentRateLimitError(sessionID string, now time.Time, window time.Duration) bool {
-	var lastErr sql.NullString
-	err := db.conn.QueryRow(
-		`SELECT last_error_at FROM session_rate_limits WHERE session_id = ?`,
-		sessionID).Scan(&lastErr)
-	if err != nil || !lastErr.Valid || lastErr.String == "" {
-		return false
-	}
-	t, err := time.Parse(time.RFC3339, lastErr.String)
-	if err != nil {
-		return false
-	}
-	return now.Sub(t) <= window
 }

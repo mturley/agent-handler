@@ -145,35 +145,36 @@ func TestDeleteRateLimitsForSessionsEmptyIsNoop(t *testing.T) {
 	}
 }
 
-func TestRecordAndReadRateLimitError(t *testing.T) {
+func TestRecordRateLimitErrorIsReadable(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "rle-1")
 
-	now := time.Now().UTC()
-	if err := d.RecordRateLimitError("rle-1", now.Format(time.RFC3339)); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := d.RecordRateLimitError("rle-1", now); err != nil {
 		t.Fatalf("RecordRateLimitError failed: %v", err)
 	}
 
-	if !d.HadRecentRateLimitError("rle-1", now, time.Minute) {
-		t.Error("expected a just-recorded error to count as recent")
+	rl, err := d.GetRateLimit("rle-1")
+	if err != nil {
+		t.Fatalf("GetRateLimit failed: %v", err)
 	}
-	if d.HadRecentRateLimitError("rle-1", now.Add(10*time.Minute), time.Minute) {
-		t.Error("expected the error to age out of a 1-minute window")
+	if rl == nil || rl.LastErrorAt != now {
+		t.Errorf("expected last_error_at %q, got %+v", now, rl)
 	}
 }
 
-// The error must be recordable even when no statusline row exists yet — a
-// session can hit a rate limit before the statusline has written anything.
+// A session can hit a rate limit before the statusline has written anything.
 func TestRecordRateLimitErrorWithoutExistingRow(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "rle-2")
 
-	now := time.Now().UTC()
-	if err := d.RecordRateLimitError("rle-2", now.Format(time.RFC3339)); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := d.RecordRateLimitError("rle-2", now); err != nil {
 		t.Fatalf("RecordRateLimitError failed: %v", err)
 	}
-	if !d.HadRecentRateLimitError("rle-2", now, time.Minute) {
-		t.Error("expected the error to be recorded without a prior rate limit row")
+	rl, _ := d.GetRateLimit("rle-2")
+	if rl == nil || rl.LastErrorAt == "" {
+		t.Error("expected the error recorded without a prior rate limit row")
 	}
 }
 
@@ -182,11 +183,11 @@ func TestRecordRateLimitErrorPreservesUsage(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "rle-3")
 
-	now := time.Now().UTC()
-	if err := d.UpsertRateLimit("rle-3", 97, "2026-09-02T21:00:00Z", now.Format(time.RFC3339)); err != nil {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := d.UpsertRateLimit("rle-3", 97, "2026-09-02T21:00:00Z", now); err != nil {
 		t.Fatalf("upsert failed: %v", err)
 	}
-	if err := d.RecordRateLimitError("rle-3", now.Format(time.RFC3339)); err != nil {
+	if err := d.RecordRateLimitError("rle-3", now); err != nil {
 		t.Fatalf("RecordRateLimitError failed: %v", err)
 	}
 
@@ -194,12 +195,20 @@ func TestRecordRateLimitErrorPreservesUsage(t *testing.T) {
 	if rl == nil || rl.FiveHourPercent != 97 {
 		t.Errorf("expected usage preserved, got %+v", rl)
 	}
+	if rl.LastErrorAt == "" {
+		t.Error("expected the error timestamp alongside the preserved usage")
+	}
 }
 
-func TestHadRecentRateLimitErrorFalseWhenNoneRecorded(t *testing.T) {
+func TestLastErrorAtEmptyWhenNoneRecorded(t *testing.T) {
 	d := testDB(t)
 	seedSession(t, d, "rle-4")
-	if d.HadRecentRateLimitError("rle-4", time.Now().UTC(), time.Minute) {
-		t.Error("expected false when no error was ever recorded")
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := d.UpsertRateLimit("rle-4", 50, "2026-09-02T21:00:00Z", now); err != nil {
+		t.Fatalf("upsert failed: %v", err)
+	}
+	rl, _ := d.GetRateLimit("rle-4")
+	if rl == nil || rl.LastErrorAt != "" {
+		t.Errorf("expected empty last_error_at, got %+v", rl)
 	}
 }

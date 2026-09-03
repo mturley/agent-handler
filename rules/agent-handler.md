@@ -103,9 +103,12 @@ The instruction can arrive from either hook:
 
 Why it has to happen early: once you are actually rate-limited you cannot call
 `CronCreate` at all, so the job has to be scheduled while there is still budget.
-Scheduling one that turns out to be unnecessary is harmless — the job is removed
-automatically when the session goes idle, and it does nothing if there is no
-work in progress when it fires.
+
+Scheduling one that turns out to be unnecessary is harmless. The job outlives
+the turn that created it — a turn ending does not mean your work is finished,
+since subagents may still be running — and when it fires it decides what to do:
+resume work that was in progress, restate the question if you were waiting on
+the user, or do nothing at all if neither applies.
 
 To disable this behaviour entirely, set `auto_wake_on_rate_limit: false` in
 `~/.agent-handler/config.yaml`.

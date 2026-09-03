@@ -76,35 +76,6 @@ func TestWakeCheckMessageEmptyWithNoRateLimitRow(t *testing.T) {
 	}
 }
 
-// --- cleanup ---------------------------------------------------------------
-
-func TestWakeCleanupRemovesOnlyWakeJobs(t *testing.T) {
-	d := cronTestDB(t)
-	ts := time.Now().UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("c-1", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if err := d.UpsertSessionCron("c-1", db.SessionCron{JobID: "other", Schedule: "*/5 * * * *", Prompt: "/inbox --auto"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	removed := wakeCleanupJobIDs(d, "c-1")
-	if len(removed) != 1 || removed[0] != "wake" {
-		t.Fatalf("expected only the wake job id, got %v", removed)
-	}
-}
-
-func TestWakeCleanupReturnsNothingWhenNoWakeJob(t *testing.T) {
-	d := cronTestDB(t)
-	ts := time.Now().UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("c-2", db.SessionCron{JobID: "other", Schedule: "*/5 * * * *", Prompt: "/inbox"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if ids := wakeCleanupJobIDs(d, "c-2"); len(ids) != 0 {
-		t.Errorf("expected no ids, got %v", ids)
-	}
-}
-
 // --- PreToolUse allow guard ------------------------------------------------
 
 func TestCronCreateAllowedForWakeJobWhileOverThreshold(t *testing.T) {
@@ -170,126 +141,91 @@ func TestCronCreateNotAllowedOnStaleData(t *testing.T) {
 	}
 }
 
-// --- Stop cleanup with the StopFailure guard --------------------------------
+// --- Stop must never interfere with a wake job -----------------------------
+//
+// Cancelling on Stop was removed after a live failure: Stop fires at the end of
+// an assistant TURN, not when the session's work is finished — subagents may
+// still be running — and a cancel-then-recreate cycle made the Stop and
+// PostToolUse hooks contradict each other every turn.
 
-func TestStopCleanupRemovesWakeJobAfterNormalTurn(t *testing.T) {
+func TestStopLeavesWakeJobAlone(t *testing.T) {
 	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("s-1", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
+	seedStopSession(t, d, "s-1")
+	ts := time.Now().UTC().Format(time.RFC3339)
+	if err := d.UpsertSessionCron("s-1", db.SessionCron{
+		JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume",
+	}, ts); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 
-	ids := wakeStopCleanupIDs(d, "s-1", now)
-	if len(ids) != 1 || ids[0] != "wake" {
-		t.Fatalf("expected the wake job to be cleaned up, got %v", ids)
+	// The snapshot still reports the job, as Claude's would.
+	stop := []byte(`{"session_id":"s-1","stop_hook_active":false,"session_crons":[` +
+		`{"id":"wake","schedule":"1 2 3 4 *","recurring":false,"prompt":"` + wakeMarker + ` resume"}]}`)
+	if err := applyStopHook(d, stop); err != nil {
+		t.Fatalf("applyStopHook failed: %v", err)
+	}
+
+	crons, err := d.ListSessionCrons("s-1")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var found bool
+	for _, c := range crons {
+		if isWakeCron(c) {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the wake job must survive Stop — a turn ending is not the work finishing")
 	}
 }
 
-// If the turn died on a rate limit, the wake job is exactly what is needed —
-// cleaning it up then would silently defeat the whole feature. This makes the
-// unknown Stop-vs-StopFailure ordering irrelevant.
-func TestStopCleanupSkippedAfterRateLimitFailure(t *testing.T) {
+// Stop still does its own job: marking the session idle and reconciling crons.
+func TestStopStillReconcilesAlongsideWakeJob(t *testing.T) {
 	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("s-2", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if err := d.RecordRateLimitError("s-2", ts); err != nil {
-		t.Fatalf("record error: %v", err)
+	seedStopSession(t, d, "s-2")
+	ts := time.Now().UTC().Format(time.RFC3339)
+	for _, c := range []db.SessionCron{
+		{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"},
+		{JobID: "fired", Schedule: "5 6 7 8 *", Prompt: "one-shot that already fired"},
+	} {
+		if err := d.UpsertSessionCron("s-2", c, ts); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
 	}
 
-	if ids := wakeStopCleanupIDs(d, "s-2", now); len(ids) != 0 {
-		t.Errorf("expected cleanup to be skipped after a rate-limit failure, got %v", ids)
+	// Snapshot omits "fired" — it auto-deleted when it fired.
+	stop := []byte(`{"session_id":"s-2","session_crons":[` +
+		`{"id":"wake","schedule":"1 2 3 4 *","recurring":false,"prompt":"` + wakeMarker + ` resume"}]}`)
+	if err := applyStopHook(d, stop); err != nil {
+		t.Fatalf("applyStopHook failed: %v", err)
+	}
+
+	crons, _ := d.ListSessionCrons("s-2")
+	if len(crons) != 1 || crons[0].JobID != "wake" {
+		t.Errorf("expected only the wake job to remain after reconciliation, got %+v", crons)
+	}
+	s, _ := d.GetSession("s-2")
+	if s.Working {
+		t.Error("expected Working false")
 	}
 }
 
-// An old failure must not suppress cleanup forever.
-func TestStopCleanupResumesAfterOldRateLimitFailure(t *testing.T) {
-	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("s-3", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	old := now.Add(-2 * time.Hour).UTC().Format(time.RFC3339)
-	if err := d.RecordRateLimitError("s-3", old); err != nil {
-		t.Fatalf("record error: %v", err)
-	}
+// The prompt has to cover the case that motivated dropping cancellation: a
+// session idle because it asked the user something.
+func TestWakePromptHandlesWaitingOnUser(t *testing.T) {
+	now := time.Date(2026, 9, 3, 13, 0, 0, 0, time.Local)
+	reset := time.Date(2026, 9, 3, 15, 30, 0, 0, time.Local)
+	rl := freshLimit(95, reset.UTC().Format(time.RFC3339), now)
 
-	if ids := wakeStopCleanupIDs(d, "s-3", now); len(ids) != 1 {
-		t.Errorf("expected cleanup to resume after an old failure, got %v", ids)
+	d := decideWake(enabledCfg(), rl, nil, now)
+	if !d.Inject {
+		t.Fatal("expected injection")
 	}
-}
-
-// --- forced cleanup via Stop exit 2 ----------------------------------------
-
-func TestStopForcesDeleteWhenWakeJobPresent(t *testing.T) {
-	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("f-1", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	ids, force := wakeStopDecision(d, "f-1", now, false)
-	if !force {
-		t.Fatal("expected Stop to force a continuation to delete the wake job")
-	}
-	if len(ids) != 1 || ids[0] != "wake" {
-		t.Errorf("expected the wake job id, got %v", ids)
-	}
-}
-
-// THE loop guard: once a stop hook is already holding the session open, never
-// force again, or the session can never stop.
-func TestStopDoesNotForceWhenStopHookAlreadyActive(t *testing.T) {
-	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("f-2", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-
-	if _, force := wakeStopDecision(d, "f-2", now, true); force {
-		t.Error("must not force a continuation when stop_hook_active is set")
-	}
-}
-
-func TestStopDoesNotForceWithoutWakeJob(t *testing.T) {
-	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("f-3", db.SessionCron{JobID: "other", Schedule: "*/5 * * * *", Prompt: "/inbox"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if _, force := wakeStopDecision(d, "f-3", now, false); force {
-		t.Error("must not force a continuation when there is no wake job")
-	}
-}
-
-func TestStopDoesNotForceAfterRateLimitFailure(t *testing.T) {
-	d := cronTestDB(t)
-	now := time.Now()
-	ts := now.UTC().Format(time.RFC3339)
-	if err := d.UpsertSessionCron("f-4", db.SessionCron{JobID: "wake", Schedule: "1 2 3 4 *", Prompt: wakeMarker + " resume"}, ts); err != nil {
-		t.Fatalf("seed: %v", err)
-	}
-	if err := d.RecordRateLimitError("f-4", ts); err != nil {
-		t.Fatalf("record error: %v", err)
-	}
-	// Rate-limited: the job is needed, and a forced continuation would fail anyway.
-	if _, force := wakeStopDecision(d, "f-4", now, false); force {
-		t.Error("must not force a continuation right after a rate-limit failure")
-	}
-}
-
-func TestWakeDeleteInstructionNamesTheJobIDs(t *testing.T) {
-	msg := wakeDeleteInstruction([]string{"abc123"})
-	for _, want := range []string{"CronDelete", "abc123"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("expected %q in %q", want, msg)
+	lower := strings.ToLower(d.Prompt)
+	for _, want := range []string{"question", "restate"} {
+		if !strings.Contains(lower, want) {
+			t.Errorf("expected the wake prompt to mention %q, got:\n%s", want, d.Prompt)
 		}
 	}
 }
