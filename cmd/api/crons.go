@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/mturley/agent-handler/cronsched"
 	"github.com/mturley/agent-handler/db"
-	"github.com/robfig/cron/v3"
 )
 
 // sessionCronInfo is a tracked cron job enriched with its next fire time.
@@ -15,23 +15,12 @@ type sessionCronInfo struct {
 	NextFireAt string `json:"next_fire_at"`
 }
 
-// cronParser matches Claude Code's format: standard 5-field cron, no seconds
-// field and no descriptors.
-var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-
 // nextFireAt returns the next time the expression fires after `from`, as
 // RFC3339 in `from`'s location. An unparseable expression yields "" rather than
 // an error — a job with a bad schedule should still be listed.
 func nextFireAt(expr string, from time.Time) string {
-	if expr == "" {
-		return ""
-	}
-	sched, err := cronParser.Parse(expr)
-	if err != nil {
-		return ""
-	}
-	next := sched.Next(from)
-	if next.IsZero() {
+	next, ok := cronsched.Next(expr, from)
+	if !ok {
 		return ""
 	}
 	return next.Format(time.RFC3339)

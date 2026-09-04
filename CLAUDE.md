@@ -66,7 +66,7 @@ cmux keyboard shortcut actions are defined in `cmd/cmux_config.go` (`handlerCmux
 
 When adding or removing cmux keyboard shortcut actions:
 - Update `handlerCmuxActions` and `handlerCmuxActionIDs` in `cmd/cmux_config.go`
-- Update the statusline rendering in `cmd/statusline.go` — `renderAwaitingLine()` shows the awaiting shortcut in context, and `renderCmuxShortcutsLine()` shows a summary at the bottom. Both read shortcuts dynamically from `GetCmuxShortcuts()`, but the display text is hardcoded and must be updated to describe new actions.
+- Update the statusline rendering in `cmd/statusline.go`. Shortcuts are advertised in context by the line that uses them (e.g. `renderAwaitingLine()`), not in a summary footer — there is no shortcut summary line. Those read shortcuts dynamically from `GetCmuxShortcuts()`, but the display text is hardcoded and must be updated to describe new actions. `renderCmuxSetupTip()` only nudges cmux sessions that have not installed the shortcuts at all.
 - Update the setup summary in `cmd/setup.go` (the cmux actions section of the "will do" list)
 
 ## Watchers (watcher library)

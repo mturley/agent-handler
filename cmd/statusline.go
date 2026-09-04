@@ -28,22 +28,22 @@ import (
 
 // ANSI color constants
 const (
-	colorCyan        = "\033[36m"
-	colorYellow      = "\033[33m"
-	colorBoldYellow  = "\033[1;33m"
-	colorGreen       = "\033[32m"
-	colorRed         = "\033[31m"
-	colorLightRed    = "\033[91m"
-	colorPurple      = "\033[35m"
-	colorBlue        = "\033[34m"
-	colorHint        = "\033[35m"
-	colorBoldWhite  = "\033[1;37m"
-	colorBoldGreen  = "\033[1;32m"
-	colorDim        = "\033[2m"
-	colorDimGreen   = "\033[2;32m"
+	colorCyan         = "\033[36m"
+	colorYellow       = "\033[33m"
+	colorBoldYellow   = "\033[1;33m"
+	colorGreen        = "\033[32m"
+	colorRed          = "\033[31m"
+	colorLightRed     = "\033[91m"
+	colorPurple       = "\033[35m"
+	colorBlue         = "\033[34m"
+	colorHint         = "\033[35m"
+	colorBoldWhite    = "\033[1;37m"
+	colorBoldGreen    = "\033[1;32m"
+	colorDim          = "\033[2m"
+	colorDimGreen     = "\033[2;32m"
 	colorClaudeOrange = "\033[38;2;218;119;86m"
-	colorUnderline  = "\033[4m"
-	colorReset      = "\033[0m"
+	colorUnderline    = "\033[4m"
+	colorReset        = "\033[0m"
 )
 
 var statuslineCmd = &cobra.Command{
@@ -373,10 +373,9 @@ func renderWorkerStatusline(d *db.DB, session *db.Session, cfg *config.Config, i
 
 	// Footer
 	if session.TerminalType == "cmux" {
-		renderCmuxShortcutsLine(shortcuts)
+		renderCmuxSetupTip(shortcuts)
 	}
-	fmt.Printf("%sUse %s/done%s%s before closing the session to log a summary%s\n",
-		colorDim, colorHint, colorReset, colorDim, colorReset)
+	renderCronsSection(d, session)
 
 	return nil
 }
@@ -476,10 +475,11 @@ func renderHandlerStatusline(d *db.DB, session *db.Session, cfg *config.Config, 
 		fmt.Printf("%s⠀%s\n", colorDim, colorReset)
 	}
 
-	// Footer (cmux shortcuts)
+	// Footer
 	if session.TerminalType == "cmux" {
-		renderCmuxShortcutsLine(shortcuts)
+		renderCmuxSetupTip(shortcuts)
 	}
+	renderCronsSection(d, session)
 
 	return nil
 }
@@ -539,24 +539,15 @@ func renderReminderSessionsLine(reminderSessionNames []string) {
 	fmt.Printf("%s  ↳ %s%s%s\n", colorDim, colorPurple, nameList, colorReset)
 }
 
-func renderCmuxShortcutsLine(shortcuts *CmuxShortcuts) {
-	if shortcuts == nil {
-		fmt.Printf("%sRun %shandler setup%s%s from within cmux to set up keyboard shortcuts%s\n",
-			colorDim, colorHint, colorReset, colorDim, colorReset)
+// renderCmuxSetupTip nudges a cmux session that has not installed handler's
+// keyboard shortcuts. Once they are installed there is nothing to say — the
+// shortcuts are advertised in context by the lines that use them.
+func renderCmuxSetupTip(shortcuts *CmuxShortcuts) {
+	if shortcuts != nil {
 		return
 	}
-	var parts []string
-	if shortcuts.SwitchToSession != "" {
-		parts = append(parts, fmt.Sprintf("%s%s%s to switch sessions", colorHint, shortcuts.SwitchToSession, colorReset+colorDim))
-	}
-	if shortcuts.FocusBack != "" && shortcuts.FocusForward != "" {
-		parts = append(parts, fmt.Sprintf("%s%s%s and %s%s%s for focus back and forward",
-			colorHint, shortcuts.FocusBack, colorReset+colorDim,
-			colorHint, shortcuts.FocusForward, colorReset+colorDim))
-	}
-	if len(parts) > 0 {
-		fmt.Printf("%s%s%s\n", colorDim, strings.Join(parts, " · "), colorReset)
-	}
+	fmt.Printf("%sRun %shandler setup%s%s from within cmux to set up keyboard shortcuts%s\n",
+		colorDim, colorHint, colorReset, colorDim, colorReset)
 }
 
 // --- Shared rendering helpers ---
