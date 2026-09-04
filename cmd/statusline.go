@@ -29,6 +29,7 @@ import (
 // ANSI color constants
 const (
 	colorCyan         = "\033[36m"
+	colorBoldCyan     = "\033[1;36m"
 	colorYellow       = "\033[33m"
 	colorBoldYellow   = "\033[1;33m"
 	colorGreen        = "\033[32m"

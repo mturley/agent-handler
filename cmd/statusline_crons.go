@@ -113,7 +113,7 @@ func renderCronsSection(d *db.DB, session *db.Session) {
 		return
 	}
 	header, jobs := cronStatusSection(crons, time.Now())
-	fmt.Printf("%s%s%s\n", colorCyan, header, colorReset)
+	fmt.Printf("%s%s%s\n", colorBoldCyan, header, colorReset)
 	for _, j := range jobs {
 		fmt.Printf("%s  ↳ %s%s%s%s%s: %s%s\n",
 			colorDim, colorReset,
