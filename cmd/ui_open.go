@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -40,6 +41,23 @@ func uiPortForRunningServer() int {
 	return 0
 }
 
+// homeMarkerParam names the query parameter that tells the web UI which
+// session a browser tab was opened FOR. The UI keeps it on every URL the tab
+// ever has, so a suspended-and-restored pane can recover the home from the URL
+// alone.
+const homeMarkerParam = "home"
+
+// uiOpenURL builds the URL to open for sessionID. A session URL carries the
+// home marker; the main page deliberately does not — it was opened for no
+// session in particular.
+func uiOpenURL(base, sessionID string) string {
+	if sessionID == "" {
+		return base + "/"
+	}
+	return fmt.Sprintf("%s/sessions/%s?%s=%s",
+		base, url.PathEscape(sessionID), homeMarkerParam, url.QueryEscape(sessionID))
+}
+
 func runUIOpen(cmd *cobra.Command, args []string) error {
 	d, err := openReadOnlyDB()
 	if err != nil {
@@ -67,12 +85,8 @@ func runUIOpen(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no handler UI server is running. Start one with `handler ui` in another terminal (or `make dev` for development)")
 	}
 
-	base := fmt.Sprintf("http://localhost:%d", port)
-	url := base + "/"
-	if sessionID != "" {
-		url = fmt.Sprintf("%s/sessions/%s", base, sessionID)
-	}
-	openBrowser(url)
-	fmt.Printf("Opening %s\n", url)
+	target := uiOpenURL(fmt.Sprintf("http://localhost:%d", port), sessionID)
+	openBrowser(target)
+	fmt.Printf("Opening %s\n", target)
 	return nil
 }

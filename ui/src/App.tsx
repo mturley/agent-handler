@@ -13,6 +13,8 @@ import { TimelinePage } from "@/pages/TimelinePage"
 import { ResourcesPage } from "@/pages/ResourcesPage"
 import { SessionDetailPage } from "@/pages/SessionDetailPage"
 import { CostBadge, CostDialog } from "@/components/CostDialog"
+import { HomeSessionBanner } from "@/components/HomeSessionBanner"
+import { withHomeParam } from "@/lib/homeSession"
 
 const tabPaths: Record<string, string> = {
   sessions: "/",
@@ -61,7 +63,7 @@ export default function App() {
     setRightTab(value)
     const params = new URLSearchParams(window.location.search)
     params.set("right", value)
-    window.history.replaceState(null, "", `/?${params.toString()}`)
+    window.history.replaceState(null, "", withHomeParam(`/?${params.toString()}`))
   }, [])
 
   const navigateToTimeline = useCallback((sessionId: string, archived?: boolean) => {
@@ -116,6 +118,10 @@ export default function App() {
   if (sessionMatch) {
     return (
       <div className="min-h-screen bg-background">
+        {/* Aligned with SessionDetailPage's own max-w-4xl content column. */}
+        <div className="max-w-4xl mx-auto px-4 pt-4 [&>*]:mb-0">
+          <HomeSessionBanner />
+        </div>
         <SessionDetailPage sessionId={decodeURIComponent(sessionMatch[1])} cmuxAvailable={cmuxAvailable} />
         <Toaster />
       </div>
@@ -127,6 +133,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-background">
         <div className="max-w-7xl mx-auto px-4 py-6">
+          <HomeSessionBanner />
           <header className="mb-6 flex items-center justify-between">
             <h1 className="text-lg font-semibold tracking-tight">agent-handler</h1>
             <CostBadge onClick={() => setCostOpen(true)} />
@@ -183,6 +190,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-4 py-6">
+        <HomeSessionBanner />
         <header className="mb-6 flex items-center justify-between">
           <h1 className="text-lg font-semibold tracking-tight">agent-handler</h1>
           <CostBadge onClick={() => setCostOpen(true)} />

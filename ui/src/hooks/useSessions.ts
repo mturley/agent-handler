@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { Session } from "@/api/types"
 import { getSessions, getSessionsQuickState } from "@/api/client"
 import { queryKeys } from "@/api/queryKeys"
+import { withHomeParam } from "@/lib/homeSession"
 
 export type SortField = "cmux" | "recent" | "unread" | "name"
 
@@ -124,7 +125,7 @@ export function useSessions() {
     if (desc) params.set("desc", "true"); else params.delete("desc")
     if (group) params.set("group", "repo"); else params.delete("group")
     const qs = params.toString()
-    window.history.replaceState(null, "", qs ? `/?${qs}` : "/")
+    window.history.replaceState(null, "", withHomeParam(qs ? `/?${qs}` : "/"))
   }, [])
 
   const setSortField = useCallback((v: SortField) => {
