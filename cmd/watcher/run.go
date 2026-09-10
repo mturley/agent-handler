@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -81,6 +82,9 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(resources) == 0 {
+		if err := recordIdleRun(d.Conn(), name); err != nil {
+			return fmt.Errorf("failed to record idle run: %w", err)
+		}
 		fmt.Printf("No resources to poll for %s watcher.\n", name)
 		return nil
 	}
@@ -136,6 +140,14 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 	default:
 		return fmt.Errorf("unknown watcher: %s", name)
 	}
+}
+
+// recordIdleRun marks a poll that had no resources to check as a successful
+// run. Without it last_success stays frozen at whatever the last real poll
+// wrote, so an error recorded before the last subscription expired keeps
+// HasPollerError true forever and the watcher reads as broken when it is idle.
+func recordIdleRun(conn *sql.DB, name string) error {
+	return wdb.RecordPollerSuccess(conn, name)
 }
 
 // serviceToResourceType maps service names to resource types
