@@ -171,6 +171,9 @@ How it fits together:
 - A **PreToolUse** hook auto-approves that one job, identified by handler's own marker and
   validated against stored state. Every other `CronCreate` follows normal permission rules. No
   entry is added to your `permissions.allow` list.
+- That same hook **denies** a wake job whose pinned time has already passed. This happens when
+  the session hits the limit after receiving the instruction but before acting on it; once it
+  resumes, the limit has reset and the job would otherwise fire a year later.
 - **Stop** deliberately leaves wake jobs alone. An earlier version cancelled them when the
   session went idle; that was wrong twice over. Stop fires at the end of an assistant *turn*,
   which is not the same as the work being finished — a turn can end with subagents still

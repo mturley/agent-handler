@@ -44,6 +44,7 @@ func init() {
 type wakeHookInput struct {
 	SessionID string `json:"session_id"`
 	ToolInput struct {
+		Cron      string `json:"cron"`
 		Prompt    string `json:"prompt"`
 		Recurring bool   `json:"recurring"`
 	} `json:"tool_input"`
@@ -98,12 +99,29 @@ func runWakeCheck(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// runCronGuard auto-approves the wake job, and only the wake job. It never
-// denies: anything it does not recognise gets no decision and falls through to
-// normal permission handling.
+// runCronGuard auto-approves the wake job, and only the wake job. The one
+// thing it denies is a wake job pinned to a moment that has already passed
+// (see isStaleWakeJob); anything else it does not recognise gets no decision
+// and falls through to normal permission handling.
 func runCronGuard(cmd *cobra.Command, args []string) error {
 	in, cfg, ok := readWakeInput()
 	if !ok {
+		return nil
+	}
+	if isStaleWakeJob(in.ToolInput.Cron, in.ToolInput.Prompt, in.ToolInput.Recurring, time.Now()) {
+		out, err := json.Marshal(map[string]interface{}{
+			"hookSpecificOutput": map[string]interface{}{
+				"hookEventName":      "PreToolUse",
+				"permissionDecision": "deny",
+				"permissionDecisionReason": "agent-handler: this wake job's time has already passed — " +
+					"the rate limit has reset, so it is no longer needed. Do not retry it; carry on " +
+					"with what you were doing.",
+			},
+		})
+		if err != nil {
+			return nil
+		}
+		fmt.Println(string(out))
 		return nil
 	}
 	d, err := openDB()

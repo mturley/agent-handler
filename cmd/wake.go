@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mturley/agent-handler/config"
+	"github.com/mturley/agent-handler/cronsched"
 	"github.com/mturley/agent-handler/db"
 )
 
@@ -159,6 +160,24 @@ func shouldAllowCronCreate(d *db.DB, cfg *config.Config, sessionID, prompt strin
 		return false
 	}
 	return wakeArmedAt(rl.FiveHourPercent, cfg.AutoWakeThresholdPercent())
+}
+
+// wakeStaleHorizon is how far ahead a wake job may legitimately fire. A real
+// one fires a minute after the 5h window resets, so it is never more than ~5h
+// out; a pinned expression whose moment has passed next matches a year later.
+const wakeStaleHorizon = 24 * time.Hour
+
+// isStaleWakeJob reports whether a CronCreate call is handler's wake job
+// pinned to a moment that has already passed. That happens when the session is
+// rate-limited between receiving the instruction and acting on it: by the time
+// it resumes, the limit has reset and the job would instead fire next year.
+// Only handler's own marked one-shot can be stale; nothing else is touched.
+func isStaleWakeJob(expr, prompt string, recurring bool, now time.Time) bool {
+	if recurring || !strings.Contains(prompt, wakeMarker) {
+		return false
+	}
+	next, ok := cronsched.Next(expr, now)
+	return ok && next.Sub(now) > wakeStaleHorizon
 }
 
 // NOTE: Stop deliberately has no wake-job behaviour at all.

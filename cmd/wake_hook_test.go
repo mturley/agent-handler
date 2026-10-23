@@ -229,3 +229,46 @@ func TestWakePromptHandlesWaitingOnUser(t *testing.T) {
 		}
 	}
 }
+
+// --- A wake job whose moment has already passed is denied -------------------
+//
+// The instruction can be injected and then the session rate-limited before it
+// acts on it. When it resumes after the reset, the pinned expression points to
+// the past, and cron would fire it next year instead.
+
+func TestStaleWakeJobDetectedWhenPinnedTimeHasPassed(t *testing.T) {
+	now := time.Date(2026, 9, 2, 16, 0, 0, 0, time.Local)
+	// 15:01 on Sep 2 — an hour ago.
+	if !isStaleWakeJob("1 15 2 9 *", wakeMarker+" resume", false, now) {
+		t.Error("expected a wake job pinned to the past to be stale")
+	}
+}
+
+func TestStaleWakeJobNotFlaggedWhenPinnedTimeIsAhead(t *testing.T) {
+	now := time.Date(2026, 9, 2, 13, 0, 0, 0, time.Local)
+	if isStaleWakeJob("1 15 2 9 *", wakeMarker+" resume", false, now) {
+		t.Error("a wake job pinned two hours ahead is not stale")
+	}
+}
+
+func TestStaleWakeJobNotFlaggedAcrossNewYear(t *testing.T) {
+	now := time.Date(2026, 12, 31, 22, 0, 0, 0, time.Local)
+	// 00:01 on Jan 1 — two hours ahead, in next year.
+	if isStaleWakeJob("1 0 1 1 *", wakeMarker+" resume", false, now) {
+		t.Error("a wake job pinned just past midnight on Jan 1 is not stale")
+	}
+}
+
+// Only handler's own one-shot is ever denied; everything else falls through.
+func TestStaleWakeJobIgnoresOtherJobs(t *testing.T) {
+	now := time.Date(2026, 9, 2, 16, 0, 0, 0, time.Local)
+	if isStaleWakeJob("1 15 2 9 *", "some other job", false, now) {
+		t.Error("an unmarked job must never be denied")
+	}
+	if isStaleWakeJob("1 15 2 9 *", wakeMarker+" resume", true, now) {
+		t.Error("a recurring job must never be denied")
+	}
+	if isStaleWakeJob("not a cron", wakeMarker+" resume", false, now) {
+		t.Error("an unparseable expression must not be denied")
+	}
+}
