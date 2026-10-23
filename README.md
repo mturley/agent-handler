@@ -178,6 +178,10 @@ How it fits together:
   opposing instructions every turn. Instead the wake job simply outlives the turn, and its
   prompt decides what to do when it fires: resume in-progress work, restate a pending question
   if the session was waiting on you, or do nothing.
+- At **100%** the hooks go quiet again. A session still getting responses at the cap is running
+  on usage credits (a real rate limit ends the turn), and the statusline has no explicit credits
+  field, so the cap itself is the signal. A wake job is useless there, and asking for one on
+  every tool call just nags.
 
 Configure in `~/.agent-handler/config.yaml`:
 

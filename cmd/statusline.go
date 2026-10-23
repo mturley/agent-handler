@@ -1369,5 +1369,5 @@ func recordRateLimit(wd *db.DB, input *hookInput) {
 	if cfg != nil {
 		threshold = cfg.AutoWakeThresholdPercent()
 	}
-	setWakeArmed(input.SessionID, input.RateLimits.FiveHour.UsedPercentage >= float64(threshold))
+	setWakeArmed(input.SessionID, wakeArmedAt(input.RateLimits.FiveHour.UsedPercentage, threshold))
 }

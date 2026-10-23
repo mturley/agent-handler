@@ -22,6 +22,19 @@ const wakeMarker = "[handler-wake]"
 // reporting and the value must not be trusted.
 const wakeStaleWindow = 15 * time.Minute
 
+// wakeCapPercent is the 5h usage at which the wake hooks go quiet again. A
+// session that is still getting API responses at 100% can only be running on
+// usage credits (a real rate limit ends the turn), and a wake job is no use
+// then — asking for one on every tool call just nags. The statusline exposes
+// no explicit credits field, so this is the signal.
+const wakeCapPercent = 100
+
+// wakeArmedAt reports whether 5h usage is in the band where a wake job is
+// wanted: at or over the threshold, but below the cap.
+func wakeArmedAt(pct float64, threshold int) bool {
+	return pct >= float64(threshold) && pct < wakeCapPercent
+}
+
 // wakeDecision is the outcome of the hook-side check. Everything the session
 // needs is computed here so the injected instruction is fully formed.
 type wakeDecision struct {
@@ -50,7 +63,7 @@ func decideWake(cfg *config.Config, rl *db.RateLimitState, crons []db.SessionCro
 	if rl == nil || rl.IsStale(now, wakeStaleWindow) {
 		return wakeDecision{}
 	}
-	if rl.FiveHourPercent < float64(cfg.AutoWakeThresholdPercent()) {
+	if !wakeArmedAt(rl.FiveHourPercent, cfg.AutoWakeThresholdPercent()) {
 		return wakeDecision{}
 	}
 	for _, c := range crons {
@@ -145,7 +158,7 @@ func shouldAllowCronCreate(d *db.DB, cfg *config.Config, sessionID, prompt strin
 	if err != nil || rl == nil || rl.IsStale(now, wakeStaleWindow) {
 		return false
 	}
-	return rl.FiveHourPercent >= float64(cfg.AutoWakeThresholdPercent())
+	return wakeArmedAt(rl.FiveHourPercent, cfg.AutoWakeThresholdPercent())
 }
 
 // NOTE: Stop deliberately has no wake-job behaviour at all.

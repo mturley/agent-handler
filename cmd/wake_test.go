@@ -49,6 +49,16 @@ func TestWakeDecisionSilentBelowThreshold(t *testing.T) {
 	}
 }
 
+func TestWakeDecisionSilentAtOrAboveCap(t *testing.T) {
+	now := time.Date(2026, 9, 2, 13, 0, 0, 0, time.Local)
+	for _, pct := range []float64{100, 104.5} {
+		rl := freshLimit(pct, now.Add(2*time.Hour).UTC().Format(time.RFC3339), now)
+		if d := decideWake(enabledCfg(), rl, nil, now); d.Inject {
+			t.Errorf("expected no injection at %v%% (usage credits in play), got %+v", pct, d)
+		}
+	}
+}
+
 func TestWakeDecisionDisabledByConfig(t *testing.T) {
 	now := time.Date(2026, 9, 2, 13, 0, 0, 0, time.Local)
 	rl := freshLimit(99, now.Add(2*time.Hour).UTC().Format(time.RFC3339), now)
