@@ -1,6 +1,7 @@
 package worktreeinterop
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,11 +66,29 @@ func listAll(dir string) ([]listItem, error) {
 		}
 		return nil, fmt.Errorf("worktree resources list: %w", err)
 	}
-	var items []listItem
-	if err := json.Unmarshal(out, &items); err != nil {
+	items, err := parseListOutput(out)
+	if err != nil {
 		return nil, fmt.Errorf("parse worktree resources json: %w", err)
 	}
 	return items, nil
+}
+
+// parseListOutput decodes `worktree resources list --json`. Current worktree
+// prints an envelope ({"schema_version":1,"resources":[...]}); older
+// versions print a bare array. The two tools are installed separately, so
+// either may be the newer one: accept both.
+func parseListOutput(out []byte) ([]listItem, error) {
+	var items []listItem
+	if trimmed := bytes.TrimSpace(out); len(trimmed) > 0 && trimmed[0] == '[' {
+		return items, json.Unmarshal(trimmed, &items)
+	}
+	var env struct {
+		Resources []listItem `json:"resources"`
+	}
+	if err := json.Unmarshal(out, &env); err != nil {
+		return nil, err
+	}
+	return env.Resources, nil
 }
 
 // ListPrimaryResources returns only the primary resources tracked by dir.

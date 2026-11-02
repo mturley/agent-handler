@@ -175,3 +175,30 @@ func TestHelperProcess(t *testing.T) {
 	}
 	os.Exit(code)
 }
+
+func TestListResources_EnvelopeAndBareArray(t *testing.T) {
+	want := []Resource{{Type: "pr", ID: "o/r#1", URL: "u1"}}
+	for name, out := range map[string]string{
+		"envelope":    `{"schema_version":1,"resources":[{"type":"pr","id":"o/r#1","url":"u1","primary":true}]}`,
+		"bare array":  `[{"type":"pr","id":"o/r#1","url":"u1","primary":true}]`,
+		"unknown key": `{"schema_version":2,"extra":true,"resources":[{"type":"pr","id":"o/r#1","url":"u1","primary":true}]}`,
+	} {
+		restore := fakeExec(t, out, 0)
+		got, err := ListPrimaryResources("/d")
+		restore()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %+v, want %+v", name, got, want)
+		}
+	}
+}
+
+func TestListResources_EnvelopeEmpty(t *testing.T) {
+	defer fakeExec(t, `{"schema_version":1,"resources":[]}`, 0)()
+	got, err := ListResources("/d")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("got %+v, err %v", got, err)
+	}
+}
