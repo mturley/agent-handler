@@ -24,10 +24,36 @@ func buildHandler(t *testing.T) string {
 	return binPath
 }
 
+// stubWorktree puts a fake `worktree` binary in handlerHome and returns its
+// directory. handler shells out to the real worktree CLI (subscribe mirrors
+// into `worktree resources add`, name sync runs `set-name`), and the worktree
+// CLI writes to the user's real worktree DB regardless of HANDLER_HOME — so
+// without this stub, every run of these tests subscribes the user's current
+// worktree to the fake resources below. The stub records each invocation in
+// worktreeCallsLog(handlerHome) and fails, which handler treats as a soft
+// degradation.
+func stubWorktree(t *testing.T, handlerHome string) string {
+	t.Helper()
+	dir := filepath.Join(handlerHome, "stub-bin")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("failed to create stub dir: %v", err)
+	}
+	script := "#!/bin/sh\necho \"$@\" >> '" + worktreeCallsLog(handlerHome) + "'\necho 'worktree stubbed out by integration test' >&2\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(dir, "worktree"), []byte(script), 0o755); err != nil {
+		t.Fatalf("failed to write worktree stub: %v", err)
+	}
+	return dir
+}
+
+func worktreeCallsLog(handlerHome string) string {
+	return filepath.Join(handlerHome, "worktree-calls.log")
+}
+
 func runHandler(t *testing.T, bin string, handlerHome string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
-	cmd.Env = append(os.Environ(), "HANDLER_HOME="+handlerHome, "WATCHER_HOME="+handlerHome)
+	path := stubWorktree(t, handlerHome) + string(os.PathListSeparator) + os.Getenv("PATH")
+	cmd.Env = append(os.Environ(), "HANDLER_HOME="+handlerHome, "WATCHER_HOME="+handlerHome, "PATH="+path)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -139,6 +165,11 @@ func TestIntegrationLifecycle(t *testing.T) {
 		"--session-id", "test-session-1")
 	if err != nil {
 		t.Fatalf("subscribe failed: %s\nerr: %v", out, err)
+	}
+	// The mirror into worktree must have hit the stub, not the real CLI.
+	calls, _ := os.ReadFile(worktreeCallsLog(home))
+	if !strings.Contains(string(calls), "resources add pr mturley/myrepo#42") {
+		t.Errorf("subscribe should have called the worktree stub, got calls: %q", calls)
 	}
 
 	// List subscriptions
