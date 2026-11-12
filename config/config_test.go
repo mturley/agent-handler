@@ -303,3 +303,31 @@ func TestStatuslineShowGit(t *testing.T) {
 		})
 	}
 }
+
+func TestSeedJiraCustomFieldsNullJira(t *testing.T) {
+	for _, jiraLine := range []string{"jira:\n", "jira: ~\n"} {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		os.WriteFile(path, []byte("# top\n"+jiraLine+"debug: true\n"), 0600)
+		wrote, err := SeedJiraCustomFields(path, map[string]string{"a": "customfield_1"})
+		if err != nil || !wrote {
+			t.Fatalf("%q: wrote=%v err=%v", jiraLine, wrote, err)
+		}
+		cfg, err := Read(path)
+		if err != nil || cfg.Jira == nil || cfg.Jira.CustomFields["a"] != "customfield_1" || !cfg.Debug {
+			t.Errorf("%q: unexpected cfg %+v err=%v", jiraLine, cfg, err)
+		}
+	}
+}
+
+func TestSeedJiraCustomFieldsCommentOnlyFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	os.WriteFile(path, []byte("# just a comment\n"), 0600)
+	wrote, err := SeedJiraCustomFields(path, map[string]string{"a": "customfield_1"})
+	if err != nil || !wrote {
+		t.Fatalf("wrote=%v err=%v", wrote, err)
+	}
+	cfg, err := Read(path)
+	if err != nil || cfg.Jira == nil || cfg.Jira.CustomFields["a"] != "customfield_1" {
+		t.Errorf("unexpected cfg %+v err=%v", cfg, err)
+	}
+}

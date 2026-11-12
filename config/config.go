@@ -257,7 +257,10 @@ func SeedJiraCustomFields(path string, fields map[string]string) (bool, error) {
 		return false, err
 	}
 	if doc.Kind == 0 {
-		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
+		doc = yaml.Node{Kind: yaml.DocumentNode}
+	}
+	if len(doc.Content) == 0 {
+		doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
 	}
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
@@ -267,6 +270,8 @@ func SeedJiraCustomFields(path string, fields map[string]string) (bool, error) {
 	if jira == nil {
 		jira = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 		root.Content = append(root.Content, scalarNode("jira"), jira)
+	} else if jira.Kind == yaml.ScalarNode && jira.Tag == "!!null" {
+		*jira = yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
 	} else if jira.Kind != yaml.MappingNode {
 		return false, fmt.Errorf("%s: jira is not a mapping", path)
 	}
