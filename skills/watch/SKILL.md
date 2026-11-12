@@ -50,9 +50,9 @@ Combine with the channel id to form `slack:<CHANNEL>:<ts>`, e.g.
 `slack:C069KSM8T9N:1787257539.775119`. A `?thread_ts=…` query param, when
 present, is the thread's root `ts` — prefer it over the path `p…` if they
 differ (the path may point at a reply). Slack watching requires Slack creds in
-the shared watcher config (`~/.config/watcher/auth.yaml`, via `worktree setup`);
+handler's watcher credentials (`~/.agent-handler/watcher-auth.yaml`);
 if `handler watching` shows the Slack watcher unconfigured, tell the user to run
-`worktree setup` (or `handler watcher auth slack`) first.
+`handler watcher auth slack` first.
 
 ### Step 2: Subscribe
 

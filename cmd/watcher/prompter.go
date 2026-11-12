@@ -14,8 +14,7 @@ import (
 // same style already used by the (now-removed) configureGitHub/configureJira
 // helpers in auth.go. It mirrors the confirm() helper in cmd/uninstall.go
 // (package cmd) — duplicated here rather than shared across packages, since
-// cmd/watcher cannot import cmd (cmd already imports cmd/watcher), matching
-// the precedent already set by writeWatcherBehaviorConfig in auth.go.
+// cmd/watcher cannot import cmd (cmd already imports cmd/watcher).
 //
 // Handler has no automated Slack credential extraction (no extract.mjs, per
 // worktree's approach) — PromptSlack always falls back to manual devtools

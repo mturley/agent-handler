@@ -101,14 +101,9 @@ This will, in order:
    migration prints a warning and continues rather than aborting — the
    leftover rows are harmless duplicates, and the copy (and any table
    drops) already succeeded.
-7. Best-effort copy GitHub/Jira credentials from handler's
-   `~/.agent-handler/config.yaml` into the watcher library's
-   `~/.config/watcher/auth.yaml`, for any service present in the handler
-   config but not yet configured in `auth.yaml`. This step never fails the
-   migration — if it can't complete, it prints a note to run
-   `handler watcher auth` manually.
-8. Best-effort seed Jira behavior settings (custom fields, bot usernames)
-   into the watcher library's `config.yaml`.
+
+Credentials are not part of the migration: run `handler watcher auth` to
+store them in `~/.agent-handler/watcher-auth.yaml`.
 
 ## Verify
 

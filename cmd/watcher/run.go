@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	watcherlib "github.com/mturley/watcher"
 	wcfg "github.com/mturley/watcher/config"
@@ -46,10 +47,17 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown watcher: %s (must be 'github', 'jira', or 'slack')", name)
 	}
 
-	// Load credentials from the watcher library config (auth.yaml).
-	creds, err := wcfg.Load(wcfg.DefaultPath())
+	// Load credentials from handler's watcher-auth.yaml.
+	creds, err := wcfg.Load(config.WatcherAuthPath())
 	if err != nil {
 		return fmt.Errorf("failed to load watcher credentials: %w", err)
+	}
+
+	// Behavior settings (bot usernames, Jira custom fields) come from
+	// handler's config.yaml; a missing file yields none.
+	hcfg, err := config.Read(config.DefaultPath())
+	if err != nil {
+		return fmt.Errorf("failed to read handler config: %w", err)
 	}
 
 	// Open database
@@ -101,30 +109,13 @@ func runWatcher(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("github credentials not available: %w", err)
 		}
-		return wgithub.Poll(d.Conn(), gh.Token, resources, logger)
+		return wgithub.PollWithOptions(d.Conn(), gh.Token, resources, logger, githubOptionsFor(hcfg))
 	case "jira":
 		jc, err := creds.Jira()
 		if err != nil {
 			return fmt.Errorf("jira credentials not available: %w", err)
 		}
-		// BotUsernames and CustomFields are non-credential behavior settings,
-		// sourced from the watcher library's config.yaml (best-effort; absent
-		// file yields none). config.yaml is the single source of truth —
-		// `handler watcher auth` and the migration both write custom fields
-		// there, so the poller does not read them from auth.yaml.
-		var botUsernames []string
-		var customFields map[string]string
-		if behaviorCfg, cfgErr := wcfg.LoadConfig(wcfg.ConfigDefaultPath()); cfgErr == nil {
-			botUsernames = behaviorCfg.JiraBotUsernames()
-			customFields = behaviorCfg.JiraCustomFields()
-		}
-		auth := wjira.JiraAuth{
-			URL:          jc.Host,
-			Email:        jc.Email,
-			Token:        jc.Token,
-			CustomFields: customFields,
-			BotUsernames: botUsernames,
-		}
+		auth := jiraAuthFor(jc, hcfg)
 		return wjira.Poll(d.Conn(), auth, resources, logger)
 	case "slack":
 		sc, err := creds.Slack()
@@ -178,4 +169,24 @@ func openLog(name string) *log.Logger {
 		return log.New(os.Stderr, fmt.Sprintf("[%s] ", name), log.LstdFlags)
 	}
 	return log.New(logFile, "", log.LstdFlags)
+}
+
+// jiraAuthFor combines the Jira credentials with the behavior settings in
+// handler's config.yaml (bot usernames, custom fields).
+func jiraAuthFor(creds wcfg.JiraCreds, cfg *config.Config) wjira.JiraAuth {
+	auth := wjira.JiraAuth{URL: creds.Host, Email: creds.Email, Token: creds.Token}
+	if cfg != nil && cfg.Jira != nil {
+		auth.BotUsernames = cfg.Jira.BotUsernames
+		auth.CustomFields = cfg.Jira.CustomFields
+	}
+	return auth
+}
+
+// githubOptionsFor builds the GitHub poll options from handler's config.yaml.
+func githubOptionsFor(cfg *config.Config) wgithub.PollOptions {
+	var opts wgithub.PollOptions
+	if cfg != nil && cfg.GitHub != nil {
+		opts.BotUsernames = cfg.GitHub.BotUsernames
+	}
+	return opts
 }

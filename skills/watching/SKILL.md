@@ -21,7 +21,7 @@ If this session has the handler role (`handler configure --get role` returns `ha
 2. Show watcher status: configured, installed, running, last run time
 3. For any watcher in an error state (where `last_error` is more recent than `last_success` in the watcher status), show the error message and help troubleshoot:
    - "Could not resolve to a Repository" → the repo may be private and the GitHub token needs `repo` scope. Suggest re-running `handler watcher auth github` with a new token.
-   - "401 Unauthorized" or "403 Forbidden" → the API token is invalid or expired. Suggest `handler watcher auth <service>` to update it. For the Slack watcher, `invalid_auth`/`not_authed` means the Slack session token/cookie expired (they rotate every 1–2 weeks) → suggest re-running `worktree setup` (or `handler watcher auth slack`).
+   - "401 Unauthorized" or "403 Forbidden" → the API token is invalid or expired. Suggest `handler watcher auth <service>` to update it. For the Slack watcher, `invalid_auth`/`not_authed` means the Slack session token/cookie expired (they rotate every 1–2 weeks) → suggest re-running `handler watcher auth slack`.
    - "rate limit" → suggest increasing the polling interval with `handler watcher uninstall <name>` then `handler watcher install <name> --interval 10m`.
    - For other errors, show the error message and suggest `handler watcher logs <name>` for details.
 4. If watchers are not installed for subscribed resource types, suggest running `handler watcher install`

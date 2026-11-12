@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mturley/agent-handler/config"
 	watcherPkg "github.com/mturley/agent-handler/watcher"
 	wcfg "github.com/mturley/watcher/config"
 	"github.com/mturley/watcher/credsetup"
@@ -63,9 +64,9 @@ func runInstallWatcher(cmd *cobra.Command, args []string) error {
 }
 
 func installAll(cmd *cobra.Command) error {
-	// Run auth first, writing credentials to the watcher library config.
+	// Run auth first, writing credentials to handler's watcher-auth.yaml.
 	// Scoped to github+jira+slack, matching knownWatchers below.
-	authPath := wcfg.DefaultPath()
+	authPath := config.WatcherAuthPath()
 	cfg, err := wcfg.Load(authPath)
 	if err != nil {
 		cfg = &wcfg.Config{}
@@ -131,7 +132,7 @@ func installSingle(cmd *cobra.Command, name string) error {
 		return fmt.Errorf("unknown watcher: %s (valid: %s)", name, strings.Join(knownWatchers, ", "))
 	}
 
-	cfg, err := wcfg.Load(wcfg.DefaultPath())
+	cfg, err := wcfg.Load(config.WatcherAuthPath())
 	if err != nil {
 		return fmt.Errorf("reading credentials: %w", err)
 	}

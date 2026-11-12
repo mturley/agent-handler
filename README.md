@@ -43,7 +43,7 @@ handler setup --migrate-watcher # backs up the DB, copies data into the watcher_
 handler watcher start
 ```
 
-Until you migrate, `handler setup` will refuse to run against a pre-migration database and tell you to run the migration (or delete your database and start fresh). The migration is a **one-way structural cleanup**: it auto-backs-up your database to `~/.agent-handler/handler.db.backup-<timestamp>`, copies the legacy data into the `watcher_*` tables, **drops the legacy tables**, and **purges** the now-duplicated github/jira rows from the legacy `events` table. It no longer retains the old tables — the backup is the rollback mechanism. If you already ran an older (Phase 2b) version of this migration that copied data but kept the old tables, running `--migrate-watcher` again finishes the cleanup (no data is re-copied). See [docs/watcher-migration-runbook.md](docs/watcher-migration-runbook.md) for the full procedure, the 2b-adopter finish path, and rollback steps. Watcher credentials in `~/.agent-handler/config.yaml` are copied to `~/.config/watcher/auth.yaml` as part of the migration.
+Until you migrate, `handler setup` will refuse to run against a pre-migration database and tell you to run the migration (or delete your database and start fresh). The migration is a **one-way structural cleanup**: it auto-backs-up your database to `~/.agent-handler/handler.db.backup-<timestamp>`, copies the legacy data into the `watcher_*` tables, **drops the legacy tables**, and **purges** the now-duplicated github/jira rows from the legacy `events` table. It no longer retains the old tables — the backup is the rollback mechanism. If you already ran an older (Phase 2b) version of this migration that copied data but kept the old tables, running `--migrate-watcher` again finishes the cleanup (no data is re-copied). See [docs/watcher-migration-runbook.md](docs/watcher-migration-runbook.md) for the full procedure, the 2b-adopter finish path, and rollback steps.
 
 ## Uninstall
 
@@ -221,7 +221,7 @@ Watch for external events (PR reviews, Jira comments, CI status, Slack thread re
 
 Three services are watched: **GitHub** (PRs), **Jira** (issues), and **Slack** (threads). A new reply to a watched Slack thread becomes an inbox event just like a PR review or Jira comment, and Slack appears alongside GitHub/Jira in `handler watcher list`, `handler watching`, `handler status`, and `handler triage`.
 
-The watcher subsystem — polling, resource state, event storage, and subscription leases — is powered by the reusable [`mturley/watcher`](https://github.com/mturley/watcher) library, which owns its own `watcher_*` tables in handler's SQLite database (`~/.agent-handler/data/handler.db`). handler is one consumer of that library; the credentials and behavior settings it uses live under `~/.config/watcher/` (see below). handler keeps its own scheduling (launchd/cron) and its inbox/session layer on top.
+The watcher subsystem — polling, resource state, event storage, and subscription leases — is powered by the reusable [`mturley/watcher`](https://github.com/mturley/watcher) library, which owns its own `watcher_*` tables in handler's SQLite database (`~/.agent-handler/data/handler.db`). handler is one consumer of that library; its credentials live in `~/.agent-handler/watcher-auth.yaml` and its behavior settings in `~/.agent-handler/config.yaml` (see below). handler keeps its own scheduling (launchd/cron) and its inbox/session layer on top.
 
 > **Note:** the [`worktree`](https://github.com/mturley/worktree) tool is the library's other consumer, but the two tools do **not** share a database — they share only the library's schema. handler's rows live in `~/.agent-handler/data/handler.db`; worktree's live in a separate file. See [worktree integration](#worktree-integration) for the CLI-level coupling.
 
@@ -239,7 +239,7 @@ handler watcher install jira
 handler watcher install slack
 ```
 
-Credentials for all three services live in the shared `~/.config/watcher/auth.yaml`. `handler watcher auth`/`install` run the library's shared **credential test-and-repair** flow (`credsetup`): it validates each service's existing credentials and, if one is missing or invalid, walks you through configuring and re-validating a new one. Non-secret behavior settings (Jira [custom fields](#jira-custom-fields) and bot usernames) live alongside it in `~/.config/watcher/config.yaml`.
+Credentials for all three services live in `~/.agent-handler/watcher-auth.yaml`, written by `handler watcher auth`. `handler watcher auth`/`install` run the library's shared **credential test-and-repair** flow (`credsetup`): it validates each service's existing credentials and, if one is missing or invalid, walks you through configuring and re-validating a new one. Non-secret behavior settings (Jira [custom fields](#jira-custom-fields) and bot usernames) live in `~/.agent-handler/config.yaml` under top-level `jira:` and `github:` blocks (`bot_usernames`; Jira also `custom_fields`).
 
 `handler watcher install` creates a scheduled job that runs `handler watcher run <service>` periodically. On macOS this creates a launchd plist; on Linux it adds a cron entry. Default poll intervals: GitHub every 3 minutes, Jira and Slack every 5 minutes (override with `--interval`).
 
@@ -253,7 +253,7 @@ Alternatively, you can skip `handler watcher install` and schedule the watcher r
 
 ### Jira custom fields
 
-Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. They are a non-secret behavior setting, owned by the watcher library and configured in `~/.config/watcher/config.yaml` under `jira.custom_fields`:
+Jira custom fields let the watcher fetch additional data (epic links, blocked status, story points, etc.) when polling issues. This data is cached in the resource state and available to `handler triage` for richer context. They are a non-secret behavior setting, configured in `~/.agent-handler/config.yaml` under `jira.custom_fields`:
 
 ```yaml
 jira:
