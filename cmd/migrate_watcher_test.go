@@ -7,9 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
-	wcfg "github.com/mturley/watcher/config"
 )
 
 // testMigrateDB opens a temp database for migration tests. CRITICAL: this
@@ -574,126 +572,11 @@ func countRows(t *testing.T, d *db.DB, table string) int {
 	return n
 }
 
-// isolateHomes points HANDLER_HOME and WATCHER_HOME at fresh temp
-// directories for the duration of a test, so runMigrateWatcherAt's
-// best-effort credential migration (which reads/writes config.DefaultPath()
-// and wcfg.DefaultPath()) can NEVER touch the real
-// ~/.agent-handler/config.yaml or ~/.config/watcher/auth.yaml files.
+// isolateHomes points HANDLER_HOME at a fresh temp directory for the duration
+// of a test, so nothing can touch the real ~/.agent-handler.
 func isolateHomes(t *testing.T) {
 	t.Helper()
 	t.Setenv("HANDLER_HOME", filepath.Join(t.TempDir(), "handler-home"))
-	t.Setenv("WATCHER_HOME", filepath.Join(t.TempDir(), "watcher-home"))
-}
-
-// TestMigrateBehaviorConfigSeedsEmptyConfig verifies that, given a handler
-// config with Jira custom_fields and bot_usernames and no existing
-// watcher config.yaml, migrateBehaviorConfig writes both into config.yaml
-// (the behavior file), NOT auth.yaml (credentials).
-func TestMigrateBehaviorConfigSeedsEmptyConfig(t *testing.T) {
-	isolateHomes(t)
-
-	hcfg := &config.Config{
-		Services: config.Services{
-			Jira: &config.JiraConfig{
-				URL:          "https://example.atlassian.net",
-				Email:        "user@example.com",
-				Token:        "tok",
-				CustomFields: map[string]string{"epic_key": "customfield_10014"},
-				BotUsernames: []string{"bot1", "bot2"},
-			},
-		},
-	}
-
-	migrateBehaviorConfig(hcfg)
-
-	bcfg, err := wcfg.LoadConfig(wcfg.ConfigDefaultPath())
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	cf := bcfg.JiraCustomFields()
-	if len(cf) != 1 || cf["epic_key"] != "customfield_10014" {
-		t.Errorf("JiraCustomFields() = %v, want map[epic_key:customfield_10014]", cf)
-	}
-	bots := bcfg.JiraBotUsernames()
-	if len(bots) != 2 || bots[0] != "bot1" || bots[1] != "bot2" {
-		t.Errorf("JiraBotUsernames() = %v, want [bot1 bot2]", bots)
-	}
-}
-
-// TestMigrateBehaviorConfigDoesNotOverwriteExisting verifies that
-// migrateBehaviorConfig never clobbers values already present in an
-// existing config.yaml, even when the handler config has different values.
-func TestMigrateBehaviorConfigDoesNotOverwriteExisting(t *testing.T) {
-	isolateHomes(t)
-
-	existing := &wcfg.ConfigFile{
-		Jira: &wcfg.JiraBehavior{
-			CustomFields: map[string]string{"epic_key": "customfield_99999"},
-			BotUsernames: []string{"existing-bot"},
-		},
-	}
-	if err := writeWatcherBehaviorConfig(existing); err != nil {
-		t.Fatalf("seed existing config.yaml: %v", err)
-	}
-
-	hcfg := &config.Config{
-		Services: config.Services{
-			Jira: &config.JiraConfig{
-				CustomFields: map[string]string{"epic_key": "customfield_10014"},
-				BotUsernames: []string{"bot1", "bot2"},
-			},
-		},
-	}
-
-	migrateBehaviorConfig(hcfg)
-
-	bcfg, err := wcfg.LoadConfig(wcfg.ConfigDefaultPath())
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	cf := bcfg.JiraCustomFields()
-	if len(cf) != 1 || cf["epic_key"] != "customfield_99999" {
-		t.Errorf("JiraCustomFields() = %v, want unchanged map[epic_key:customfield_99999]", cf)
-	}
-	bots := bcfg.JiraBotUsernames()
-	if len(bots) != 1 || bots[0] != "existing-bot" {
-		t.Errorf("JiraBotUsernames() = %v, want unchanged [existing-bot]", bots)
-	}
-}
-
-// TestMigrateCredentialsDoesNotWriteCustomFieldsToAuth verifies that, after
-// Step 3's change, migrateCredentials no longer writes Jira custom_fields
-// into auth.yaml — that's now migrateBehaviorConfig's job, targeting
-// config.yaml instead.
-func TestMigrateCredentialsDoesNotWriteCustomFieldsToAuth(t *testing.T) {
-	isolateHomes(t)
-
-	hcfg := &config.Config{
-		Services: config.Services{
-			Jira: &config.JiraConfig{
-				URL:          "https://example.atlassian.net",
-				Email:        "user@example.com",
-				Token:        "tok",
-				CustomFields: map[string]string{"epic_key": "customfield_10014"},
-			},
-		},
-	}
-	if err := config.Write(config.DefaultPath(), hcfg); err != nil {
-		t.Fatalf("write handler config: %v", err)
-	}
-
-	migrateCredentials()
-
-	acfg, err := wcfg.Load(wcfg.DefaultPath())
-	if err != nil {
-		t.Fatalf("Load auth.yaml: %v", err)
-	}
-	if len(acfg.JiraCustomFields) != 0 {
-		t.Errorf("acfg.JiraCustomFields = %v, want empty (custom_fields no longer written to auth.yaml)", acfg.JiraCustomFields)
-	}
-	if acfg.Services.Jira == nil || acfg.Services.Jira.Token != "tok" {
-		t.Errorf("Jira credentials not copied to auth.yaml as expected: %+v", acfg.Services.Jira)
-	}
 }
 
 // countEventsBySource returns the number of rows in the legacy `events` table

@@ -3,109 +3,78 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	wcfg "github.com/mturley/watcher/config"
 )
 
 func TestReadWriteConfig(t *testing.T) {
-	// Create a temporary directory for test files
-	tmpDir, err := os.MkdirTemp("", "config-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
+	testPath := filepath.Join(t.TempDir(), "config.yaml")
 
-	testPath := filepath.Join(tmpDir, "config.yaml")
-
-	// Create a config with both services
 	cfg := &Config{
-		Services: Services{
-			GitHub: &GitHubConfig{
-				Token: "ghp_test123",
-			},
-			Jira: &JiraConfig{
-				URL:          "https://jira.example.com",
-				Email:        "test@example.com",
-				Token:        "jira_token_abc",
-				BotUsernames: []string{"bot1", "bot2"},
-			},
+		GitHub: &wcfg.GitHubBehavior{BotUsernames: []string{"*ci-bot*"}},
+		Jira: &wcfg.JiraBehavior{
+			BotUsernames: []string{"bot1", "bot2"},
+			CustomFields: map[string]string{"epic_key": "customfield_10014"},
 		},
 	}
-
-	// Write the config
 	if err := Write(testPath, cfg); err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
-
-	// Verify file permissions are 0600
 	info, err := os.Stat(testPath)
 	if err != nil {
-		t.Fatalf("Failed to stat file: %v", err)
+		t.Fatalf("Stat failed: %v", err)
 	}
-	if mode := info.Mode().Perm(); mode != 0600 {
-		t.Errorf("Expected file permissions 0600, got %v", mode)
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("Expected file mode 0600, got %o", info.Mode().Perm())
 	}
 
-	// Read the config back
-	readCfg, err := Read(testPath)
+	got, err := Read(testPath)
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
-
-	// Verify all fields
-	if readCfg.Services.GitHub == nil {
-		t.Fatal("GitHub config is nil")
+	if got.GitHub == nil || len(got.GitHub.BotUsernames) != 1 || got.GitHub.BotUsernames[0] != "*ci-bot*" {
+		t.Errorf("GitHub behavior not round-tripped: %+v", got.GitHub)
 	}
-	if readCfg.Services.GitHub.Token != "ghp_test123" {
-		t.Errorf("Expected GitHub token 'ghp_test123', got '%s'", readCfg.Services.GitHub.Token)
+	if got.Jira == nil || len(got.Jira.BotUsernames) != 2 || got.Jira.BotUsernames[1] != "bot2" {
+		t.Fatalf("Jira bot usernames not round-tripped: %+v", got.Jira)
 	}
-
-	if readCfg.Services.Jira == nil {
-		t.Fatal("Jira config is nil")
-	}
-	if readCfg.Services.Jira.URL != "https://jira.example.com" {
-		t.Errorf("Expected Jira URL 'https://jira.example.com', got '%s'", readCfg.Services.Jira.URL)
-	}
-	if readCfg.Services.Jira.Email != "test@example.com" {
-		t.Errorf("Expected Jira email 'test@example.com', got '%s'", readCfg.Services.Jira.Email)
-	}
-	if readCfg.Services.Jira.Token != "jira_token_abc" {
-		t.Errorf("Expected Jira token 'jira_token_abc', got '%s'", readCfg.Services.Jira.Token)
-	}
-	if len(readCfg.Services.Jira.BotUsernames) != 2 {
-		t.Fatalf("Expected 2 bot usernames, got %d", len(readCfg.Services.Jira.BotUsernames))
-	}
-	if readCfg.Services.Jira.BotUsernames[0] != "bot1" || readCfg.Services.Jira.BotUsernames[1] != "bot2" {
-		t.Errorf("Expected bot usernames [bot1, bot2], got %v", readCfg.Services.Jira.BotUsernames)
+	if got.Jira.CustomFields["epic_key"] != "customfield_10014" {
+		t.Errorf("custom fields not round-tripped: %v", got.Jira.CustomFields)
 	}
 }
 
 func TestReadMissingFile(t *testing.T) {
-	// Try to read a file that doesn't exist
 	cfg, err := Read("/nonexistent/path/config.yaml")
 	if err != nil {
 		t.Fatalf("Expected no error for missing file, got: %v", err)
 	}
-
-	// Should return empty config
 	if cfg == nil {
 		t.Fatal("Expected non-nil config")
 	}
-	if cfg.Services.GitHub != nil {
-		t.Error("Expected nil GitHub config for missing file")
+	if cfg.GitHub != nil || cfg.Jira != nil {
+		t.Error("Expected nil behavior blocks for missing file")
 	}
-	if cfg.Services.Jira != nil {
-		t.Error("Expected nil Jira config for missing file")
+}
+
+func TestWatcherAuthPathHonorsHandlerHome(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HANDLER_HOME", dir)
+	if got, want := WatcherAuthPath(), filepath.Join(dir, "watcher-auth.yaml"); got != want {
+		t.Errorf("WatcherAuthPath() = %q, want %q", got, want)
 	}
 }
 
 func TestDefaultResourceURL(t *testing.T) {
-	cfg := &Config{
-		Services: Services{
-			Jira: &JiraConfig{URL: "https://jira.example.com"},
-		},
+	t.Setenv("HANDLER_HOME", t.TempDir())
+	seed := &wcfg.Config{Services: wcfg.Services{Jira: &wcfg.JiraConfig{
+		Host: "x.atlassian.net", Email: "e@example.com", Token: "t",
+	}}}
+	if err := seed.Save(WatcherAuthPath()); err != nil {
+		t.Fatalf("seed: %v", err)
 	}
+	cfg := &Config{}
 
 	tests := []struct {
 		name         string
@@ -117,133 +86,41 @@ func TestDefaultResourceURL(t *testing.T) {
 		{"PR with org", "pr", "my-org/my-repo#42", "https://github.com/my-org/my-repo/pull/42"},
 		{"PR missing hash", "pr", "owner/repo", ""},
 		{"PR empty number", "pr", "owner/repo#", ""},
-		{"Jira", "jira", "PROJ-456", "https://jira.example.com/browse/PROJ-456"},
-		{"Jira trailing slash", "jira", "PROJ-1", "https://jira.example.com/browse/PROJ-1"},
-		{"Unknown type", "slack", "chan-123", ""},
+		{"Jira", "jira", "PROJ-456", "https://x.atlassian.net/browse/PROJ-456"},
+		{"Unknown type", "other", "chan-123", ""},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := cfg.DefaultResourceURL(tt.resourceType, tt.resourceID)
-			if result != tt.expected {
-				t.Errorf("DefaultResourceURL(%s, %s) = %q, want %q", tt.resourceType, tt.resourceID, result, tt.expected)
+			if got := cfg.DefaultResourceURL(tt.resourceType, tt.resourceID); got != tt.expected {
+				t.Errorf("DefaultResourceURL(%s, %s) = %q, want %q", tt.resourceType, tt.resourceID, got, tt.expected)
 			}
 		})
-	}
-
-	// Test with trailing slash on Jira URL
-	cfgSlash := &Config{
-		Services: Services{
-			Jira: &JiraConfig{URL: "https://jira.example.com/"},
-		},
-	}
-	result := cfgSlash.DefaultResourceURL("jira", "PROJ-1")
-	if result != "https://jira.example.com/browse/PROJ-1" {
-		t.Errorf("Trailing slash: got %q, want %q", result, "https://jira.example.com/browse/PROJ-1")
-	}
-
-	// Test with no Jira config
-	cfgNoJira := &Config{}
-	result = cfgNoJira.DefaultResourceURL("jira", "PROJ-1")
-	if result != "" {
-		t.Errorf("No Jira config: got %q, want empty", result)
 	}
 }
 
-func TestIsServiceConfigured(t *testing.T) {
-	tests := []struct {
-		name     string
-		config   *Config
-		service  string
-		expected bool
-	}{
-		{
-			name: "GitHub configured",
-			config: &Config{
-				Services: Services{
-					GitHub: &GitHubConfig{Token: "test"},
-				},
-			},
-			service:  "github",
-			expected: true,
-		},
-		{
-			name: "GitHub not configured - nil",
-			config: &Config{
-				Services: Services{},
-			},
-			service:  "github",
-			expected: false,
-		},
-		{
-			name: "GitHub not configured - empty token",
-			config: &Config{
-				Services: Services{
-					GitHub: &GitHubConfig{Token: ""},
-				},
-			},
-			service:  "github",
-			expected: false,
-		},
-		{
-			name: "Jira configured",
-			config: &Config{
-				Services: Services{
-					Jira: &JiraConfig{Token: "test"},
-				},
-			},
-			service:  "jira",
-			expected: true,
-		},
-		{
-			name: "Jira not configured - nil",
-			config: &Config{
-				Services: Services{},
-			},
-			service:  "jira",
-			expected: false,
-		},
-		{
-			name: "Jira not configured - empty token",
-			config: &Config{
-				Services: Services{
-					Jira: &JiraConfig{Token: ""},
-				},
-			},
-			service:  "jira",
-			expected: false,
-		},
-		{
-			name:     "Unknown service",
-			config:   &Config{},
-			service:  "unknown",
-			expected: false,
-		},
+func TestDefaultResourceURLJiraUsesAuthHost(t *testing.T) {
+	t.Setenv("HANDLER_HOME", t.TempDir())
+	if got := (&Config{}).DefaultResourceURL("jira", "PROJ-1"); got != "" {
+		t.Errorf("no auth file: got %q, want empty", got)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.IsServiceConfigured(tt.service)
-			if result != tt.expected {
-				t.Errorf("Expected IsServiceConfigured(%s) to be %v, got %v", tt.service, tt.expected, result)
-			}
-		})
+	seed := &wcfg.Config{Services: wcfg.Services{Jira: &wcfg.JiraConfig{
+		Host: "https://x.atlassian.net/", Email: "e@example.com", Token: "t",
+	}}}
+	if err := seed.Save(WatcherAuthPath()); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	if got, want := (&Config{}).DefaultResourceURL("jira", "PROJ-1"), "https://x.atlassian.net/browse/PROJ-1"; got != want {
+		t.Errorf("got %q want %q", got, want)
 	}
 }
 
 func TestJiraCustomFieldsConfig(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-
-	content := `services:
-  jira:
-    url: https://jira.example.com
-    email: test@example.com
-    token: test-token
-    custom_fields:
-      epic_key: "customfield_10014"
-      blocked: "customfield_10517"
-      story_points: "customfield_10028"
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	content := `jira:
+  custom_fields:
+    epic_key: "customfield_10014"
+    blocked: "customfield_10517"
+    story_points: "customfield_10028"
 `
 	os.WriteFile(path, []byte(content), 0600)
 
@@ -251,23 +128,95 @@ func TestJiraCustomFieldsConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
-	if cfg.Services.Jira == nil {
-		t.Fatal("expected Jira config")
+	if cfg.Jira == nil || len(cfg.Jira.CustomFields) != 3 {
+		t.Fatalf("expected 3 custom fields, got %+v", cfg.Jira)
 	}
-	if len(cfg.Services.Jira.CustomFields) != 3 {
-		t.Errorf("expected 3 custom fields, got %d", len(cfg.Services.Jira.CustomFields))
+	if cfg.Jira.CustomFields["epic_key"] != "customfield_10014" {
+		t.Errorf("epic_key = %q", cfg.Jira.CustomFields["epic_key"])
 	}
-	if cfg.Services.Jira.CustomFields["epic_key"] != "customfield_10014" {
-		t.Errorf("expected epic_key = customfield_10014, got %q", cfg.Services.Jira.CustomFields["epic_key"])
+}
+
+func TestSeedJiraCustomFieldsPreservesFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	input := `# my hand-written comment
+services:
+  github:
+    token: t
+auto_wake:
+  enabled: false
+`
+	if err := os.WriteFile(path, []byte(input), 0640); err != nil {
+		t.Fatal(err)
+	}
+	wrote, err := SeedJiraCustomFields(path, map[string]string{"epic_key": "customfield_10014"})
+	if err != nil || !wrote {
+		t.Fatalf("wrote=%v err=%v", wrote, err)
+	}
+	data, _ := os.ReadFile(path)
+	out := string(data)
+	for _, line := range []string{"# my hand-written comment", "services:", "  github:", "    token: t", "auto_wake:", "  enabled: false"} {
+		if !strings.Contains(out, line+"\n") {
+			t.Errorf("line %q lost from:\n%s", line, out)
+		}
+	}
+	if strings.Index(out, "services:") > strings.Index(out, "auto_wake:") {
+		t.Errorf("key order changed:\n%s", out)
+	}
+	cfg, err := Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Jira == nil || cfg.Jira.CustomFields["epic_key"] != "customfield_10014" {
+		t.Errorf("jira.custom_fields not seeded: %+v", cfg.Jira)
+	}
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0640 {
+		t.Errorf("mode = %o, want 640", fi.Mode().Perm())
+	}
+}
+
+func TestSeedJiraCustomFieldsKeepsExisting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	input := "jira:\n    custom_fields:\n        a: customfield_1 # keep\n"
+	os.WriteFile(path, []byte(input), 0600)
+	wrote, err := SeedJiraCustomFields(path, map[string]string{"b": "customfield_2"})
+	if err != nil || wrote {
+		t.Fatalf("wrote=%v err=%v, want false,nil", wrote, err)
+	}
+	if data, _ := os.ReadFile(path); string(data) != input {
+		t.Errorf("file changed:\n%s", data)
+	}
+}
+
+func TestSeedJiraCustomFieldsCreatesMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "config.yaml")
+	wrote, err := SeedJiraCustomFields(path, map[string]string{"a": "customfield_1"})
+	if err != nil || !wrote {
+		t.Fatalf("wrote=%v err=%v", wrote, err)
+	}
+	if fi, err := os.Stat(path); err != nil || fi.Mode().Perm() != 0600 {
+		t.Errorf("stat=%v err=%v, want mode 600", fi, err)
+	}
+}
+
+func TestSeedJiraCustomFieldsFillsEmptyBlock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	os.WriteFile(path, []byte("jira:\n    bot_usernames: [bot]\n    custom_fields: {}\n"), 0600)
+	wrote, err := SeedJiraCustomFields(path, map[string]string{"a": "customfield_1"})
+	if err != nil || !wrote {
+		t.Fatalf("wrote=%v err=%v", wrote, err)
+	}
+	cfg, _ := Read(path)
+	if cfg.Jira.CustomFields["a"] != "customfield_1" || len(cfg.Jira.BotUsernames) != 1 {
+		t.Errorf("unexpected: %+v", cfg.Jira)
 	}
 }
 
 func TestDefaultResourceURL_Slack(t *testing.T) {
-	t.Setenv("WATCHER_HOME", t.TempDir())
+	t.Setenv("HANDLER_HOME", t.TempDir())
 	seed := &wcfg.Config{Services: wcfg.Services{Slack: &wcfg.SlackConfig{
 		Token: "xoxc-x", Cookie: "d", WorkspaceDomain: "myteam.slack.com",
 	}}}
-	if err := seed.Save(wcfg.DefaultPath()); err != nil {
+	if err := seed.Save(WatcherAuthPath()); err != nil {
 		t.Fatalf("seed auth.yaml: %v", err)
 	}
 	c := &Config{}
@@ -281,11 +230,11 @@ func TestDefaultResourceURL_Slack(t *testing.T) {
 }
 
 func TestDefaultResourceURL_Slack_SchemeTolerated(t *testing.T) {
-	t.Setenv("WATCHER_HOME", t.TempDir())
+	t.Setenv("HANDLER_HOME", t.TempDir())
 	seed := &wcfg.Config{Services: wcfg.Services{Slack: &wcfg.SlackConfig{
 		Token: "x", Cookie: "d", WorkspaceDomain: "https://myteam.slack.com/",
 	}}}
-	if err := seed.Save(wcfg.DefaultPath()); err != nil {
+	if err := seed.Save(WatcherAuthPath()); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	c := &Config{}
@@ -296,7 +245,7 @@ func TestDefaultResourceURL_Slack_SchemeTolerated(t *testing.T) {
 }
 
 func TestDefaultResourceURL_Slack_NoDomain(t *testing.T) {
-	t.Setenv("WATCHER_HOME", t.TempDir())
+	t.Setenv("HANDLER_HOME", t.TempDir())
 	c := &Config{}
 	if got := c.DefaultResourceURL("slack", "C0:1699999999.000100"); got != "" {
 		t.Errorf("no domain: got %q want \"\"", got)
@@ -352,26 +301,5 @@ func TestStatuslineShowGit(t *testing.T) {
 				t.Errorf("StatuslineShowGit() = %v, want %v", got, tt.expected)
 			}
 		})
-	}
-}
-
-func TestJiraNoCustomFields(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-
-	content := `services:
-  jira:
-    url: https://jira.example.com
-    email: test@example.com
-    token: test-token
-`
-	os.WriteFile(path, []byte(content), 0600)
-
-	cfg, err := Read(path)
-	if err != nil {
-		t.Fatalf("Read failed: %v", err)
-	}
-	if cfg.Services.Jira.CustomFields != nil && len(cfg.Services.Jira.CustomFields) != 0 {
-		t.Errorf("expected nil or empty custom fields, got %v", cfg.Services.Jira.CustomFields)
 	}
 }

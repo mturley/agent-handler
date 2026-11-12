@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	wcfg "github.com/mturley/watcher/config"
@@ -11,12 +13,13 @@ import (
 
 // Config represents the agent-handler configuration
 type Config struct {
-	Services     Services            `yaml:"services"`
-	Statusline   *StatuslineConfig   `yaml:"statusline,omitempty"`
-	Experimental *ExperimentalConfig `yaml:"experimental,omitempty"`
-	Reminders    *RemindersConfig    `yaml:"reminders,omitempty"`
-	AutoWake     *AutoWakeConfig     `yaml:"auto_wake,omitempty"`
-	Debug        bool                `yaml:"debug,omitempty"`
+	GitHub       *wcfg.GitHubBehavior `yaml:"github,omitempty"`
+	Jira         *wcfg.JiraBehavior   `yaml:"jira,omitempty"`
+	Statusline   *StatuslineConfig    `yaml:"statusline,omitempty"`
+	Experimental *ExperimentalConfig  `yaml:"experimental,omitempty"`
+	Reminders    *RemindersConfig     `yaml:"reminders,omitempty"`
+	AutoWake     *AutoWakeConfig      `yaml:"auto_wake,omitempty"`
+	Debug        bool                 `yaml:"debug,omitempty"`
 }
 
 // AutoWakeConfig controls automatic rate-limit wake jobs: when a session's
@@ -30,26 +33,6 @@ type AutoWakeConfig struct {
 // ExperimentalConfig contains flags for experimental features
 type ExperimentalConfig struct {
 	CostDisplay *bool `yaml:"cost_display,omitempty"`
-}
-
-// Services contains configuration for external services
-type Services struct {
-	GitHub *GitHubConfig `yaml:"github,omitempty"`
-	Jira   *JiraConfig   `yaml:"jira,omitempty"`
-}
-
-// GitHubConfig contains GitHub API configuration
-type GitHubConfig struct {
-	Token string `yaml:"token"`
-}
-
-// JiraConfig contains Jira API configuration
-type JiraConfig struct {
-	URL          string            `yaml:"url"`
-	Email        string            `yaml:"email"`
-	Token        string            `yaml:"token"`
-	BotUsernames []string          `yaml:"bot_usernames,omitempty"`
-	CustomFields map[string]string `yaml:"custom_fields,omitempty"`
 }
 
 // StatuslineConfig controls which extra lines appear in the statusline
@@ -93,6 +76,12 @@ func DefaultPath() string {
 	return filepath.Join(home, ".agent-handler", "config.yaml")
 }
 
+// WatcherAuthPath returns the path of handler's watcher credentials file,
+// next to handler's config.yaml (so it honours HANDLER_HOME).
+func WatcherAuthPath() string {
+	return filepath.Join(filepath.Dir(DefaultPath()), "watcher-auth.yaml")
+}
+
 // Read reads configuration from the specified path
 // Returns an empty Config if the file doesn't exist (not an error)
 func Read(path string) (*Config, error) {
@@ -128,18 +117,6 @@ func Write(path string, cfg *Config) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-// IsServiceConfigured checks if a service has a non-empty token
-func (c *Config) IsServiceConfigured(service string) bool {
-	switch service {
-	case "github":
-		return c.Services.GitHub != nil && c.Services.GitHub.Token != ""
-	case "jira":
-		return c.Services.Jira != nil && c.Services.Jira.Token != ""
-	default:
-		return false
-	}
-}
-
 // ResourceTypeToService maps resource types to service names
 func ResourceTypeToService(resourceType string) string {
 	switch resourceType {
@@ -163,10 +140,7 @@ func (c *Config) DefaultResourceURL(resourceType, resourceID string) string {
 	case "pr":
 		return prResourceURL(resourceID)
 	case "jira":
-		if c.Services.Jira != nil && c.Services.Jira.URL != "" {
-			return strings.TrimRight(c.Services.Jira.URL, "/") + "/browse/" + resourceID
-		}
-		return ""
+		return jiraResourceURL(resourceID)
 	case "slack":
 		return slackResourceURL(resourceID)
 	default:
@@ -188,17 +162,32 @@ func prResourceURL(resourceID string) string {
 	return "https://github.com/" + repo + "/pull/" + num
 }
 
+// jiraResourceURL builds a Jira browse URL from the host in the watcher auth
+// file. Returns "" if Jira is not configured there.
+func jiraResourceURL(resourceID string) string {
+	ac, err := wcfg.Load(WatcherAuthPath())
+	if err != nil {
+		return ""
+	}
+	creds, err := ac.Jira()
+	if err != nil || creds.Host == "" {
+		return ""
+	}
+	host := strings.TrimPrefix(creds.Host, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	host = strings.TrimRight(host, "/")
+	return "https://" + host + "/browse/" + resourceID
+}
+
 // slackResourceURL builds a Slack archive permalink from a "<channel>:<ts>"
-// resource ID and the WorkspaceDomain in the shared watcher auth.yaml (the
-// source of truth for Slack config — handler's own config has no Slack
-// section). Returns "" if the domain is unset/unreadable or the ID is
+// resource ID and the WorkspaceDomain in handler's watcher-auth.yaml. Returns "" if the domain is unset/unreadable or the ID is
 // malformed.
 func slackResourceURL(resourceID string) string {
 	parts := strings.SplitN(resourceID, ":", 2)
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return ""
 	}
-	sc, err := wcfg.Load(wcfg.DefaultPath())
+	sc, err := wcfg.Load(WatcherAuthPath())
 	if err != nil {
 		return ""
 	}
@@ -242,4 +231,84 @@ func (c *Config) AutoWakeThresholdPercent() int {
 		return defaultAutoWakeThreshold
 	}
 	return v
+}
+
+// SeedJiraCustomFields sets jira.custom_fields in the YAML file at path, but
+// only when that key is absent or empty. It edits the parsed node tree so
+// comments, key order, unknown keys and the file's mode are left alone; a
+// missing file is created with mode 0600. It reports whether it wrote.
+func SeedJiraCustomFields(path string, fields map[string]string) (bool, error) {
+	if len(fields) == 0 {
+		return false, nil
+	}
+	mode := os.FileMode(0600)
+	var doc yaml.Node
+	data, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		if fi, serr := os.Stat(path); serr == nil {
+			mode = fi.Mode().Perm()
+		}
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return false, err
+		}
+	case os.IsNotExist(err):
+	default:
+		return false, err
+	}
+	if doc.Kind == 0 {
+		doc = yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}}
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return false, fmt.Errorf("%s: top level is not a mapping", path)
+	}
+	jira := mapValue(root, "jira")
+	if jira == nil {
+		jira = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+		root.Content = append(root.Content, scalarNode("jira"), jira)
+	} else if jira.Kind != yaml.MappingNode {
+		return false, fmt.Errorf("%s: jira is not a mapping", path)
+	}
+	if cf := mapValue(jira, "custom_fields"); cf != nil && len(cf.Content) > 0 {
+		return false, nil
+	}
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	cf := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	for _, k := range keys {
+		cf.Content = append(cf.Content, scalarNode(k), scalarNode(fields[k]))
+	}
+	if existing := mapValue(jira, "custom_fields"); existing != nil {
+		*existing = *cf
+	} else {
+		jira.Content = append(jira.Content, scalarNode("custom_fields"), cf)
+	}
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return false, err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return false, err
+	}
+	if err := os.WriteFile(path, out, mode); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func mapValue(m *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == key {
+			return m.Content[i+1]
+		}
+	}
+	return nil
+}
+
+func scalarNode(v string) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v}
 }

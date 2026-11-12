@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mturley/agent-handler/config"
 	"github.com/mturley/agent-handler/db"
 	wcfg "github.com/mturley/watcher/config"
 )
@@ -53,7 +52,7 @@ func runHandler(t *testing.T, bin string, handlerHome string, args ...string) (s
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	path := stubWorktree(t, handlerHome) + string(os.PathListSeparator) + os.Getenv("PATH")
-	cmd.Env = append(os.Environ(), "HANDLER_HOME="+handlerHome, "WATCHER_HOME="+handlerHome, "PATH="+path)
+	cmd.Env = append(os.Environ(), "HANDLER_HOME="+handlerHome, "PATH="+path)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -89,20 +88,8 @@ func TestIntegrationLifecycle(t *testing.T) {
 	}
 	testDB.Close()
 
-	// Create a minimal config file with GitHub token so subscribe guard passes
-	cfg := config.Config{
-		Services: config.Services{
-			GitHub: &config.GitHubConfig{Token: "fake-token"},
-			Jira:   &config.JiraConfig{Token: "fake-token", URL: "https://fake.atlassian.net", Email: "test@example.com"},
-		},
-	}
-	configPath := filepath.Join(home, "config.yaml")
-	if err := config.Write(configPath, &cfg); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
-
-	// Also write the watcher library's shared auth.yaml (the source of
-	// truth serviceConfiguredForWatching consults) so the subscribe guard
+	// Write handler's watcher-auth.yaml (the source of truth
+	// ServiceConfiguredForWatching consults) so the subscribe guard
 	// and watcher status checks pass.
 	watcherCreds := wcfg.Config{
 		Services: wcfg.Services{
@@ -110,8 +97,8 @@ func TestIntegrationLifecycle(t *testing.T) {
 			Jira:   &wcfg.JiraConfig{Token: "fake-token", Host: "fake.atlassian.net", Email: "test@example.com"},
 		},
 	}
-	if err := watcherCreds.Save(filepath.Join(home, "auth.yaml")); err != nil {
-		t.Fatalf("failed to write watcher auth.yaml: %v", err)
+	if err := watcherCreds.Save(filepath.Join(home, "watcher-auth.yaml")); err != nil {
+		t.Fatalf("failed to write watcher-auth.yaml: %v", err)
 	}
 
 	// Register a session
@@ -337,20 +324,8 @@ func TestIntegrationUnregister(t *testing.T) {
 	}
 	testDB.Close()
 
-	// Create a minimal config file for subscribe guard
-	cfg := config.Config{
-		Services: config.Services{
-			GitHub: &config.GitHubConfig{Token: "fake-token"},
-			Jira:   &config.JiraConfig{Token: "fake-token", URL: "https://fake.atlassian.net", Email: "test@example.com"},
-		},
-	}
-	configPath := filepath.Join(home, "config.yaml")
-	if err := config.Write(configPath, &cfg); err != nil {
-		t.Fatalf("failed to write config: %v", err)
-	}
-
-	// Also write the watcher library's shared auth.yaml (the source of
-	// truth serviceConfiguredForWatching consults) so the subscribe guard
+	// Write handler's watcher-auth.yaml (the source of truth
+	// ServiceConfiguredForWatching consults) so the subscribe guard
 	// and watcher status checks pass.
 	watcherCreds := wcfg.Config{
 		Services: wcfg.Services{
@@ -358,8 +333,8 @@ func TestIntegrationUnregister(t *testing.T) {
 			Jira:   &wcfg.JiraConfig{Token: "fake-token", Host: "fake.atlassian.net", Email: "test@example.com"},
 		},
 	}
-	if err := watcherCreds.Save(filepath.Join(home, "auth.yaml")); err != nil {
-		t.Fatalf("failed to write watcher auth.yaml: %v", err)
+	if err := watcherCreds.Save(filepath.Join(home, "watcher-auth.yaml")); err != nil {
+		t.Fatalf("failed to write watcher-auth.yaml: %v", err)
 	}
 
 	// Register

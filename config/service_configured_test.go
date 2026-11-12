@@ -6,38 +6,30 @@ import (
 	wcfg "github.com/mturley/watcher/config"
 )
 
-func TestServiceConfiguredForWatching(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("WATCHER_HOME", dir)
+func TestServiceConfiguredReadsHandlerWatcherAuth(t *testing.T) {
+	t.Setenv("HANDLER_HOME", t.TempDir())
 
-	// No auth.yaml written yet: nothing should be configured.
-	if ServiceConfiguredForWatching("github") {
-		t.Error("expected github to be unconfigured before auth.yaml exists")
-	}
-	if ServiceConfiguredForWatching("jira") {
-		t.Error("expected jira to be unconfigured before auth.yaml exists")
-	}
-	if ServiceConfiguredForWatching("bogus") {
-		t.Error("expected unknown service to be unconfigured")
+	for _, svc := range []string{"github", "jira", "slack", "bogus"} {
+		if ServiceConfiguredForWatching(svc) {
+			t.Errorf("%s configured with no watcher-auth.yaml", svc)
+		}
 	}
 
-	// Write auth.yaml with only GitHub credentials.
-	creds := &wcfg.Config{
-		Services: wcfg.Services{
-			GitHub: &wcfg.GitHubConfig{Token: "gh-token"},
-		},
+	check := func(auth wcfg.Services, want map[string]bool) {
+		t.Helper()
+		if err := (&wcfg.Config{Services: auth}).Save(WatcherAuthPath()); err != nil {
+			t.Fatalf("save: %v", err)
+		}
+		for svc, w := range want {
+			if got := ServiceConfiguredForWatching(svc); got != w {
+				t.Errorf("ServiceConfiguredForWatching(%q) = %v, want %v", svc, got, w)
+			}
+		}
 	}
-	if err := creds.Save(wcfg.DefaultPath()); err != nil {
-		t.Fatalf("failed to save auth.yaml: %v", err)
-	}
-
-	if !ServiceConfiguredForWatching("github") {
-		t.Error("expected github to be configured after writing a token")
-	}
-	if ServiceConfiguredForWatching("jira") {
-		t.Error("expected jira to remain unconfigured (no jira block written)")
-	}
-	if ServiceConfiguredForWatching("bogus") {
-		t.Error("expected unknown service to remain unconfigured")
-	}
+	check(wcfg.Services{GitHub: &wcfg.GitHubConfig{Token: "gh"}},
+		map[string]bool{"github": true, "jira": false, "slack": false, "bogus": false})
+	check(wcfg.Services{Jira: &wcfg.JiraConfig{Host: "x.atlassian.net", Email: "e@example.com", Token: "t"}},
+		map[string]bool{"github": false, "jira": true, "slack": false})
+	check(wcfg.Services{Slack: &wcfg.SlackConfig{Token: "xoxc-x", Cookie: "d", WorkspaceDomain: "t.slack.com"}},
+		map[string]bool{"github": false, "jira": false, "slack": true})
 }
