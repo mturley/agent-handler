@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// isServiceConfigured reports whether a service has credentials in the
-// watcher library config (auth.yaml). Slack is a first-class watcher here
+// isServiceConfigured reports whether a service has credentials in
+// handler's watcher-auth.yaml. Slack is a first-class watcher here
 // (and in knownWatchers/defaultIntervals below), polled just like github
 // and jira.
 func isServiceConfigured(cfg *wcfg.Config, name string) bool {

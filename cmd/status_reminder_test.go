@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -246,13 +247,8 @@ func TestCheckStatusReminderExemptsHandlerRole(t *testing.T) {
 
 func TestCheckStatusReminderRespectsDisabledConfig(t *testing.T) {
 	d := reminderTestDB(t)
-	enabled := false
-	if err := config.Write(config.DefaultPath(), &config.Config{
-		Reminders: &config.RemindersConfig{
-			Status: &config.StatusReminderConfig{Enabled: &enabled},
-		},
-	}); err != nil {
-		t.Fatalf("config.Write failed: %v", err)
+	if err := os.WriteFile(config.DefaultPath(), []byte("reminders:\n  status:\n    enabled: false\n"), 0600); err != nil {
+		t.Fatalf("writing config: %v", err)
 	}
 
 	now := time.Now().UTC()

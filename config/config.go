@@ -101,22 +101,6 @@ func Read(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// Write writes configuration to the specified path with 0600 permissions
-// Creates parent directories if needed
-func Write(path string, cfg *Config) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(path, data, 0600)
-}
-
 // ResourceTypeToService maps resource types to service names
 func ResourceTypeToService(resourceType string) string {
 	switch resourceType {
@@ -241,31 +225,11 @@ func SeedJiraCustomFields(path string, fields map[string]string) (bool, error) {
 	if len(fields) == 0 {
 		return false, nil
 	}
-	mode := os.FileMode(0600)
-	var doc yaml.Node
-	data, err := os.ReadFile(path)
-	switch {
-	case err == nil:
-		if fi, serr := os.Stat(path); serr == nil {
-			mode = fi.Mode().Perm()
-		}
-		if err := yaml.Unmarshal(data, &doc); err != nil {
-			return false, err
-		}
-	case os.IsNotExist(err):
-	default:
+	doc, mode, err := loadDoc(path)
+	if err != nil {
 		return false, err
 	}
-	if doc.Kind == 0 {
-		doc = yaml.Node{Kind: yaml.DocumentNode}
-	}
-	if len(doc.Content) == 0 {
-		doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
-	}
 	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return false, fmt.Errorf("%s: top level is not a mapping", path)
-	}
 	jira := mapValue(root, "jira")
 	if jira == nil {
 		jira = &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
@@ -292,17 +256,83 @@ func SeedJiraCustomFields(path string, fields map[string]string) (bool, error) {
 	} else {
 		jira.Content = append(jira.Content, scalarNode("custom_fields"), cf)
 	}
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		return false, err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return false, err
-	}
-	if err := os.WriteFile(path, out, mode); err != nil {
+	if err := saveDoc(path, doc, mode); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+// SetDebug turns debug on (debug: true) or off (removes the key; absent
+// means off) in the YAML file at path. Like SeedJiraCustomFields it edits
+// the node tree, so every other key, comment and the file's mode survive; a
+// missing file is created with mode 0600 only when turning debug on.
+func SetDebug(path string, on bool) error {
+	doc, mode, err := loadDoc(path)
+	if err != nil {
+		return err
+	}
+	root := doc.Content[0]
+	if !on {
+		for i := 0; i+1 < len(root.Content); i += 2 {
+			if root.Content[i].Value == "debug" {
+				root.Content = append(root.Content[:i], root.Content[i+2:]...)
+				return saveDoc(path, doc, mode)
+			}
+		}
+		return nil
+	}
+	if v := mapValue(root, "debug"); v != nil && v.Kind == yaml.ScalarNode {
+		v.Value, v.Tag, v.Style = "true", "!!bool", 0
+	} else if v != nil {
+		*v = yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"}
+	} else {
+		root.Content = append(root.Content, scalarNode("debug"),
+			&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+	}
+	return saveDoc(path, doc, mode)
+}
+
+// loadDoc parses the YAML file at path into a document whose root is a
+// mapping, and returns the file's mode. A missing, empty or comment-only
+// file yields an empty mapping and mode 0600.
+func loadDoc(path string) (*yaml.Node, os.FileMode, error) {
+	mode := os.FileMode(0600)
+	var doc yaml.Node
+	data, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		if fi, serr := os.Stat(path); serr == nil {
+			mode = fi.Mode().Perm()
+		}
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return nil, 0, err
+		}
+	case os.IsNotExist(err):
+	default:
+		return nil, 0, err
+	}
+	if doc.Kind == 0 {
+		doc = yaml.Node{Kind: yaml.DocumentNode}
+	}
+	if len(doc.Content) == 0 {
+		doc.Content = []*yaml.Node{{Kind: yaml.MappingNode, Tag: "!!map"}}
+	}
+	if doc.Content[0].Kind != yaml.MappingNode {
+		return nil, 0, fmt.Errorf("%s: top level is not a mapping", path)
+	}
+	return &doc, mode, nil
+}
+
+// saveDoc writes doc to path with mode, creating parent directories.
+func saveDoc(path string, doc *yaml.Node, mode os.FileMode) error {
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, out, mode)
 }
 
 func mapValue(m *yaml.Node, key string) *yaml.Node {

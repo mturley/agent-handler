@@ -25,19 +25,12 @@ func runDebug(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("usage: handler debug [enable|disable]")
 	}
 
-	cfgPath := config.DefaultPath()
-	cfg, err := config.Read(cfgPath)
-	if err != nil {
-		cfg = &config.Config{}
-	}
-
-	cfg.Debug = action == "enable"
-
-	if err := config.Write(cfgPath, cfg); err != nil {
+	on := action == "enable"
+	if err := config.SetDebug(config.DefaultPath(), on); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
-	if cfg.Debug {
+	if on {
 		fmt.Println("✓ Debug mode enabled — statusline will show debug info for all sessions")
 	} else {
 		fmt.Println("✓ Debug mode disabled")

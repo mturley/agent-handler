@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestStatusReminderDefaults(t *testing.T) {
 	// No reminders block at all: enabled with the documented defaults.
@@ -72,15 +75,9 @@ func TestStatusReminderRoundTripsThroughYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/config.yaml"
 
-	enabled := true
-	turns := 5
-	hours := 1
-	if err := Write(path, &Config{
-		Reminders: &RemindersConfig{
-			Status: &StatusReminderConfig{Enabled: &enabled, Turns: &turns, Hours: &hours},
-		},
-	}); err != nil {
-		t.Fatalf("Write failed: %v", err)
+	body := "reminders:\n  status:\n    enabled: true\n    turns: 5\n    hours: 1\n"
+	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
+		t.Fatal(err)
 	}
 
 	readCfg, err := Read(path)

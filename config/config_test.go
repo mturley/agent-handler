@@ -9,25 +9,11 @@ import (
 	wcfg "github.com/mturley/watcher/config"
 )
 
-func TestReadWriteConfig(t *testing.T) {
+func TestReadConfig(t *testing.T) {
 	testPath := filepath.Join(t.TempDir(), "config.yaml")
-
-	cfg := &Config{
-		GitHub: &wcfg.GitHubBehavior{BotUsernames: []string{"*ci-bot*"}},
-		Jira: &wcfg.JiraBehavior{
-			BotUsernames: []string{"bot1", "bot2"},
-			CustomFields: map[string]string{"epic_key": "customfield_10014"},
-		},
-	}
-	if err := Write(testPath, cfg); err != nil {
-		t.Fatalf("Write failed: %v", err)
-	}
-	info, err := os.Stat(testPath)
-	if err != nil {
-		t.Fatalf("Stat failed: %v", err)
-	}
-	if info.Mode().Perm() != 0600 {
-		t.Errorf("Expected file mode 0600, got %o", info.Mode().Perm())
+	body := "github:\n  bot_usernames: ['*ci-bot*']\njira:\n  bot_usernames: [bot1, bot2]\n  custom_fields:\n    epic_key: customfield_10014\n"
+	if err := os.WriteFile(testPath, []byte(body), 0600); err != nil {
+		t.Fatal(err)
 	}
 
 	got, err := Read(testPath)
@@ -35,13 +21,13 @@ func TestReadWriteConfig(t *testing.T) {
 		t.Fatalf("Read failed: %v", err)
 	}
 	if got.GitHub == nil || len(got.GitHub.BotUsernames) != 1 || got.GitHub.BotUsernames[0] != "*ci-bot*" {
-		t.Errorf("GitHub behavior not round-tripped: %+v", got.GitHub)
+		t.Errorf("GitHub behavior not read: %+v", got.GitHub)
 	}
 	if got.Jira == nil || len(got.Jira.BotUsernames) != 2 || got.Jira.BotUsernames[1] != "bot2" {
-		t.Fatalf("Jira bot usernames not round-tripped: %+v", got.Jira)
+		t.Fatalf("Jira bot usernames not read: %+v", got.Jira)
 	}
 	if got.Jira.CustomFields["epic_key"] != "customfield_10014" {
-		t.Errorf("custom fields not round-tripped: %v", got.Jira.CustomFields)
+		t.Errorf("custom fields not read: %v", got.Jira.CustomFields)
 	}
 }
 
@@ -329,5 +315,77 @@ func TestSeedJiraCustomFieldsCommentOnlyFile(t *testing.T) {
 	cfg, err := Read(path)
 	if err != nil || cfg.Jira == nil || cfg.Jira.CustomFields["a"] != "customfield_1" {
 		t.Errorf("unexpected cfg %+v err=%v", cfg, err)
+	}
+}
+
+// SetDebug edits only the debug key: comments, unknown blocks such as an old
+// services: block, other settings and the file's mode all survive.
+func TestSetDebugKeepsEverythingElse(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	orig := "# my handler config\nservices:\n  github:\n    token: keep-me\nauto_wake:\n  threshold_percent: 80 # wake earlier\n"
+	if err := os.WriteFile(path, []byte(orig), 0640); err != nil {
+		t.Fatal(err)
+	}
+	check := func(wantDebug bool) {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"# my handler config", "services:", "token: keep-me", "threshold_percent: 80", "# wake earlier"} {
+			if !strings.Contains(string(data), want) {
+				t.Errorf("lost %q:\n%s", want, data)
+			}
+		}
+		cfg, err := Read(path)
+		if err != nil || cfg.Debug != wantDebug || cfg.AutoWakeThresholdPercent() != 80 {
+			t.Errorf("cfg %+v err %v, want debug %v", cfg, err, wantDebug)
+		}
+		if fi, _ := os.Stat(path); fi.Mode().Perm() != 0640 {
+			t.Errorf("mode %o, want 0640", fi.Mode().Perm())
+		}
+	}
+	if err := SetDebug(path, true); err != nil {
+		t.Fatal(err)
+	}
+	check(true)
+	if err := SetDebug(path, false); err != nil {
+		t.Fatal(err)
+	}
+	check(false)
+}
+
+func TestSetDebugCreatesMissingFileOwnerOnly(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "config.yaml")
+	if err := SetDebug(path, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("disabling created a file: %v", err)
+	}
+	if err := SetDebug(path, true); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode().Perm() != 0600 {
+		t.Errorf("mode %o, want 0600", fi.Mode().Perm())
+	}
+	if cfg, err := Read(path); err != nil || !cfg.Debug {
+		t.Errorf("cfg %+v err %v", cfg, err)
+	}
+}
+
+func TestSetDebugRefusesUnparsableFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	orig := "debug: [unclosed\n"
+	os.WriteFile(path, []byte(orig), 0600)
+	if err := SetDebug(path, true); err == nil {
+		t.Fatal("expected a parse error")
+	}
+	if data, _ := os.ReadFile(path); string(data) != orig {
+		t.Fatalf("file rewritten:\n%s", data)
 	}
 }

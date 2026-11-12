@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestAutoWakeOnRateLimitDefaultsEnabled(t *testing.T) {
 	c := &Config{}
@@ -63,10 +66,8 @@ func TestAutoWakeThresholdIgnoresOutOfRangeValues(t *testing.T) {
 func TestAutoWakeConfigRoundTripsThroughYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := dir + "/config.yaml"
-	no := false
-	v := 80
-	if err := Write(path, &Config{AutoWake: &AutoWakeConfig{Enabled: &no, ThresholdPercent: &v}}); err != nil {
-		t.Fatalf("Write failed: %v", err)
+	if err := os.WriteFile(path, []byte("auto_wake:\n  enabled: false\n  threshold_percent: 80\n"), 0600); err != nil {
+		t.Fatal(err)
 	}
 	got, err := Read(path)
 	if err != nil {
