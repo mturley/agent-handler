@@ -1,6 +1,7 @@
 package watcher
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -97,5 +98,24 @@ func TestSeedDefaultJiraCustomFieldsWritesHandlerConfig(t *testing.T) {
 	}
 	if cfg.Jira == nil || cfg.Jira.CustomFields["epic_key"] != "customfield_10014" {
 		t.Errorf("jira = %+v", cfg.Jira)
+	}
+}
+
+// An unreadable credentials file (here: group/world-readable, which the
+// library refuses) must stop install, not be replaced by whatever the
+// prompts collect.
+func TestInstallAllRefusesUnreadableCredentials(t *testing.T) {
+	t.Setenv("HANDLER_HOME", t.TempDir())
+	path := config.WatcherAuthPath()
+	orig := []byte("services:\n    github:\n        token: keep-me\n")
+	if err := os.WriteFile(path, orig, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := installAll(nil); err == nil {
+		t.Fatal("expected installAll to fail on an unreadable watcher-auth.yaml")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(orig) {
+		t.Fatalf("watcher-auth.yaml changed: %q (%v)", got, err)
 	}
 }

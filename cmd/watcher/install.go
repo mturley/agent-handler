@@ -67,9 +67,11 @@ func installAll(cmd *cobra.Command) error {
 	// Run auth first, writing credentials to handler's watcher-auth.yaml.
 	// Scoped to github+jira+slack, matching knownWatchers below.
 	authPath := config.WatcherAuthPath()
+	// A missing file loads as empty; any other failure (e.g. permissions)
+	// must stop here, or saving the prompts' answers would overwrite it.
 	cfg, err := wcfg.Load(authPath)
 	if err != nil {
-		cfg = &wcfg.Config{}
+		return fmt.Errorf("reading credentials: %w", err)
 	}
 
 	prompter := newAuthPrompter()
