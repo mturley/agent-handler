@@ -5,11 +5,55 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/mturley/agent-handler/config"
 	"github.com/spf13/cobra"
 )
+
+// wakeMarkerMaxAge bounds how long a wake-armed marker may outlive the
+// session it was written for. The statusline clears a session's own marker
+// as soon as usage drops back below threshold, but a session that crashes or
+// is killed while armed never runs that code again, so its marker would
+// otherwise sit in wakeMarkerDir() forever. Since the shell wrapper
+// (hooks/post_tool_use_wake.sh) spawns the handler binary on every tool call
+// in EVERY session as long as the directory is non-empty, one leaked marker
+// defeats the fast-path for every other session too. runWakeCheck only runs
+// when the shell wrapper already found at least one marker, so it is a
+// convenient place to sweep stale ones without any extra process spawn.
+//
+// This does NOT use fscache.Prune: that helper writes its own ".pruned"
+// throttle marker into the directory it scans, which would itself make
+// wakeMarkerDir() permanently non-empty and defeat the shell wrapper's
+// glob check forever. pruneStaleWakeMarkers is a plain, unthrottled sweep
+// instead — cheap (a directory listing plus a stat per entry, no process
+// spawn) and only reached when the directory was already non-empty.
+const wakeMarkerMaxAge = 6 * time.Hour
+
+// pruneStaleWakeMarkers removes wake-armed markers older than
+// wakeMarkerMaxAge, so a marker left behind by a crashed or killed session
+// cannot keep the PostToolUse wake hook's fast-path disarmed indefinitely
+// for every session. Best-effort: errors are ignored.
+func pruneStaleWakeMarkers(now time.Time) {
+	dir := wakeMarkerDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if now.Sub(info.ModTime()) > wakeMarkerMaxAge {
+			os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
+}
 
 // Hook entry points for automatic rate-limit wake jobs. All three are silent
 // no-ops when the feature is disabled, when the payload is malformed, or when
@@ -76,6 +120,7 @@ func runWakeCheck(cmd *cobra.Command, args []string) error {
 	if !ok {
 		return nil
 	}
+	pruneStaleWakeMarkers(time.Now())
 	d, err := openDB()
 	if err != nil {
 		return nil

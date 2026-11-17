@@ -1,9 +1,18 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 	"time"
 )
+
+// wakeMarkerExists reports whether the fast-path marker is set for a session.
+// Mirrors the removed wakeArmed helper, kept local to the tests that exercise
+// setWakeArmed's filesystem side effect.
+func wakeMarkerExists(sessionID string) bool {
+	_, err := os.Stat(wakeMarkerPath(sessionID))
+	return err == nil
+}
 
 func TestRecordRateLimitPersistsFiveHourWindow(t *testing.T) {
 	d := cronTestDB(t)
@@ -116,7 +125,7 @@ func TestWakeMarkerCreatedWhenOverThreshold(t *testing.T) {
 
 	recordRateLimit(d, in)
 
-	if !wakeArmed("mk-1") {
+	if !wakeMarkerExists("mk-1") {
 		t.Error("expected the marker to exist when usage is over threshold")
 	}
 }
@@ -130,7 +139,7 @@ func TestWakeMarkerAbsentBelowThreshold(t *testing.T) {
 
 	recordRateLimit(d, in)
 
-	if wakeArmed("mk-2") {
+	if wakeMarkerExists("mk-2") {
 		t.Error("expected no marker below threshold")
 	}
 }
@@ -145,13 +154,13 @@ func TestWakeMarkerClearedWhenUsageDrops(t *testing.T) {
 
 	in.RateLimits.FiveHour.UsedPercentage = 95
 	recordRateLimit(d, in)
-	if !wakeArmed("mk-3") {
+	if !wakeMarkerExists("mk-3") {
 		t.Fatal("expected marker to be armed first")
 	}
 
 	in.RateLimits.FiveHour.UsedPercentage = 5
 	recordRateLimit(d, in)
-	if wakeArmed("mk-3") {
+	if wakeMarkerExists("mk-3") {
 		t.Error("expected the marker to be cleared once usage dropped")
 	}
 }
@@ -162,7 +171,35 @@ func TestWakeMarkerAbsentForSessionsWithoutLimits(t *testing.T) {
 	in.RateLimits = nil
 	recordRateLimit(d, in)
 
-	if wakeArmed("mk-4") {
+	if wakeMarkerExists("mk-4") {
 		t.Error("expected no marker for a session that reports no limits")
+	}
+}
+
+// A session that crashes or is killed while armed never clears its own
+// marker (that only happens when its statusline next runs with usage back
+// below threshold, or when `handler cleanup` later archives it). Since the
+// PostToolUse wake hook's shell wrapper spawns the handler binary on every
+// tool call in EVERY session as long as wakeMarkerDir() is non-empty, a
+// leaked marker must eventually time out on its own so it cannot disable
+// the fast-path for every other session forever.
+func TestPruneStaleWakeMarkersRemovesOldKeepsFresh(t *testing.T) {
+	t.Setenv("HANDLER_HOME", t.TempDir())
+	setWakeArmed("stale-session", true)
+	setWakeArmed("fresh-session", true)
+
+	stalePath := wakeMarkerPath("stale-session")
+	old := time.Now().Add(-(wakeMarkerMaxAge + time.Hour))
+	if err := os.Chtimes(stalePath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	pruneStaleWakeMarkers(time.Now())
+
+	if wakeMarkerExists("stale-session") {
+		t.Error("expected the stale marker to be pruned")
+	}
+	if !wakeMarkerExists("fresh-session") {
+		t.Error("expected the fresh marker to survive pruning")
 	}
 }

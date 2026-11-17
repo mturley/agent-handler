@@ -60,6 +60,24 @@ func TestPruneRemovesOldKeepsNew(t *testing.T) {
 	}
 }
 
+func TestPruneRunsDespiteFutureMarkerMtime(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now()
+	marker := filepath.Join(dir, prunedMarker)
+	os.WriteFile(marker, []byte{}, 0o644)
+	// Simulate clock skew: marker mtime is in the future relative to now.
+	os.Chtimes(marker, now.Add(time.Hour), now.Add(time.Hour))
+
+	old := filepath.Join(dir, "old.json")
+	os.WriteFile(old, []byte("{}"), 0o644)
+	os.Chtimes(old, now.Add(-8*24*time.Hour), now.Add(-8*24*time.Hour))
+
+	Prune(dir, 7*24*time.Hour, now)
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Error("prune did not run with future marker mtime (clock skew)")
+	}
+}
+
 func TestPruneRateLimited(t *testing.T) {
 	dir := t.TempDir()
 	now := time.Now()

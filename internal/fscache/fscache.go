@@ -60,8 +60,11 @@ func ReadJSON(path string, v any) bool {
 // removes.
 func Prune(dir string, maxAge time.Duration, now time.Time) {
 	marker := filepath.Join(dir, prunedMarker)
-	if info, err := os.Stat(marker); err == nil && now.Sub(info.ModTime()) < pruneInterval {
-		return
+	if info, err := os.Stat(marker); err == nil {
+		age := now.Sub(info.ModTime())
+		if age >= 0 && age < pruneInterval {
+			return
+		}
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {

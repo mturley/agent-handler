@@ -2,7 +2,6 @@ package terminal
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -187,5 +186,4 @@ func TestDetectCachedEmptySessionUncached(t *testing.T) {
 	if len(ents) != 0 {
 		t.Errorf("expected no cache files for empty session id, got %v", ents)
 	}
-	_ = filepath.Join(dir, "x")
 }

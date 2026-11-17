@@ -211,15 +211,6 @@ func wakeMarkerPath(sessionID string) string {
 	return filepath.Join(wakeMarkerDir(), sessionID)
 }
 
-// wakeArmed reports whether the fast-path marker is set for a session.
-func wakeArmed(sessionID string) bool {
-	if sessionID == "" {
-		return false
-	}
-	_, err := os.Stat(wakeMarkerPath(sessionID))
-	return err == nil
-}
-
 // setWakeArmed creates or removes the marker. Best-effort: a failure here costs
 // a redundant hook invocation, never correctness.
 func setWakeArmed(sessionID string, armed bool) {

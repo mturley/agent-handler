@@ -127,6 +127,20 @@ func cacheKey(s string) string {
 // per-cwd status entry guarded by a filesystem fingerprint and a 30s TTL, and
 // a per-(commondir, branch) base entry guarded by HEAD sha, base ref sha and a
 // 10m TTL. A warm hit spawns no git processes. Cache errors are misses.
+//
+// Known limits of the fingerprint: it only watches mtime/size of
+// <gitdir>/HEAD and <gitdir>/index, the mtime of <commondir>/packed-refs, and
+// (when HEAD is a symbolic ref) the mtime of the current branch's ref file.
+// Commits, checkouts, staging, resets, and rebases touch one of those and are
+// detected immediately, invalidating the cache on the next call. Plain edits
+// to already-tracked or untracked working-tree files, and fetches that don't
+// move HEAD/index/packed-refs (e.g. updating a different branch's
+// remote-tracking ref), are invisible to the fingerprint — a stale cached
+// status can lag behind those changes for up to statusTTL (30s). A refresh
+// requested more than statusTTL after the last write misses the cache and
+// spawns 2 git processes (status plus a diff against HEAD); base info
+// (ahead/behind against the upstream branch) stays served from its own cache
+// entry regardless, since it has its own, separate TTL and sha guards.
 func GetStatusCached(cwd, cacheDir string) *Status {
 	dirs, ok := ResolveGitDir(cwd)
 	if !ok {
