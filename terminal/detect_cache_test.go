@@ -143,6 +143,32 @@ func TestDetectCachedPerSession(t *testing.T) {
 	}
 }
 
+// TestDetectCachedWarmSpawnsNothing replaces detectFn with a counting fake
+// and confirms that once the cache is warm, 5 repeated DetectCached calls
+// never invoke it (i.e. spawn no cmux/tmux processes).
+func TestDetectCachedWarmSpawnsNothing(t *testing.T) {
+	calls := 0
+	oldFn, oldNow := detectFn, now
+	detectFn = func() (string, string, string) {
+		calls++
+		return "cmux", "surface:1", "ws:1"
+	}
+	fixedNow := time.Now()
+	now = func() time.Time { return fixedNow }
+	defer func() { detectFn = oldFn; now = oldNow }()
+
+	dir := t.TempDir()
+	DetectCached(dir, "sess-a") // warm
+
+	calls = 0
+	for i := 0; i < 5; i++ {
+		DetectCached(dir, "sess-a")
+	}
+	if calls != 0 {
+		t.Fatalf("expected 0 calls after warm, got %d", calls)
+	}
+}
+
 func TestDetectCachedEmptySessionUncached(t *testing.T) {
 	fn, calls := fakeDetect([3]string{"cmux", "surface:1", "ws:1"})
 	oldFn, oldNow := detectFn, now
