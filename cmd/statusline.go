@@ -175,7 +175,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		// the statusline.
 		_ = wd.RenewSubscriptionsForSession(input.SessionID)
 
-		termType, termID, workspaceID := terminal.Detect()
+		termType, termID, workspaceID := terminal.DetectCached(filepath.Join(db.HandlerHome(), "state", "terminal-cache"), input.SessionID)
 		syncSessionMetadata(wd, input.SessionID, input.SessionName, claudePID(), termType, termID, workspaceID, input.CWD, input.Model.DisplayName, input.ContextWindow.UsedPercentage)
 		recordCostSnapshot(wd, &input)
 		recordRateLimit(wd, &input)

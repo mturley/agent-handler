@@ -97,7 +97,7 @@ func runUserPromptSubmit(cmd *cobra.Command, args []string) error {
 	d.SetWorking(input.SessionID, true)
 
 	// Sync session metadata (name, terminal)
-	termType, termID, workspaceID := terminal.Detect()
+	termType, termID, workspaceID := terminal.DetectCached(filepath.Join(db.HandlerHome(), "state", "terminal-cache"), input.SessionID)
 	syncSessionMetadata(d, input.SessionID, input.SessionTitle, claudePID(), termType, termID, workspaceID, input.CWD, "", -1)
 
 	// Nudge the session if it has gone too long without emitting a status.
