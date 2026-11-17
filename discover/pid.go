@@ -1,11 +1,12 @@
 package discover
 
 import (
+	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 // WritePIDCache writes the session ID to a PID cache file
@@ -59,9 +60,11 @@ func CleanStalePIDCaches(sessionsDir string) (int, error) {
 
 // IsProcessAlive checks if a process with the given PID is running
 func IsProcessAlive(pid int) bool {
-	cmd := exec.Command("kill", "-0", strconv.Itoa(pid))
-	err := cmd.Run()
-	return err == nil
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 // IsSessionProcess checks if the process at the given PID belongs to the
@@ -74,11 +77,10 @@ func IsSessionProcess(pid int, sessionID string) bool {
 	if !IsProcessAlive(pid) {
 		return false
 	}
-	out, err := exec.Command("ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
+	cmdline, err := processCmdline(pid)
 	if err != nil {
 		return true // can't inspect, assume it's ours
 	}
-	cmdline := string(out)
 	if !strings.Contains(cmdline, "claude") {
 		return false // not a claude process at all
 	}

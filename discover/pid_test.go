@@ -2,7 +2,9 @@ package discover
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -103,5 +105,76 @@ func TestIsProcessAlive(t *testing.T) {
 	// A very high PID should not exist
 	if IsProcessAlive(999999) {
 		t.Error("PID 999999 should not be alive")
+	}
+}
+
+func TestIsProcessAliveSelf(t *testing.T) {
+	if !IsProcessAlive(os.Getpid()) {
+		t.Error("current process should be reported as alive")
+	}
+
+	if IsProcessAlive(0) {
+		t.Error("pid 0 should not be reported as alive")
+	}
+
+	cmd := exec.Command("sleep", "0")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start child: %v", err)
+	}
+	childPid := cmd.Process.Pid
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	if err := cmd.Wait(); err != nil {
+		t.Fatalf("failed to wait for child: %v", err)
+	}
+
+	if IsProcessAlive(childPid) {
+		t.Error("exited child process should not be reported as alive")
+	}
+}
+
+func TestProcessCmdlineSelf(t *testing.T) {
+	cmdline, err := processCmdline(os.Getpid())
+	if err != nil {
+		t.Fatalf("processCmdline(self) failed: %v", err)
+	}
+	if !strings.Contains(cmdline, filepath.Base(os.Args[0])) {
+		t.Errorf("expected cmdline %q to contain %q", cmdline, filepath.Base(os.Args[0]))
+	}
+
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start child: %v", err)
+	}
+	childPid := cmd.Process.Pid
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+
+	childCmdline, err := processCmdline(childPid)
+	if err != nil {
+		t.Fatalf("processCmdline(child) failed: %v", err)
+	}
+	if childCmdline != "sleep 30" {
+		t.Errorf("expected childCmdline %q, got %q", "sleep 30", childCmdline)
+	}
+}
+
+func TestIsSessionProcessMatchesCmdline(t *testing.T) {
+	cmd := exec.Command("sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start child: %v", err)
+	}
+	childPid := cmd.Process.Pid
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+
+	if IsSessionProcess(childPid, "x") {
+		t.Error("expected IsSessionProcess to be false for a non-claude process")
 	}
 }
