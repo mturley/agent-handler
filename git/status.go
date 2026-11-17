@@ -66,14 +66,17 @@ func GetStatus(cwd string) *Status {
 	if !ok {
 		return &Status{DefaultBranch: "main"}
 	}
-	return computeStatus(cwd, dirs)
+	return computeStatus(cwd, dirs, func(branch string) baseInfo {
+		return computeBase(cwd, dirs, branch)
+	})
 }
 
 // computeStatus computes a full, uncached Status for a resolved git
 // repository: one `status --porcelain=v2 --branch` call and one
 // `diff HEAD --shortstat` call in parallel, rebase detection via the
-// filesystem, and computeBase when the current branch isn't the default.
-func computeStatus(cwd string, dirs GitDirs) *Status {
+// filesystem, and base(branch) for the default-branch comparison (GetStatus
+// passes computeBase; GetStatusCached injects a cached lookup).
+func computeStatus(cwd string, dirs GitDirs, base func(branch string) baseInfo) *Status {
 	s := &Status{InGit: true, DefaultBranch: "main"}
 
 	var statusOut, uncommittedStat string
@@ -120,13 +123,13 @@ func computeStatus(cwd string, dirs GitDirs) *Status {
 		}
 	}
 
-	base := computeBase(cwd, dirs, s.Branch)
-	s.DefaultBranch = base.DefaultBranch
+	b := base(s.Branch)
+	s.DefaultBranch = b.DefaultBranch
 	if s.Branch != "" && s.Branch != s.DefaultBranch {
-		s.Ahead = base.Ahead
-		s.Behind = base.Behind
-		s.CommittedAdds = base.CommittedAdds
-		s.CommittedDels = base.CommittedDels
+		s.Ahead = b.Ahead
+		s.Behind = b.Behind
+		s.CommittedAdds = b.CommittedAdds
+		s.CommittedDels = b.CommittedDels
 	}
 
 	return s

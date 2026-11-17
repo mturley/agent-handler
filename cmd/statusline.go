@@ -234,7 +234,7 @@ func runStatuslineFromHook(cmd *cobra.Command) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			gitStatus = gitpkg.GetStatus(input.CWD)
+			gitStatus = gitpkg.GetStatusCached(input.CWD, filepath.Join(db.HandlerHome(), "state", "git-cache"))
 		}()
 	}
 
