@@ -66,7 +66,7 @@ func GetStatus(cwd string) *Status {
 	if !ok {
 		return &Status{DefaultBranch: "main"}
 	}
-	return computeStatus(cwd, dirs, func(branch string) baseInfo {
+	return computeStatus(cwd, dirs, func(branch, _ string) baseInfo {
 		return computeBase(cwd, dirs, branch)
 	})
 }
@@ -74,9 +74,9 @@ func GetStatus(cwd string) *Status {
 // computeStatus computes a full, uncached Status for a resolved git
 // repository: one `status --porcelain=v2 --branch` call and one
 // `diff HEAD --shortstat` call in parallel, rebase detection via the
-// filesystem, and base(branch) for the default-branch comparison (GetStatus
+// filesystem, and base(branch, headOID) for the default-branch comparison (GetStatus
 // passes computeBase; GetStatusCached injects a cached lookup).
-func computeStatus(cwd string, dirs GitDirs, base func(branch string) baseInfo) *Status {
+func computeStatus(cwd string, dirs GitDirs, base func(branch, headOID string) baseInfo) *Status {
 	s := &Status{InGit: true, DefaultBranch: "main"}
 
 	var statusOut, uncommittedStat string
@@ -123,7 +123,7 @@ func computeStatus(cwd string, dirs GitDirs, base func(branch string) baseInfo) 
 		}
 	}
 
-	b := base(s.Branch)
+	b := base(s.Branch, p.Oid)
 	s.DefaultBranch = b.DefaultBranch
 	if s.Branch != "" && s.Branch != s.DefaultBranch {
 		s.Ahead = b.Ahead

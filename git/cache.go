@@ -150,8 +150,8 @@ func GetStatusCached(cwd, cacheDir string) *Status {
 		}
 	}
 
-	s := computeStatus(cwd, dirs, func(branch string) baseInfo {
-		return cachedBase(cwd, dirs, branch, cacheDir)
+	s := computeStatus(cwd, dirs, func(branch, headOID string) baseInfo {
+		return cachedBase(cwd, dirs, branch, headOID, cacheDir)
 	})
 	_ = fscache.WriteJSONAtomic(statusPath, statusEntry{Fingerprint: fp, WrittenAt: now(), Status: *s})
 	fscache.Prune(cacheDir, cachePruneAge, now())
@@ -160,11 +160,16 @@ func GetStatusCached(cwd, cacheDir string) *Status {
 
 // cachedBase returns base info for branch from the base entry when it is
 // still valid, else computes it with computeBase and overwrites the entry.
-func cachedBase(cwd string, dirs GitDirs, branch, cacheDir string) baseInfo {
-	// HEAD sha read now (just after the status command), before computeBase
-	// runs: if HEAD moves mid-compute the stored sha is the older one and the
-	// next lookup misses, rather than caching new results as current.
-	_, _, headSHA := takeFingerprint(dirs)
+//
+// headOID is branch.oid from the porcelain v2 status just run, i.e. HEAD as
+// of before computeBase: if HEAD moves mid-compute the stored sha is the
+// older one and the next lookup misses, rather than caching new results as
+// current. An unborn ("(initial)") or empty oid disables base caching.
+func cachedBase(cwd string, dirs GitDirs, branch, headOID, cacheDir string) baseInfo {
+	headSHA := headOID
+	if headSHA == "(initial)" {
+		headSHA = ""
+	}
 	path := filepath.Join(cacheDir, "base-"+cacheKey(dirs.CommonDir+"\x00"+branch)+".json")
 
 	var e baseEntry
