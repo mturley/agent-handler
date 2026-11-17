@@ -61,11 +61,12 @@ func TestGetStatusParity(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := GetStatus(dir)
-		// NOTE: today's `git status --porcelain --no-lock-index` call errors out on
-		// this git version (--no-lock-index is not a recognized flag), so gitCmd
-		// returns "" and Modified/Untracked stay 0. This characterizes the ACTUAL
-		// current behavior, bug and all.
-		want := &Status{InGit: true, Branch: "main", DefaultBranch: "main", UncommittedAdds: 1}
+		// NOTE: the old `--no-lock-index` flag git status was called with is not a
+		// real git option (git rejects it outright), so Modified/Untracked always
+		// read 0 before this fix regardless of real repo state. This is corrected
+		// going forward (see runner.go/status.go), so these now reflect the real,
+		// intentional values rather than the old always-0 bug.
+		want := &Status{InGit: true, Branch: "main", DefaultBranch: "main", Modified: 1, Untracked: 1, UncommittedAdds: 1}
 		if *got != *want {
 			t.Errorf("got %+v, want %+v", got, want)
 		}
@@ -76,8 +77,9 @@ func TestGetStatusParity(t *testing.T) {
 		runIn(t, dir, "mv", "README.md", "RENAMED.md")
 		runIn(t, dir, "add", "-A")
 		got := GetStatus(dir)
-		// Same --no-lock-index issue as above: Modified stays 0 on this git version.
-		want := &Status{InGit: true, Branch: "main", DefaultBranch: "main"}
+		// Same --no-lock-index fix as above: this now correctly reports the
+		// staged rename as one modified entry instead of always reading 0.
+		want := &Status{InGit: true, Branch: "main", DefaultBranch: "main", Modified: 1}
 		if *got != *want {
 			t.Errorf("got %+v, want %+v", got, want)
 		}
