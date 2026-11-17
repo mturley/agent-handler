@@ -1,12 +1,10 @@
 package discover
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 )
 
 // WritePIDCache writes the session ID to a PID cache file
@@ -56,15 +54,6 @@ func CleanStalePIDCaches(sessionsDir string) (int, error) {
 	}
 
 	return cleaned, nil
-}
-
-// IsProcessAlive checks if a process with the given PID is running
-func IsProcessAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
 }
 
 // IsSessionProcess checks if the process at the given PID belongs to the
