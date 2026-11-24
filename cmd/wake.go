@@ -229,6 +229,11 @@ func setWakeArmed(sessionID string, armed bool) {
 	if err == nil {
 		f.Close()
 	}
+	// Opening an existing file leaves its mtime alone; refresh it so a
+	// session that stays armed is never mistaken for a leaked marker by
+	// pruneStaleWakeMarkers.
+	now := time.Now()
+	_ = os.Chtimes(path, now, now)
 }
 
 // clearWakeMarkers removes markers for sessions being archived.

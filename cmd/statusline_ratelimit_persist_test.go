@@ -203,3 +203,22 @@ func TestPruneStaleWakeMarkersRemovesOldKeepsFresh(t *testing.T) {
 		t.Error("expected the fresh marker to survive pruning")
 	}
 }
+
+// A session that stays armed re-arms on every statusline refresh; that must
+// keep its marker fresh so pruning never removes a live session's marker.
+func TestReArmRefreshesWakeMarkerMtime(t *testing.T) {
+	t.Setenv("HANDLER_HOME", t.TempDir())
+	setWakeArmed("long-session", true)
+	path := wakeMarkerPath("long-session")
+	old := time.Now().Add(-(wakeMarkerMaxAge + time.Hour))
+	if err := os.Chtimes(path, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	setWakeArmed("long-session", true)
+	pruneStaleWakeMarkers(time.Now())
+
+	if !wakeMarkerExists("long-session") {
+		t.Error("re-armed marker was pruned as stale")
+	}
+}
